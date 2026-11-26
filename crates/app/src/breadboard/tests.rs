@@ -708,12 +708,15 @@ fn a_bare_wire_is_drawn_and_taken_away_on_the_perfboard() {
     click(&mut app, &mut run, b, egui::PointerButton::Primary);
     let drawn = app.sch.stripboard.clone().expect("kept with the sheet");
     assert!(drawn.perf && drawn.bare.len() == auto.bare.len() + 1 && drawn.bare.last() == Some(&(a, b)), "{:?}", drawn.bare.last());
-    click(&mut app, &mut run, (r, c0 + 1), egui::PointerButton::Secondary);
-    assert_eq!(app.sch.stripboard.as_ref().map(|l| l.bare.len()), Some(auto.bare.len()), "a right click on it takes it away");
-    // drawn again, and taken away by the eraser: a click on it
+    // the right click as on the schematic and the board: a wire begun is let go, then the tool goes back to Select (the wire stays)
     click(&mut app, &mut run, a, egui::PointerButton::Primary);
-    click(&mut app, &mut run, b, egui::PointerButton::Primary);
-    assert_eq!(app.sch.stripboard.as_ref().map(|l| l.bare.len()), Some(auto.bare.len() + 1));
+    assert!(app.breadboard.strip.link_start.is_some());
+    click(&mut app, &mut run, (r, c0 + 1), egui::PointerButton::Secondary);
+    assert!(app.breadboard.strip.link_start.is_none() && app.breadboard.strip.tool == strip_view::StripTool::Bare, "the wire begun is let go");
+    click(&mut app, &mut run, (r, c0 + 1), egui::PointerButton::Secondary);
+    assert_eq!(app.breadboard.strip.tool, strip_view::StripTool::Move, "then back to Select");
+    assert_eq!(app.sch.stripboard.as_ref().map(|l| l.bare.len()), Some(auto.bare.len() + 1), "a right click takes no wire away");
+    // the eraser takes it away: a click on it
     app.breadboard.strip.tool = strip_view::StripTool::Erase;
     click(&mut app, &mut run, (r, c0 + 1), egui::PointerButton::Primary);
     assert_eq!(app.sch.stripboard.as_ref().map(|l| l.bare.len()), Some(auto.bare.len()), "the eraser's click takes it away");

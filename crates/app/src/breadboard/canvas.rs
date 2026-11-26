@@ -169,9 +169,18 @@ impl BreadboardView {
                 l = m;
             }
         }
+        // the keys of the schematic and the board: W the jumper tool, Esc stops what is begun and goes back to Select
+        if response.hovered() && !ui.ctx().egui_wants_keyboard_input() && ui.input(|i| i.key_pressed(egui::Key::W) && i.modifiers.is_none()) {
+            self.tool = Tool::Wire;
+            self.wire_start = None;
+        }
         if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.wire_start = None;
             self.chosen.clear();
+            if self.tool != Tool::Move {
+                self.tool = Tool::Move;
+                sch.status = i18n::tr("選択に戻りました").to_string();
+            }
         }
         let mut dragging = false;
         if let Some(d) = &self.drag
@@ -449,11 +458,19 @@ impl BreadboardView {
             // a click on a jumper picks it (Delete removes it)
             self.picked_wire = response.interact_pointer_pos().and_then(|p| l.wires.iter().position(|w| wire_points(to(w.a), to(w.b), pitch).iter().any(|q| q.distance(p) < pitch * 0.35)));
         }
-        // a right click lets go of what is picked (as Esc)
-        if self.tool == Tool::Move && response.secondary_clicked() {
-            self.chosen.clear();
-            self.picked = None;
-            self.picked_wire = None;
+        // the right click as on the schematic and the board: in Select it lets go of what is picked; in another tool it stops
+        // what is begun (a jumper's first end), and with nothing begun it goes back to Select
+        if response.secondary_clicked() {
+            if self.tool == Tool::Move {
+                self.chosen.clear();
+                self.picked = None;
+                self.picked_wire = None;
+            } else if self.wire_start.take().is_some() {
+                sch.status = i18n::tr("ジャンパー線をやめました (もう一度右クリックで選択に戻ります)").to_string();
+            } else {
+                self.tool = Tool::Move;
+                sch.status = i18n::tr("選択に戻りました").to_string();
+            }
         }
         // the box being drawn, and what it picks when let go
         if let Some((from, touching)) = self.pick_box {
@@ -473,8 +490,8 @@ impl BreadboardView {
             }
         }
         let legend = match self.tool {
-            Tool::Move => i18n::tr("黄: ポインタの下の穴とつながっている穴　赤い丸: 回路図と違う足　部品・線の端はドラッグで差し替え (R で回す・Delete で線を消す)　何も無い所から囲んで選ぶ (右ドラッグは触れた物も・Shift で足す)"),
-            Tool::Wire => i18n::tr("ジャンパー線: 穴をクリックして、つなぐ先の穴をクリック (Esc でやめる)"),
+            Tool::Move => i18n::tr("黄: ポインタの下の穴とつながっている穴　赤い丸: 回路図と違う足　部品・線の端はドラッグで差し替え (R で回す・Delete で線を消す)　何も無い所から囲んで選ぶ (右ドラッグは触れた物も・Shift で足す)　右クリックで選択を外す"),
+            Tool::Wire => i18n::tr("ジャンパー線: 穴をクリックして、つなぐ先の穴をクリック (右クリックか Esc でやめる。もう一度で選択に戻る)"),
             Tool::Meter => i18n::tr("テスター: 赤い棒 → 黒い棒の順に穴をクリック。電圧は左に出ます"),
             Tool::Scope => i18n::tr("オシロ: 探り針を当てる穴をクリック。波形は左に出ます"),
         };
