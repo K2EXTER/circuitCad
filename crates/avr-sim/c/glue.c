@@ -8,6 +8,7 @@
 #include "avr_adc.h"
 #include "avr_uart.h"
 #include "avr_eeprom.h"
+#include "avr_spi.h"
 
 // one change of a pin: the cycle, the port's letter, the bit, the level, and whether a timer's compare output set it (simavr marks
 // those with AVR_IOPORT_OUTPUT; a write of the port reaches the pin too, which the chip would not let through while the timer has it)
@@ -29,6 +30,9 @@ struct ccavr_t {
 	// set while we raise an input pin ourselves, so that our own change is not taken for the program's
 	int driving;
 	ccavr_pin_t pins[NPORTS * 8];
+	// SPI: simavr moves the bytes, not the pins; the byte a master reads back is the MISO pin's level held through the transfer
+	avr_irq_t * spi_in;
+	uint8_t miso_bit;
 };
 
 static void grow(void ** p, uint32_t * cap, uint32_t need, size_t size) {
@@ -46,6 +50,15 @@ static void on_pin(struct avr_irq_t * irq, uint32_t value, void * param) {
 	grow((void **)&c->events, &c->cap_events, c->n_events + 1, sizeof(ccavr_event_t));
 	ccavr_event_t * e = &c->events[c->n_events++];
 	e->cycle = c->avr->cycle; e->port = p->port; e->bit = p->bit; e->value = (value & 0xff) ? 1 : 0; e->timer = (value & AVR_IOPORT_OUTPUT) ? 1 : 0;
+}
+
+// the master sent a byte: what it reads in the same 8 clocks is the MISO pin (port B) as the circuit holds it, all ones or all
+// zeros (left alone, simavr would leave the byte sent in SPDR, as if MISO were wired to MOSI)
+static void on_spi(struct avr_irq_t * irq, uint32_t value, void * param) {
+	ccavr_t * c = param; (void)irq; (void)value;
+	avr_ioport_state_t st;
+	if (avr_ioctl(c->avr, AVR_IOCTL_IOPORT_GETSTATE('B'), &st) != 0) return;
+	avr_raise_irq(c->spi_in, ((st.pin >> c->miso_bit) & 1) ? 0xff : 0x00);
 }
 
 static void on_byte(struct avr_irq_t * irq, uint32_t value, void * param) {
@@ -82,6 +95,11 @@ ccavr_t * ccavr_new(const char * mcu, uint32_t freq, uint32_t vcc_mv) {
 	}
 	avr_irq_t * out = avr_io_getirq(avr, AVR_IOCTL_UART_GETIRQ('0'), UART_IRQ_OUTPUT);
 	if (out) avr_irq_register_notify(out, on_byte, c);
+	// MISO is PB3 on the ATmega2560, PB4 on the ATmega328
+	c->miso_bit = strcmp(mcu, "atmega2560") == 0 ? 3 : 4;
+	c->spi_in = avr_io_getirq(avr, AVR_IOCTL_SPI_GETIRQ(0), SPI_IRQ_INPUT);
+	avr_irq_t * spi_out = avr_io_getirq(avr, AVR_IOCTL_SPI_GETIRQ(0), SPI_IRQ_OUTPUT);
+	if (spi_out && c->spi_in) avr_irq_register_notify(spi_out, on_spi, c);
 	return c;
 }
 

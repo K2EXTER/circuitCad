@@ -44,6 +44,8 @@
   - シリアルの `ee=42` と `a0=409`、受けた文字を送り返す。60 文字の行 (`Board::send_text`) もそのまま返る。
   - `adc_time.elf` (`adc_time.c`): ADC の変換時間が 200 µs (1 回目)・104 µs (2 回目から)。
   - `mega.elf` (`mega.c`、ATmega2560): Mega のピン番号で、D13 (PB7) の反転・D2 (PE4) → D22 (PA0)・A8 (ADC8、MUX5) → D53 (PB0)・D11 (OC1A) の PWM・シリアル。
+  - `libs.elf` (`libs.ino`、arduino-cli で `arduino-cli compile -b arduino:avr:nano --output-dir …` してできた ELF を写した。試験は `tests/libs.rs`): Arduino の AVR のコアに付いてくるライブラリ。EEPROM (書いて読む)・SPI (MISO の 5 V を 0xFF で読む)・Wire (相手のいないアドレスに 2 = アドレスに応答なし。止まらない)・SoftwareSerial (D7 に 9600 bps で "soft"。ピンの変化を試験が読み解く)・`attachInterrupt` (D2 を 2 回押して 2)・`tone(8, 1000)` (D8 が 1 kHz の PWM として出る)・`millis`。
+- **SPI** (W5 ⑤、2026-11-26): simavr の SPI はバイトだけを動かし、ピン (SCK・MOSI) は動かさない。相手がいないと、送ったバイトが SPDR に残る (MISO と MOSI をつないだのと同じ)。glue は、マスターが 1 バイト送り終えたとき (`SPI_IRQ_OUTPUT`) に、MISO のピン (328 は PB4、2560 は PB3) のレベルを 8 ビット分 (0xFF か 0x00) として返す (`SPI_IRQ_INPUT`)。回路の側に SPI の部品のモデルは無いので、それ以上は読めない。SCK・MOSI のピンが回路の中で動かないのも残り (D13 の LED が SPI の間に点かない)。
 
 ## はじめの試し (simavr を MSVC で通せるか)
 
@@ -103,10 +105,10 @@ exe の大きさは、試しのバイナリ全体で 283 KB (release)。simavr �
 
 - 1 の D13 の周期は 1.019 ms × 100 だった。予想は 1.1 ms 前後 (ADC の 104 µs 込み)。原因は simavr の ADC の不具合で、上の `FIXES` で直した。
 - コアは ATmega328 だけ試した。Mega (2560)・ATtiny も同じ作りなので通るはず。
-- ライブラリ (Servo・Wire など) は試していない。この PC の arduino-cli に入っていないため (入れるにはダウンロードが要る)。`tone` と `EEPROM` のようにコアの中身を使うものは動いた。ライブラリも、ビルドは arduino-cli の仕事なので、simavr の側では同じ。
-- CI: Linux・macOS は gcc / clang なので、書き換えなしで通るはず。Windows の CI は MSVC で、上の書き換えが要る。
+- ライブラリ: コアに付いてくるもの (EEPROM・SPI・Wire・SoftwareSerial) は 2026-11-26 に試した (上の `libs.elf`)。Servo はこの PC の arduino-cli に入っていない (入れるにはダウンロードが要る)。
+- CI: 書き換えの `_alloca` で Linux・macOS が落ちていた。`shim/gcc_first.h` で直した。
 
 ## 残り (候補表 W5)
 
 - ほかのチップ: ATtiny など。コアのファイルを `vendor_simavr.py` の `CORES` に足し、`sim_core_config.h`・`sim_core_decl.h` に並べ、`BoardDef` を書く (Mega はこの形で 2026-11-26 に足した)。
-- ライブラリ (Servo・Wire) のスケッチ: arduino-cli でビルドできれば同じに動くはず。試していない。
+- ライブラリ: Servo (ダウンロードが要る)。I²C・SPI の相手の部品 (センサー・EEPROM) のモデル: 今は Wire は「応答なし」、SPI は MISO のレベルしか返らない。SCK・MOSI・SDA・SCL のピンを回路の中で動かすこと。
