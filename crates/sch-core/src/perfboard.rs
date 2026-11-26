@@ -188,6 +188,7 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
                 .filter(|m| m.what == "fork" && m.pads.len() == 3 && m.op != "min")
                 .filter_map(|m| Some([crate::stripboard::pad_at(&l, &m.pads[0])?, crate::stripboard::pad_at(&l, &m.pads[1])?, crate::stripboard::pad_at(&l, &m.pads[2])?]))
                 .collect();
+            let bypass_at = bypass_pairs(&full, &wants, &l);
             let mut first: Vec<String> = vec![];
             let mut extra = 0;
             for round in 0..ROUNDS + MORE_ROUNDS {
@@ -195,7 +196,7 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
                     break;
                 }
                 let mut m = l.clone();
-                route(&full, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first, forks: &fork_at, along: ALONG_COST });
+                route(&full, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first, forks: &fork_at, along: ALONG_COST, bypass: &bypass_at });
                 let apart = crate::stripboard::strip_unjoined(s, &m);
                 let key = rank(s, &m, apart.len());
                 // a placing far behind the best on its first wiring is not wired again (the rounds after gain less than that)
@@ -236,10 +237,11 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
 }
 
 /// How good a wired layout is, the smaller the better: what is left on the mounting holes' corners, the nets left apart (`apart`),
-/// the groups past their farthest distance (after the nets left apart: a group kept close is no use on a board that does not work),
+/// the groups past their farthest distance and the bypass capacitors past theirs (after the nets left apart: a group kept close is no use on a board that does not work),
 /// the wires on top with each one along a chip's row of pins counting three (it lies on the socket, L9), the board's holes.
 fn rank(s: &Schematic, m: &StripLayout, apart: usize) -> (usize, usize, usize, usize, usize) {
-    let over = crate::stripboard::group_spreads(s, m).iter().filter(|g| g.1 > g.2 + 1e-9).count();
+    let over = crate::stripboard::group_spreads(s, m).iter().filter(|g| g.1 > g.2 + 1e-9).count()
+        + crate::stripboard::bypass_spans(s, m).iter().filter(|b| b.judged() > b.limit + 1e-9).count();
     (m.in_keepout().len(), apart, over, m.links.len() + 2 * links_along_pins(m).len(), m.rows as usize * m.cols as usize)
 }
 
@@ -410,6 +412,43 @@ fn lead_net(c: &Circuit, refdes: &str, pin: &str) -> String {
     c.on.iter().find(|x| x.0 == refdes).and_then(|x| x.2.iter().find(|(p, _)| p == pin)).map(|x| x.1.clone()).unwrap_or_default()
 }
 
+/// How far (holes, straight) a bypass capacitor's leads are from its IC: of its leads, the farthest from the IC's nearest pin of the
+/// lead's net (a lead with no such pin counts nothing). An estimate of `stripboard::bypass_spans`, which goes along the copper.
+fn bypass_gap(c: &Circuit, cap: &str, leads: &[(String, At)], ic: &StripPart) -> f64 {
+    let mut worst = 0.0f64;
+    for (pin, a) in leads {
+        let net = lead_net(c, cap, pin);
+        if net.is_empty() {
+            continue;
+        }
+        let near = ic.leads.iter().filter(|(ip, _)| lead_net(c, &ic.refdes, ip) == net).map(|(_, b)| (a.0 as f64 - b.0 as f64).hypot(a.1 as f64 - b.1 as f64)).fold(f64::INFINITY, f64::min);
+        if near.is_finite() {
+            worst = worst.max(near);
+        }
+    }
+    worst
+}
+
+/// The bypass capacitors' leads on a placed board and the IC's pin each serves: for each lead on a net of its IC, the IC's nearest
+/// pin of that net (the pin's hole, the lead's hole), for the wiring (`Order::bypass`).
+fn bypass_pairs(c: &Circuit, wants: &Wants, l: &StripLayout) -> Vec<(At, At)> {
+    let mut out = vec![];
+    for (cap, ic, _) in &wants.bypass {
+        let (Some(cp), Some(ip)) = (l.parts.iter().find(|p| &p.refdes == cap), l.parts.iter().find(|p| &p.refdes == ic)) else { continue };
+        for (pin, a) in &cp.leads {
+            let net = lead_net(c, cap, pin);
+            if net.is_empty() {
+                continue;
+            }
+            let d = |b: &At| a.0.abs_diff(b.0) as u32 + a.1.abs_diff(b.1) as u32;
+            if let Some(b) = ip.leads.iter().filter(|(x, _)| lead_net(c, ic, x) == net).map(|x| x.1).min_by_key(d) {
+                out.push((b, *a));
+            }
+        }
+    }
+    out
+}
+
 /// What the requirements table asks of the placement: the parts kept apart (each rule's two sets of parts and the distance in
 /// holes), the groups each part is in (placed together), and the sections (each placed in a band of rows of its own).
 #[derive(Default)]
@@ -423,6 +462,8 @@ struct Wants {
     /// across the boundary of the two sections (L10).
     last: BTreeSet<String>,
     early: BTreeSet<String>,
+    /// The bypass capacitors of the table: each capacitor, its IC and the farthest its leads may be from the IC's pins, in holes (L17).
+    bypass: Vec<(String, String, f64)>,
     sections: Vec<(String, BTreeSet<String>)>,
     /// The parts locked where they are (`perf_layout_around`): placed first as they are, never moved.
     keep: Vec<StripPart>,
@@ -462,7 +503,9 @@ impl Wants {
                 }
             }
         }
-        Wants { apart, groups, group_max, last, early, sections, keep: vec![], boxes: BTreeMap::new(), keepout: BTreeSet::new() }
+        let on = |r: &str| c.on.iter().any(|p| p.0 == r);
+        let bypass = s.requirements.bypass.iter().filter(|b| on(&b.ic)).flat_map(|b| b.caps.iter().filter(|cap| on(cap)).map(move |cap| (cap.clone(), b.ic.clone(), b.limit() / 2.54))).collect();
+        Wants { apart, groups, group_max, last, early, bypass, sections, keep: vec![], boxes: BTreeMap::new(), keepout: BTreeSet::new() }
     }
 
     /// Whether a part is locked where it is.
@@ -511,6 +554,11 @@ impl Wants {
             over += (far - limit).max(0.0);
         }
         over
+    }
+
+    /// The IC a bypass capacitor serves and how far (holes) its leads may be from the IC's pins.
+    fn bypass_of(&self, cap: &str) -> Option<(&str, f64)> {
+        self.bypass.iter().find(|b| b.0 == cap).map(|b| (b.1.as_str(), b.2))
     }
 
     /// Whether two parts are in a group together.
@@ -584,6 +632,18 @@ fn anneal(c: &Circuit, wants: &Wants, parts: &mut [StripPart], off: &[(String, V
             part_nets[*pi].push(nn + k);
         }
     }
+    // the bypass capacitors (L17): each a cost after the groups', how far its farthest lead is past the distance from the IC's pin of
+    // its net, weighed as heavily
+    let caps: Vec<(usize, usize, f64)> = wants
+        .bypass
+        .iter()
+        .filter_map(|(cap, ic, limit)| Some((parts.iter().position(|p| &p.refdes == cap)?, parts.iter().position(|p| &p.refdes == ic)?, *limit)))
+        .collect();
+    let ng = nn + limited.len();
+    for (k, (cp, ip, _)) in caps.iter().enumerate() {
+        part_nets[*cp].push(ng + k);
+        part_nets[*ip].push(ng + k);
+    }
     let centre = |p: &StripPart| -> (f64, f64) {
         let n = p.leads.len().max(1) as f64;
         (p.leads.iter().map(|x| x.1 .0 as f64).sum::<f64>() / n, p.leads.iter().map(|x| x.1 .1 as f64).sum::<f64>() / n)
@@ -595,6 +655,10 @@ fn anneal(c: &Circuit, wants: &Wants, parts: &mut [StripPart], off: &[(String, V
         (far - limit).max(0.0) * 4.0
     };
     let spread = |i: usize, parts: &[StripPart]| -> f64 {
+        if i >= ng {
+            let (cp, ip, limit) = caps[i - ng];
+            return (bypass_gap(c, &parts[cp].refdes, &parts[cp].leads, &parts[ip]) - limit).max(0.0) * 4.0;
+        }
         if i >= nn {
             return group_cost(i - nn, parts);
         }
@@ -866,7 +930,7 @@ fn place_packed(c: &Circuit, opt: StripOptions, gap: u16, turned: Turn, sa: bool
         };
         widths.sort_unstable();
         widths.dedup();
-        let alone = Wants { apart: wants.apart.clone(), groups: wants.groups.clone(), group_max: wants.group_max.clone(), last: wants.last.clone(), early: wants.early.clone(), ..Default::default() };
+        let alone = Wants { apart: wants.apart.clone(), groups: wants.groups.clone(), group_max: wants.group_max.clone(), last: wants.last.clone(), early: wants.early.clone(), bypass: wants.bypass.clone(), ..Default::default() };
         let mut ls: Vec<StripLayout> = widths.into_iter().map(|w| place(&sub, StripOptions { cols: Some(w), ..opt }, gap, turned, sa, &alone, None)).collect();
         ls.dedup_by_key(|l| (l.cols, l.rows));
         choices.push((i, ls));
@@ -1212,6 +1276,8 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: Turn, sa: bool, wants
         // group's parts), kept apart as the table says, in the section's rows
         let mut twos: Vec<usize> = all_twos.iter().copied().filter(|k| members.contains(&c.on[*k].0) && !wants.kept(&c.on[*k].0)).collect();
         twos.sort_by_key(|k| Reverse(c.on[*k].2.iter().filter(|(_, n)| at_net.contains_key(n)).count()));
+        // the bypass capacitors first, while there is room by their IC's pins (L17)
+        twos.sort_by_key(|k| wants.bypass_of(&c.on[*k].0).is_none());
         for k in twos {
             let (refdes, look, pins) = &c.on[k];
             if pins.len() != 2 {
@@ -1220,6 +1286,7 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: Turn, sa: bool, wants
             let near = |n: &str, a: At, at_net: &BTreeMap<String, Vec<At>>| -> u32 { at_net.get(n).map(|v| v.iter().map(|b| a.0.abs_diff(b.0) as u32 + a.1.abs_diff(b.1) as u32).min().unwrap_or(0)).unwrap_or(0) };
             let mates: Vec<At> = parts.iter().filter(|p| wants.together(refdes, &p.refdes)).flat_map(|p| p.leads.iter().map(|x| x.1)).collect();
             let mut best: Option<(u32, At, At)> = None;
+            let serves = wants.bypass_of(refdes).and_then(|(ic, limit)| Some((parts.iter().find(|p| p.refdes == ic)?.clone(), limit)));
             let reach = bottom.max(wants.keep.iter().flat_map(|p| p.leads.iter().map(|x| x.1 .0 + 1)).max().unwrap_or(0));
             for r in top..reach + 4 {
                 for cc in 0..width {
@@ -1263,7 +1330,12 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: Turn, sa: bool, wants
                                     .count() as u32
                             };
                             let aim = targets.and_then(|t| t.get(refdes)).map_or(0, |t| (3.0 * (((p.0 + q.0) as f64 / 2.0 - t.0).abs() + ((p.1 + q.1) as f64 / 2.0 - t.1).abs())) as u32);
-                            let cost = 4 * (near(&pins[0].1, p, &at_net) + near(&pins[1].1, q, &at_net)) + group + crowd(p, &pins[0].1) + crowd(q, &pins[1].1) + aim;
+                            // a bypass capacitor: its leads by its IC's pins of their nets, past the distance weighed heavily
+                            let by = serves.as_ref().map_or(0, |(ic, limit)| {
+                                let gap = bypass_gap(c, refdes, &[(pins[0].0.clone(), p), (pins[1].0.clone(), q)], ic);
+                                (8.0 * gap + 40.0 * (gap - limit).max(0.0)) as u32
+                            });
+                            let cost = 4 * (near(&pins[0].1, p, &at_net) + near(&pins[1].1, q, &at_net)) + group + crowd(p, &pins[0].1) + crowd(q, &pins[1].1) + aim + by;
                             if best.is_none_or(|x| cost < x.0) {
                                 best = Some((cost, p, q));
                             }
@@ -1346,10 +1418,12 @@ struct Order<'a> {
     forks: &'a [[At; 3]],
     /// What a jump along a chip's row of pins costs more (`ALONG_COST`; 0 in a test to compare).
     along: u32,
+    /// The bypass capacitors' leads and the IC's pin each serves (the pin, the lead): each wired from the pin first (L17).
+    bypass: &'a [(At, At)],
 }
 
 fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> String, order: Order) {
-    let Order { rails_first, escapes, first, forks, along: along_extra } = order;
+    let Order { rails_first, escapes, first, forks, along: along_extra, bypass } = order;
     let (rows, cols) = (l.rows as usize, l.cols as usize);
     let idx = |a: At| a.0 as usize * cols + a.1 as usize;
     let hole = |h: usize| ((h / cols) as u16, (h % cols) as u16);
@@ -1505,21 +1579,45 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
         let fork = forks.iter().find(|f| f.iter().all(|a| terms.contains(a))).copied();
         let mut forced: Vec<At> = vec![];
         let mut first_way: BTreeSet<At> = BTreeSet::new();
+        // each start of a forced way (None: from the copper so far)
+        let mut forced_from: Vec<Option<At>> = vec![];
         if let Some([st, a, b]) = fork {
             tree = vec![st];
             left = terms.iter().copied().filter(|t| *t != st).collect();
             forced = vec![a, b];
+        } else {
+            // the bypass capacitors on this net: each lead wired straight from its IC's pin (the pin joined to the copper first), so
+            // the capacitor's current goes to the pin and not round the rest of the net
+            let pairs: Vec<(At, At)> = bypass.iter().copied().filter(|(p, q)| terms.contains(p) && terms.contains(q)).collect();
+            if let Some((p0, _)) = pairs.first() {
+                tree = vec![*p0];
+                left = terms.iter().copied().filter(|t| t != p0).collect();
+                for (p, q) in pairs {
+                    if !tree.contains(&p) && !forced.contains(&p) {
+                        forced.push(p);
+                        forced_from.push(None);
+                    }
+                    forced.push(q);
+                    forced_from.push(Some(p));
+                }
+            }
         }
         // holes this net's ways keep off: where a way would end two wires on top in one hole
         let mut avoid: BTreeSet<At> = BTreeSet::new();
         let mut tries = 0;
         while !left.is_empty() {
+            // a bypass way whose end is joined already
+            while fork.is_none() && forced.first().is_some_and(|t| !left.contains(t)) {
+                forced.remove(0);
+                forced_from.remove(0);
+            }
             let mut dist: Vec<u32> = vec![u32::MAX; rows * cols * WAYS];
             let mut prev: Vec<u32> = vec![u32::MAX; rows * cols * WAYS];
             let mut heap = BinaryHeap::new();
             let target = forced.first().copied().filter(|t| left.contains(t));
             let starts: Vec<At> = match (target, fork) {
                 (Some(_), Some([st, _, _])) => vec![st],
+                (Some(_), None) => forced_from.first().copied().flatten().filter(|a| tree.contains(a)).map_or_else(|| tree.clone(), |a| vec![a]),
                 _ => tree.clone(),
             };
             for t in &starts {
@@ -1619,6 +1717,7 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                 // a fork's way not found: the net is wired as any other (the rules then say how far its ways run together)
                 if target.is_some() {
                     forced.clear();
+                    forced_from.clear();
                     first_way.clear();
                     continue;
                 }
@@ -1682,10 +1781,13 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
             left.remove(path.last().unwrap());
             if target.is_some() {
                 // the fork's first way: its copper (but the lead) kept off by the second
-                if forced.len() == 2 {
+                if forced.len() == 2 && fork.is_some() {
                     first_way = path.iter().copied().filter(|a| Some(*a) != fork.map(|f| f[0])).collect();
                 }
                 forced.remove(0);
+                if !forced_from.is_empty() {
+                    forced_from.remove(0);
+                }
             }
             tree.extend(path);
         }
@@ -2155,7 +2257,7 @@ mod tests {
             let placed = place(&c, StripOptions::default(), GAPS[0], turned, false, &wants, None);
             for (rails_first, escapes) in [(true, false), (false, false), (true, true), (false, true)] {
                 let mut m = placed.clone();
-                route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &[], forks: &[], along: ALONG_COST });
+                route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &[], forks: &[], along: ALONG_COST, bypass: &[] });
                 tried.push(m);
             }
         }

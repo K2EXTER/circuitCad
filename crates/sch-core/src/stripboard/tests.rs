@@ -640,3 +640,41 @@ fn a_bypass_capacitor_far_from_its_ic_is_told() {
         s.requirements.bypass.iter_mut().for_each(|b| b.max_dist = 0.0);
     }
 }
+
+/// L17: the layouts keep the table's bypass capacitors by their IC: the mixed-signal sample with each capacitor given to the IC the
+/// circuit suggests (six), still joined as drawn.
+fn bypass_sample() -> Schematic {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/mixed_signal.schjson");
+    let mut s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    for f in s.bypass_suggestions() {
+        f.apply(&mut s.requirements);
+    }
+    s
+}
+
+/// On a stripboard each capacitor moves to the holes of its nets' copper nearest the pins: the farthest comes much nearer than laid
+/// out without the rows (218 mm along the strips when written).
+#[test]
+fn a_stripboard_keeps_bypass_capacitors_by_their_ic() {
+    let s = bypass_sample();
+    let mut plain = s.clone();
+    plain.requirements.bypass.clear();
+    let worst = |l: &StripLayout| bypass_spans(&s, l).iter().map(|b| b.judged()).fold(0.0, f64::max);
+    let (before, after) = (strip_layout(&plain), strip_layout(&s));
+    assert!(strip_check(&s, &after).is_empty() && strip_unjoined(&s, &after).is_empty(), "{:?}", strip_check(&s, &after));
+    assert_eq!(bypass_spans(&s, &after).len(), 6);
+    assert!(worst(&after) < worst(&before) / 4.0, "{:.1} mm without the rows, {:.1} mm with them", worst(&before), worst(&after));
+}
+
+/// On a perfboard each capacitor is placed by its IC's pins (within 10 mm straight) and wired from the pin first (most within 13 mm
+/// along the wires).
+#[test]
+fn a_perfboard_keeps_bypass_capacitors_by_their_ic() {
+    let s = bypass_sample();
+    let l = crate::perfboard::perf_layout_with(&s, StripOptions::default());
+    assert!(strip_check(&s, &l).is_empty() && strip_unjoined(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
+    let spans = bypass_spans(&s, &l);
+    assert_eq!(spans.len(), 6);
+    assert!(spans.iter().all(|b| b.straight <= 10.0), "{spans:?}");
+    assert!(spans.iter().filter(|b| b.judged() <= 13.0).count() >= 4, "{spans:?}");
+}

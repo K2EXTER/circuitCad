@@ -19,6 +19,7 @@ use crate::{extract, Schematic};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+mod bypass;
 mod check;
 mod ends;
 mod forks;
@@ -34,6 +35,7 @@ pub use forks::strip_fork;
 pub use mate::{mate_check, mate_parts, Mate, MateLink};
 pub use search::strip_layout_with;
 use ends::{all_ends, between, end_at, other_end, set_end, share_rows, End};
+use bypass::keep_bypass;
 use forks::{copper_ways, forks, keep_forks};
 use lay::lay;
 use sections::{lay_sections, lay_within};

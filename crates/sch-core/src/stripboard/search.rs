@@ -265,5 +265,6 @@ fn strip_lay_once(s: &Schematic, c: &crate::breadboard::Circuit, opt: StripOptio
         crate::strip_edit::join_lines(s, &mut l, lines);
     }
     keep_forks(s, &mut l);
+    keep_bypass(s, &mut l);
     l
 }
