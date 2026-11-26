@@ -186,12 +186,14 @@ fn cost(x: &[f64], d: &DarlingtonSpec) -> f64 {
         let Some((m, _)) = on(&q1, &q2, d.r1, d.r2, *ic, d.on_vce) else { return 1e6 };
         e += ((m - v) / 0.02).powi(2);
     }
+    // VBE(sat) and VCE(sat) are mostly read at the same currents: each solved once
+    let sat = super::once_each(|ic| sat(&q1, &q2, d.r1, d.r2, ic, d.sat_ratio));
     for [ic, v] in &d.vbe_sat {
-        let Some((m, _)) = sat(&q1, &q2, d.r1, d.r2, *ic, d.sat_ratio) else { return 1e6 };
+        let Some((m, _)) = sat(*ic) else { return 1e6 };
         e += ((m - v) / 0.03).powi(2);
     }
     for [ic, v] in &d.vce_sat {
-        let Some((_, m)) = sat(&q1, &q2, d.r1, d.r2, *ic, d.sat_ratio) else { return 1e6 };
+        let Some((_, m)) = sat(*ic) else { return 1e6 };
         e += ((m - v) / 0.04).powi(2);
     }
     if e.is_finite() { e } else { 1e6 }
@@ -227,16 +229,11 @@ pub fn fit(d: &DarlingtonSpec) -> Result<Out, String> {
         [l(5e-12), l(2.0 * top), l(1e-11), 1.8, l(1.0), 0.5, l(0.1), l(10.0), l(0.2)],
         [l(1e-13), l(top), l(1e-13), 1.3, l(5.0), -0.5, l(0.02), l(3.0), l(0.05)],
     ];
-    let mut f = |x: &[f64]| cost(x, d);
-    let mut best: Option<(Vec<f64>, f64)> = None;
-    for x0 in starts {
-        let (x, _) = nelder_mead(&mut f, &x0, 6000, 6000, 1e-6, 1e-8);
-        let (x, c) = nelder_mead(&mut f, &x, 6000, 6000, 1e-7, 1e-9);
-        if best.as_ref().is_none_or(|b| c < b.1) {
-            best = Some((x, c));
-        }
-    }
-    let (x, c) = best.unwrap_or_default();
+    let (x, c) = super::best_of(&starts, |x0| {
+        let mut f = |x: &[f64]| cost(x, d);
+        let (x, _) = nelder_mead(&mut f, x0, 6000, 6000, 1e-6, 1e-8);
+        nelder_mead(&mut f, &x, 6000, 6000, 1e-7, 1e-9)
+    });
     if c >= 1e6 {
         return Err("当てはめが収まりませんでした。点の読み (電流 A、電圧 V) を確かめてください".into());
     }

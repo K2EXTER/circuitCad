@@ -178,12 +178,14 @@ fn cost(x: &[f64], b: &BjtSpec, vaf: f64) -> f64 {
         let Some((m, _)) = on(&p, *ic, b.on_vce) else { return 1e6 };
         e += ((m - v) / 0.01).powi(2);
     }
+    // VBE(sat) and VCE(sat) are mostly read at the same currents: each solved once
+    let sat = super::once_each(|ic| sat(&p, ic));
     for [ic, v] in &b.vbe_sat {
-        let Some((m, _)) = sat(&p, *ic) else { return 1e6 };
+        let Some((m, _)) = sat(*ic) else { return 1e6 };
         e += ((m - v) / 0.015).powi(2);
     }
     for [ic, v] in &b.vce_sat {
-        let Some((_, m)) = sat(&p, *ic) else { return 1e6 };
+        let Some((_, m)) = sat(*ic) else { return 1e6 };
         e += ((m - v) / 0.02).powi(2);
     }
     if e.is_finite() { e } else { 1e6 }
@@ -235,20 +237,15 @@ pub fn fit(b: &BjtSpec) -> Result<Out, String> {
             [l(ic / (v / VT).exp()), l(1.2 * top), l(ic / (v / VT).exp() * 10.0), 1.6, l(5.0 * imax), 0.5, l(0.2), l(10.0), l(0.5)]
         },
     ];
-    let mut f = |x: &[f64]| cost(x, b, vaf);
-    let mut best: Option<(Vec<f64>, f64)> = None;
-    for x0 in starts {
+    let (x, c) = super::best_of(&starts, |x0| {
+        let mut f = |x: &[f64]| cost(x, b, vaf);
         let mut x0 = x0.to_vec();
         if b.fit_nf {
             x0.push(1.1);
         }
         let (x, _) = nelder_mead(&mut f, &x0, 20000, 20000, 1e-7, 1e-10);
-        let (x, c) = nelder_mead(&mut f, &x, 20000, 20000, 1e-8, 1e-11);
-        if best.as_ref().is_none_or(|bb| c < bb.1) {
-            best = Some((x, c));
-        }
-    }
-    let (x, c) = best.unwrap_or_default();
+        nelder_mead(&mut f, &x, 20000, 20000, 1e-8, 1e-11)
+    });
     if c >= 1e6 {
         return Err("当てはめが収まりませんでした。点の読み (電流の単位 A、電圧 V) を確かめてください".into());
     }

@@ -309,5 +309,30 @@ fn cap_at(cj0: f64, vj: f64, m: f64, v: f64) -> f64 {
 
 const LAST_WORD: &str = "最終の確認は、メーカーの公式モデルで行ってください (公開されていれば「部品の取り込み」で読めます)。";
 
+/// The best of several searches from different starting points (the lowest cost; the first of equal ones), searched side by side:
+/// each is on its own, so the answer is the same as one after another (TIP120's four took 3.6 s one after another).
+fn best_of<X: Sync>(starts: &[X], search: impl Fn(&X) -> (Vec<f64>, f64) + Sync) -> (Vec<f64>, f64) {
+    let mut best: Option<(Vec<f64>, f64)> = None;
+    for (x, c) in pcb_core::par::par_map(starts, search) {
+        if best.as_ref().is_none_or(|b| c < b.1) {
+            best = Some((x, c));
+        }
+    }
+    best.unwrap_or_default()
+}
+
+/// `f` that works out each argument once and gives the same answer again for it (a cost that asks the same current twice).
+fn once_each<R: Copy>(f: impl Fn(f64) -> R) -> impl Fn(f64) -> R {
+    let seen = std::cell::RefCell::new(Vec::<(f64, R)>::new());
+    move |x| {
+        if let Some((_, r)) = seen.borrow().iter().find(|(k, _)| *k == x) {
+            return *r;
+        }
+        let r = f(x);
+        seen.borrow_mut().push((x, r));
+        r
+    }
+}
+
 #[cfg(test)]
 mod tests;
