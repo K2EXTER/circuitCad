@@ -263,9 +263,10 @@ pub(super) fn view_overlay(&mut self, ui: &egui::Ui, rect: Rect) {
         });
 }
 
-/// The groups of the requirements table as coloured frames with their names, and the parts to keep apart as two frames of one colour
-/// ("A" and "B") with the distance: the intent of the design, readable on the sheet without opening the table. Only the parts on the
-/// sheet that is shown (a net named in a distance is not framed).
+/// The groups of the requirements table as coloured frames with their names, and the parts to keep apart as two dashed frames of one
+/// colour ("離す A", "離す B") joined by a dimension line with arrows at both frames and the distance in its middle: the intent of
+/// the design, readable on the sheet without opening the table (a frame round the parts reads as "together"; the line between two
+/// reads as "this far apart"). Only the parts on the sheet that is shown (a net named in a distance is not framed).
 pub(super) fn draw_requirement_frames(&self, painter: &egui::Painter, rect: Rect) {
         if !self.req.frames || self.sch.requirements.is_empty() {
             return;
@@ -276,20 +277,22 @@ pub(super) fn draw_requirement_frames(&self, painter: &egui::Painter, rect: Rect
             text: String,
             col: Color32,
             filled: bool,
+            /// A side of a distance: the row of `apart` it belongs to (its two frames are joined by a dimension line).
+            apart: Option<usize>,
         }
         let spec = &self.sch.requirements;
         let mut frames: Vec<Frame> = vec![];
         for (k, g) in spec.groups.iter().enumerate() {
             if let Some(r) = self.frame_of(rect, &g.parts).filter(|r| r.intersects(rect)) {
                 let text = if g.max_dist > 0.0 { format!("近くに置く: {} ({} mm 以内)", g.name, g.max_dist) } else { format!("近くに置く: {}", g.name) };
-                frames.push(Frame { r, text, col: FRAME_COLORS[k % FRAME_COLORS.len()], filled: true });
+                frames.push(Frame { r, text, col: FRAME_COLORS[k % FRAME_COLORS.len()], filled: true, apart: None });
             }
         }
         for (k, a) in spec.apart.iter().enumerate() {
             let col = FRAME_COLORS[(k + spec.groups.len() + 3) % FRAME_COLORS.len()];
             for (side, names) in [("A", &a.a), ("B", &a.b)] {
                 if let Some(r) = self.frame_of(rect, names).filter(|r| r.intersects(rect)) {
-                    frames.push(Frame { r, text: format!("離す {side}: {} ({} mm 以上)", a.name, a.min_dist), col, filled: false });
+                    frames.push(Frame { r, text: format!("離す {side}"), col, filled: false, apart: Some(k) });
                 }
             }
         }
@@ -300,10 +303,37 @@ pub(super) fn draw_requirement_frames(&self, painter: &egui::Painter, rect: Rect
                 painter.rect_filled(*r, 4.0, f.col.gamma_multiply(0.07));
                 painter.rect_stroke(*r, 4.0, Stroke::new(1.5, f.col), egui::StrokeKind::Inside);
             } else {
-                painter.rect_stroke(*r, 4.0, Stroke::new(1.5, f.col), egui::StrokeKind::Inside);
-                // a dashed look: a second, thinner frame inside
-                painter.rect_stroke(r.shrink(3.0), 3.0, Stroke::new(0.7, f.col.gamma_multiply(0.6)), egui::StrokeKind::Inside);
+                // a side of a distance: dashed, not filled (it is not a group)
+                let c = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()];
+                painter.extend(egui::Shape::dashed_line(&c, Stroke::new(1.6, f.col), 6.0, 4.0));
             }
+        }
+        // each distance: a dimension line between its two frames (from edge to edge on the line of their middles), arrows at both
+        // ends, the name and the distance in the middle
+        for (k, a) in spec.apart.iter().enumerate() {
+            let side = |n: usize| frames.iter().zip(&rects).filter(|(f, _)| f.apart == Some(k)).nth(n).map(|(f, r)| (f.col, *r));
+            let (Some((col, ra)), Some((_, rb))) = (side(0), side(1)) else { continue };
+            if ra.intersects(rb) {
+                continue;
+            }
+            let (pa, pb) = (edge_toward(ra, rb.center()), edge_toward(rb, ra.center()));
+            let stroke = Stroke::new(1.6, col);
+            painter.line_segment([pa, pb], stroke);
+            let dir = (pb - pa).normalized();
+            for (p, d) in [(pa, -dir), (pb, dir)] {
+                // an arrowhead touching the frame, pointing at it
+                let side = d.rot90() * 4.0;
+                painter.add(egui::Shape::convex_polygon(vec![p, p - d * 9.0 + side, p - d * 9.0 - side], col, Stroke::NONE));
+            }
+            let text = format!("離す {}: {} mm 以上", a.name, a.min_dist);
+            let g = painter.layout_no_wrap(text, FontId::proportional(12.0), Color32::WHITE);
+            // beside the line (above it, or left of an upright one), not over it: the line and the parts under it stay seen
+            let size = g.size() + Vec2::new(8.0, 3.0);
+            let mid = pa + (pb - pa) * 0.5;
+            let off = if dir.x.abs() >= dir.y.abs() { Vec2::new(0.0, -(size.y / 2.0 + 3.0)) } else { Vec2::new(-(size.x / 2.0 + 4.0), 0.0) };
+            let tag = Rect::from_center_size(mid + off, size);
+            painter.rect_filled(tag, 3.0, col);
+            painter.galley(tag.min + Vec2::new(4.0, 1.5), g, Color32::WHITE);
         }
         let galleys: Vec<_> = frames.iter().map(|f| painter.layout_no_wrap(f.text.clone(), FontId::proportional(12.0), Color32::WHITE)).collect();
         let sizes: Vec<Vec2> = galleys.iter().map(|g| g.size() + Vec2::new(8.0, 3.0)).collect();
@@ -932,6 +962,16 @@ fn spread_frames(frames: &mut [Rect]) {
 
 /// Where each frame's name tag goes: on the frame's top edge, at its left, or else further right along that edge past the tags
 /// already placed, or else a row higher; kept within `view` so that it can be read. No two tags overlap while there is room.
+/// Where the line from the middle of `r` to `toward` leaves `r` (on its edge).
+fn edge_toward(r: Rect, toward: Pos2) -> Pos2 {
+    let c = r.center();
+    let d = toward - c;
+    // how far along d the edge is: the nearer of the vertical and the horizontal edges
+    let tx = if d.x.abs() > 1e-3 { (r.width() / 2.0) / d.x.abs() } else { f32::INFINITY };
+    let ty = if d.y.abs() > 1e-3 { (r.height() / 2.0) / d.y.abs() } else { f32::INFINITY };
+    c + d * tx.min(ty).min(1.0)
+}
+
 fn place_tags(frames: &[Rect], sizes: &[Vec2], view: Rect) -> Vec<Rect> {
     let mut placed: Vec<Rect> = vec![];
     for (f, size) in frames.iter().zip(sizes) {
