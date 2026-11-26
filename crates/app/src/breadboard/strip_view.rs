@@ -4,7 +4,7 @@
 
 use super::*;
 use sch_core::mount::{shopping, Mount};
-use sch_core::perfboard::{links_along_pins, lock_first, perf_layout_around, perf_layout_with, LockWhy};
+use sch_core::perfboard::{links_along_pins, lock_first, perf_layout_around, perf_layout_with, perf_route_left, without_wires, LockWhy};
 use sch_core::strip_print::{perf_wires, strip_svg, Face};
 use sch_core::strip_edit::{bare_near, cut_toggled, picked_moved, picked_turned, parts_touching_box, link_end_moved, part_moved, part_turned, parts_aligned, parts_in_box, sections_followed, synced, wires_in_boxes_removed, with_bare, with_link, with_wire, without_bare, without_link, StripAlign};
 use sch_core::stripboard::{hole_name, net_at, strip_check, strip_layout_with, strip_rules, strip_unjoined, At, StripLayout, StripOptions};
@@ -67,8 +67,10 @@ pub struct StripState {
     synced: Option<(u64, usize, StripLayout, StripLayout)>,
     /// A layout being made on another thread (a perfboard's tries take up to 1.5 s: the window does not stop meanwhile).
     job: Option<StripJob>,
-    /// "固定した部品のまわりを並べ直す" on another thread: the layout round the locked parts comes back here.
+    /// "自動配置" (and a box put, parts lined up) on another thread: the layout round the locked parts comes back here.
     pub(super) around: Option<std::sync::mpsc::Receiver<StripLayout>>,
+    /// The layout coming back on `around` is "自動配置"'s: its parts kept, its wires left off (wired by "自動配線").
+    place_only: bool,
     /// A section's box let go where it was dragged, drawn there until the layout round it comes back.
     put_box: Option<(At, At)>,
     pub(super) drag: Option<StripDrag>,
@@ -300,8 +302,13 @@ impl BreadboardView {
                 self.strip.put_box = None;
                 self.strip_unpick();
                 self.strip.picked_link = None;
-                self.strip_set(sch, Some(m));
-                sch.status = i18n::tr("固定した部品・置いた区画の箱はそのままで、ほかの部品を並べ直し、線を引き直しました (元に戻すで戻せます)").to_string();
+                if std::mem::take(&mut self.strip.place_only) {
+                    self.strip_set(sch, Some(without_wires(&m)));
+                    sch.status = i18n::tr("部品を置き直しました (固定した部品・置いた区画の箱はそのまま)。線は消えたので、黄色の線を見て手で引くか「自動配線」で引きます (元に戻すで戻せます)").to_string();
+                } else {
+                    self.strip_set(sch, Some(m));
+                    sch.status = i18n::tr("固定した部品・置いた区画の箱はそのままで、ほかの部品を並べ直し、線を引き直しました (元に戻すで戻せます)").to_string();
+                }
             }
             Err(TryRecvError::Disconnected) => {
                 self.strip.around = None;
@@ -311,8 +318,29 @@ impl BreadboardView {
         }
     }
 
-    /// "固定した部品のまわりを並べ直す": the layout round `l`'s locked parts, made on another thread (`strip_around_done` keeps it).
+    /// "自動配置": the parts placed again round `l`'s locked parts and pinned boxes, on another thread, the wires left off
+    /// (`strip_around_done`).
+    pub(super) fn strip_place(&mut self, sch: &SchEditor, l: &StripLayout) {
+        self.strip_relayout(sch, l);
+        self.strip.place_only = true;
+    }
+
+    /// "自動配線": the nets left apart wired, every wire on the board kept (`perf_route_left`).
+    pub(super) fn strip_route(&mut self, sch: &mut SchEditor, l: &StripLayout) {
+        let before = strip_unjoined(&sch.sch, l).iter().map(|x| x.0.clone()).collect::<std::collections::BTreeSet<_>>().len();
+        let m = perf_route_left(&sch.sch, l);
+        let after = strip_unjoined(&sch.sch, &m).iter().map(|x| x.0.clone()).collect::<std::collections::BTreeSet<_>>().len();
+        self.strip_set(sch, Some(m));
+        sch.status = if after == 0 {
+            i18n::trf!("つながっていなかった {} 個のネットに線を引きました。前からある線はそのままです (元に戻すで戻せます)", before)
+        } else {
+            i18n::trf!("{} 個のネットに線を引きました。{} 個は通り道が無く引けませんでした (黄色の線)。部品を少し動かすか、表の線を手で引きます", before - after.min(before), after)
+        };
+    }
+
+    /// The layout round `l`'s locked parts (placed and wired), made on another thread (`strip_around_done` keeps it).
     pub(super) fn strip_relayout(&mut self, sch: &SchEditor, l: &StripLayout) {
+        self.strip.place_only = false;
         let (tx, rx) = std::sync::mpsc::channel();
         let (s, from, opt) = (sch.sch.clone(), l.clone(), strip_options(sch.strip_size, sch.strip_chips_back, sch.strip_mount_holes));
         std::thread::spawn(move || {
@@ -472,7 +500,7 @@ impl BreadboardView {
         }
         ui.horizontal_wrapped(|ui| {
             ui.small(egui::RichText::new(i18n::tr("まず手で置くとよい部品:")).color(LOCK)).on_hover_text(i18n::tr(
-                "全体の形を決める部品です。この部品を自分で置いて固定 (L) し、「固定した部品のまわりを並べ直す」で残りを自動に任せると、全部自動より表の線が少なくなることが多いです (DMM の B 段: 81 本 → 72〜75 本)。ほかの部品は近くに寄せて線をまっすぐ引く自動の方が得意です",
+                "全体の形を決める部品です。この部品を自分で置いて固定 (L) し、「自動配置」で残りを自動に任せると、全部自動より表の線が少なくなることが多いです (DMM の B 段: 81 本 → 72〜75 本)。ほかの部品は近くに寄せて線をまっすぐ引く自動の方が得意です",
             ));
             for (r, why) in &hints {
                 let tip = match why {
@@ -513,7 +541,7 @@ impl BreadboardView {
                 ui.add(egui::DragValue::new(h).range(20.0..=400.0).suffix(" mm")).on_hover_text(i18n::tr("縦 (mm)"));
             }
             if sch.strip_size != before && sch.stripboard.is_some() {
-                sch.status = i18n::tr("手で動かした並べ方はそのままです。新しい大きさで並べるには「自動で並べ直す」を押します").to_string();
+                sch.status = i18n::tr("手で動かした並べ方はそのままです。新しい大きさで並べるには「自動で並べ直す」(ユニバーサル基板は「自動配置」) を押します").to_string();
             }
         });
         {
@@ -522,7 +550,7 @@ impl BreadboardView {
                 "基板の四隅にスペーサーの取り付け穴 (M3) をあけるとき、隅の 3 × 3 穴 (穴とスペーサーの場所) に部品・線を置かないで並べます。右の隅は基板の横、下の隅は縦を決めたときだけ分かるので、大きさも選んでください。禁止の所は灰色の丸で出ます",
             ));
             if sch.strip_mount_holes != before && sch.stripboard.is_some() {
-                sch.status = i18n::tr("手で動かした並べ方はそのままです。取り付け穴をよけて並べるには「自動で並べ直す」を押します").to_string();
+                sch.status = i18n::tr("手で動かした並べ方はそのままです。取り付け穴をよけて並べるには「自動で並べ直す」(ユニバーサル基板は「自動配置」) を押します").to_string();
             }
         }
         {
@@ -531,7 +559,7 @@ impl BreadboardView {
                 "0805・1206 のチップ抵抗・チップコンデンサを、裏 (はんだの面) で隣り合う 2 つの穴にまたがせてはんだ付けする並べ方にします。ユニバーサル基板では、片方の端を、つなぐ IC の足の穴に一緒にはんだ付けできるので、プルアップやパスコンを足のすぐそばに置けて、表の部品と線が減り、基板が小さくなります。ストリップ基板では、つなぐ 2 つのネットの帯が上下に隣り合う所にまたがせます (そういう所が無いチップは表のまま。全部を表にした並べ方より小さくならないときは、全部を表にした並べ方にします)。小さいチップを手ではんだ付けするのに慣れた人向けです (初めてなら、同じ値のリード部品を表に付ける今の形で)。リード部品は裏に付けません",
             ));
             if sch.strip_chips_back != before && sch.stripboard.is_some() {
-                sch.status = i18n::tr("手で動かした並べ方はそのままです。チップ部品を裏に付けて並べるには「自動で並べ直す」を押します").to_string();
+                sch.status = i18n::tr("手で動かした並べ方はそのままです。チップ部品を裏に付けて並べるには「自動で並べ直す」(ユニバーサル基板は「自動配置」) を押します").to_string();
             }
         }
         // what sits on the mounting holes' corners (the layout as it is: moved by hand, or laid out before the holes were asked for)
@@ -637,7 +665,34 @@ impl BreadboardView {
                 self.strip_undo(sch, false);
             }
         });
-        if sch.stripboard.is_some() {
+        if !strip {
+            // the perfboard: placing and wiring apart
+            let busy = self.strip.around.is_some();
+            // (the checks kept between frames: the lines to join)
+            let left = self.strip_checks(sch, l).unjoined.len();
+            ui.horizontal_wrapped(|ui| {
+                if crate::widgets::unless(ui, busy.then_some("いま並べています。終わるまでお待ちください"), egui::Button::new(i18n::tr("自動配置")))
+                    .on_hover_text(i18n::tr("部品だけを自動で置き直します。固定した部品 (L) と、置いた区画の箱はそのままです。線は消えるので、黄色の線を見て手で引くか、「自動配線」で引きます (元に戻すで戻せます)"))
+                    .clicked()
+                {
+                    self.strip_unpick();
+                    self.strip.picked_link = None;
+                    self.strip_place(sch, l);
+                }
+                let why = if busy { Some("いま並べています。終わるまでお待ちください") } else if left == 0 { Some("全部つながっていて、引く線がありません") } else { None };
+                if crate::widgets::unless(ui, why, egui::Button::new(i18n::tr("自動配線")))
+                    .on_hover_text(i18n::tr("まだつながっていないネット (黄色の線) にだけ線を引きます。手で引いた線も、前に引いた線も、そのまま残ります。通り道の無いネットは黄色の線のまま残ります (元に戻すで戻せます)"))
+                    .clicked()
+                {
+                    self.strip_route(sch, l);
+                }
+            });
+            if sch.stripboard.is_none() {
+                ui.label(egui::RichText::new(i18n::tr("(自動で並べた形)")).color(NOTE)).on_hover_text(i18n::tr(
+                    "まだ手で動かしていないので、回路図を変えると並べ直されます。動かすと、その並べ方が回路図のファイルに入り、回路図を変えたときは、足した部品だけが基板の右に加わり、そのネットへの線も引かれます",
+                ));
+            }
+        } else if sch.stripboard.is_some() {
             if ui.button(i18n::tr("自動で並べ直す")).on_hover_text(i18n::tr("回路図から並べ方を作り直します。手で動かした分は消えます (元に戻すで戻せます)")).clicked() {
                 self.strip_set(sch, None);
                 self.strip_unpick();
@@ -683,7 +738,7 @@ impl BreadboardView {
                 if let Some(r) = self.picked.clone().filter(|r| l.parts.iter().any(|p| &p.refdes == r)) {
                     let locked = l.locked.contains(&r);
                     let label = if locked { i18n::trf!("{} の固定を外す", r) } else { i18n::trf!("{} を固定する", r) };
-                    if ui.button(label).on_hover_text(i18n::tr("選んだ部品を今の穴に固定します (L)。「固定した部品のまわりを並べ直す」で、固定した部品は動かさず、ほかの部品を並べ直します。コネクタやつまみのようにケースの穴に合わせる部品、大きい IC など、置き場所を自分で決めたい部品に使います")).clicked() {
+                    if ui.button(label).on_hover_text(i18n::tr("選んだ部品を今の穴に固定します (L)。「自動配置」で、固定した部品は動かさず、ほかの部品を並べ直します。コネクタやつまみのようにケースの穴に合わせる部品、大きい IC など、置き場所を自分で決めたい部品に使います")).clicked() {
                         let mut m = l.clone();
                         self.strip_lock_toggle(sch, &mut m, &r);
                     }
@@ -697,16 +752,6 @@ impl BreadboardView {
                         let mut m = l.clone();
                         m.pinned.clear();
                         self.strip_relayout(sch, &m);
-                    }
-                }
-                let n = l.locked.len();
-                if n > 0 {
-                    let busy = self.strip.around.is_some();
-                    if crate::widgets::unless(ui, busy.then_some("いま並べています。終わるまでお待ちください"), egui::Button::new(i18n::trf!("固定した部品 ({} 個) のまわりを並べ直す", n)))
-                        .on_hover_text(i18n::tr("固定した部品はその穴のまま、ほかの部品を自動で置き直し、線を全部引き直します。固定した部品のまわりは、線の通り道に少し空けます (元に戻すで戻せます)"))
-                        .clicked()
-                    {
-                        self.strip_relayout(sch, l);
                     }
                 }
             });
@@ -867,7 +912,7 @@ impl BreadboardView {
                 ui.horizontal_top(|ui| {
                     ui.add_sized([44.0, 18.0], egui::Label::new(egui::RichText::new(&p.refdes).strong()));
                     if l.locked.contains(&p.refdes) {
-                        ui.label(egui::RichText::new(i18n::tr("固定")).color(LOCK).small()).on_hover_text(i18n::tr("この部品は固定してあります。「固定した部品のまわりを並べ直す」で動きません"));
+                        ui.label(egui::RichText::new(i18n::tr("固定")).color(LOCK).small()).on_hover_text(i18n::tr("この部品は固定してあります。「自動配置」で動きません"));
                     }
                     ui.vertical(|ui| {
                         ui.add(egui::Label::new(p.leads.iter().map(|(pin, at)| format!("{pin}:{}", hole_name(*at))).collect::<Vec<_>>().join("  ")).wrap());
@@ -881,7 +926,7 @@ impl BreadboardView {
                             let before = c.mount;
                             crate::breadboard::mount_choice_ui(ui, c, ("strip_mount", &p.refdes));
                             if c.mount != before && sch.stripboard.is_some() {
-                                sch.status = i18n::tr("付け方を変えました。手で動かした並べ方はそのままです。新しい付け方で並べるには「自動で並べ直す」を押します").to_string();
+                                sch.status = i18n::tr("付け方を変えました。手で動かした並べ方はそのままです。新しい付け方で並べるには「自動で並べ直す」(ユニバーサル基板は「自動配置」) を押します").to_string();
                             }
                         }
                     });

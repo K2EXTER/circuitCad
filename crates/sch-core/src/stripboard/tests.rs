@@ -761,3 +761,29 @@ fn the_perfboard_wiring_runs_bare_wires_at_45_degrees() {
     assert!(!slanted.is_empty(), "{:?}", l.bare);
     assert!(l.bare.iter().all(|(a, b)| bare_way(*a, *b)));
 }
+
+/// "自動配線" on a perfboard wires only what is left apart: the active filter's board with one net's wires taken away (and one bare
+/// wire of another net drawn by hand kept) comes back joined as drawn, every wire left on it still there; with no wires at all
+/// (after "自動配置") it is wired whole.
+#[test]
+fn the_perfboard_wiring_wires_only_what_is_left_apart() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/active_filter.schjson");
+    let s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let l = crate::perfboard::perf_layout_with(&s, StripOptions::default());
+    let net = l.bare.first().map(|(a, _)| strip_hole_nets(&s, &l)[a].clone()).expect("a bare wire");
+    let mut m = l.clone();
+    let nets = strip_hole_nets(&s, &l);
+    m.bare.retain(|(a, _)| nets.get(a) != Some(&net));
+    m.links.retain(|k| k.net != net);
+    assert!(!strip_unjoined(&s, &m).is_empty(), "{net} taken apart");
+    let r = crate::perfboard::perf_route_left(&s, &m);
+    assert!(strip_check(&s, &r).is_empty() && strip_unjoined(&s, &r).is_empty(), "{:?}", strip_check(&s, &r));
+    assert!(m.bare.iter().all(|w| r.bare.contains(w)) && m.links.iter().all(|k| r.links.contains(k)), "every wire kept");
+    // nothing left apart: nothing to do
+    assert_eq!(crate::perfboard::perf_route_left(&s, &r), r);
+    // no wires at all
+    let none = crate::perfboard::without_wires(&l);
+    assert!(none.bare.is_empty() && none.links.is_empty() && none.parts == l.parts);
+    let all = crate::perfboard::perf_route_left(&s, &none);
+    assert!(strip_check(&s, &all).is_empty() && strip_unjoined(&s, &all).is_empty(), "{:?}", strip_check(&s, &all));
+}

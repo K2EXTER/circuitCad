@@ -594,8 +594,9 @@ fn a_part_dragged_on_the_stripboard_stays_and_is_checked() {
     assert_eq!(app.breadboard.strip_shown(&app.sch), auto);
 }
 
-/// On the perfboard, L locks the picked part (kept with the sheet, the padlock's mark in the list); "固定した部品のまわりを並べ直す"
-/// then lays the others out again round it: the locked part in the same holes, the lock kept, the board as the schematic joins it.
+/// On the perfboard, L locks the picked part (kept with the sheet, the padlock's mark in the list); laid out again round it, the
+/// locked part stays in the same holes, the lock kept, the board as the schematic joins it. "自動配置" places the parts round it
+/// and leaves the wires off (the nets shown as lines to join), and "自動配線" wires them, a wire drawn by hand kept.
 #[test]
 fn a_part_locked_on_the_perfboard_stays_when_the_rest_is_laid_out_again() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
@@ -630,6 +631,22 @@ fn a_part_locked_on_the_perfboard_stays_when_the_rest_is_laid_out_again() {
     assert_eq!(again.parts.iter().find(|p| p.refdes == "U1").unwrap().leads, u1.leads, "U1 stays");
     assert!(again.locked.contains("U1"), "still locked");
     assert!(sch_core::stripboard::strip_check(&app.sch.sch, &again).is_empty(), "{:?}", sch_core::stripboard::strip_check(&app.sch.sch, &again));
+    // "自動配置": the parts placed, U1 where it is, no wires
+    app.breadboard.strip_place(&app.sch, &again);
+    run(&mut app, vec![]);
+    let placed = app.sch.stripboard.clone().unwrap();
+    assert_eq!(placed.parts.iter().find(|p| p.refdes == "U1").unwrap().leads, u1.leads, "U1 stays");
+    assert!(placed.links.is_empty() && placed.bare.is_empty(), "no wires");
+    assert!(!sch_core::stripboard::strip_unjoined(&app.sch.sch, &placed).is_empty(), "lines to join");
+    // a wire drawn by hand first (from U1's first lead to the free hole beside it), then "自動配線"
+    let a = u1.leads[0].1;
+    let b = [(a.0, a.1.wrapping_sub(1)), (a.0.wrapping_sub(1), a.1), (a.0 + 1, a.1)].into_iter().find(|h| h.1 < placed.cols && h.0 < placed.rows && !placed.used().iter().any(|x| x.0 == *h)).unwrap();
+    let mut hand = placed.clone();
+    hand.bare.push((a, b));
+    app.breadboard.strip_route(&mut app.sch, &hand);
+    let wired = app.sch.stripboard.clone().unwrap();
+    assert!(sch_core::stripboard::strip_unjoined(&app.sch.sch, &wired).is_empty() && sch_core::stripboard::strip_check(&app.sch.sch, &wired).is_empty(), "{:?}", sch_core::stripboard::strip_check(&app.sch.sch, &wired));
+    assert!(wired.bare.contains(&(a, b)), "the wire drawn by hand kept");
 }
 
 /// On the perfboard, a section's name dragged two rows down: the box is put there (kept with the sheet, marked as put by hand),

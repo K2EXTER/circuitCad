@@ -196,7 +196,7 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
                     break;
                 }
                 let mut m = l.clone();
-                route(&full, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first, forks: &fork_at, along: ALONG_COST, bypass: &bypass_at });
+                route(&full, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first, forks: &fork_at, along: ALONG_COST, bypass: &bypass_at, keep: false });
                 let apart = crate::stripboard::strip_unjoined(s, &m);
                 let key = rank(s, &m, apart.len());
                 // a placing far behind the best on its first wiring is not wired again (the rounds after gain less than that)
@@ -1137,6 +1137,37 @@ pub fn links_along_pins(l: &StripLayout) -> Vec<(usize, String)> {
         .collect()
 }
 
+/// The layout with the nets still left apart wired, every wire already on it kept (hand-drawn or automatic): each net in two or more
+/// pieces of copper is wired from piece to piece as the automatic wiring goes (bare wires on the copper side, along a row, a column
+/// or at 45 degrees, and a wire on top over what is in the way), round the copper already there. The new wires' sides are chosen as
+/// the automatic layout's are (`wire_sides`); the old ones are left as they are. Four orders are tried (the supplies first or last,
+/// with or without a way out kept by each lead): the one with the fewest nets left apart, then the fewest wires on top.
+pub fn perf_route_left(s: &Schematic, l: &StripLayout) -> StripLayout {
+    let c = read(s);
+    let net_of_lead = |r: &str, p: &str| lead_net(&c, r, p);
+    let mut best: Option<((usize, usize), StripLayout)> = None;
+    for (rails_first, escapes) in [(true, false), (false, false), (true, true), (false, true)] {
+        let mut m = l.clone();
+        route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &[], forks: &[], along: ALONG_COST, bypass: &[], keep: true });
+        let key = (crate::stripboard::strip_unjoined(s, &m).len(), m.links.len());
+        if best.as_ref().is_none_or(|b| key < b.0) {
+            best = Some((key, m));
+        }
+    }
+    let mut m = best.map(|b| b.1).unwrap_or_else(|| l.clone());
+    let old = l.links.len();
+    let mut new = StripLayout { links: m.links.split_off(old), ..m.clone() };
+    wire_sides(&mut new);
+    m.links.extend(new.links);
+    m
+}
+
+/// The layout with its parts where they are and no wires (`StripLayout::links`, `bare`): what "自動配置" leaves, the nets shown as
+/// lines to join until "自動配線" (`perf_route_left`) wires them.
+pub fn without_wires(l: &StripLayout) -> StripLayout {
+    StripLayout { links: vec![], bare: vec![], ..l.clone() }
+}
+
 /// Chooses each automatic wire's side and kind once a layout is done (`Link::back`, `Link::tinned`): a wire on top that would lie
 /// along a chip's row of pins (`links_along_pins`: on the socket) goes on the copper side, insulated (it may cross the bare wires
 /// there); a wire on top along a row or a column that passes over no hole with something coming up through it (a lead, a wire's
@@ -1460,10 +1491,13 @@ struct Order<'a> {
     along: u32,
     /// The bypass capacitors' leads and the IC's pin each serves (the pin, the lead): each wired from the pin first (L17).
     bypass: &'a [(At, At)],
+    /// The wires already on the board kept (`perf_route_left`): their holes are their nets', and only the nets still in two or more
+    /// pieces are wired, each from one piece to the next.
+    keep: bool,
 }
 
 fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> String, order: Order) {
-    let Order { rails_first, escapes, first, forks, along: along_extra, bypass } = order;
+    let Order { rails_first, escapes, first, forks, along: along_extra, bypass, keep } = order;
     let (rows, cols) = (l.rows as usize, l.cols as usize);
     let idx = |a: At| a.0 as usize * cols + a.1 as usize;
     let hole = |h: usize| ((h / cols) as u16, (h % cols) as u16);
@@ -1551,7 +1585,7 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
         let (_, p, q) = &sections[k];
         a.0 >= p.0 && a.0 <= q.0 && a.1 >= p.1 && a.1 <= q.1
     };
-    if !l.sections.is_empty() {
+    if !l.sections.is_empty() && !keep {
         let mut split = vec![];
         for (i, v, _) in std::mem::take(&mut nets) {
             if is_ground_name(&names[i as usize]) {
@@ -1570,7 +1604,7 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
     let grounds: Vec<(u32, Vec<At>, Option<usize>)> = nets.iter().filter(|x| x.2.is_some()).cloned().collect();
     nets.retain(|(_, v, _)| v.len() > 1);
     // the river: a long header's two-lead nets to the row of a chip's pins under it, wired first as nested Ls that do not cross
-    for (net, segs) in river(l, &leads, &owner, &escape) {
+    for (net, segs) in if keep { vec![] } else { river(l, &leads, &owner, &escape) } {
         for (a, b) in &segs {
             for h in along(*a, *b) {
                 owner[idx(h)] = Some(net);
@@ -1590,6 +1624,53 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
         (ahead, !short(v), rail(*i) != rails_first, v.len(), (r1 - r0) + (c1 - c0))
     });
     let mut link_ends: BTreeSet<At> = BTreeSet::new();
+    // the wires kept (`Order::keep`): each piece of copper (the holes joined by the wires, with the leads on them) belongs to the net
+    // of a lead on it, its holes taken by that net; a net already in one piece is left alone, one in two or more is wired from piece
+    // to piece (its terms: every hole of its pieces)
+    let mut piece_of: BTreeMap<At, usize> = BTreeMap::new();
+    let mut piece_holes: BTreeMap<usize, Vec<At>> = BTreeMap::new();
+    if keep {
+        let groups = l.hole_groups();
+        let mut net_of_group: BTreeMap<usize, u32> = BTreeMap::new();
+        for (a, i) in &leads {
+            if let Some(g) = groups.get(a) {
+                net_of_group.entry(*g).or_insert(*i);
+            }
+        }
+        let wired = id("\u{0}wired", &mut names);
+        let mut copper: Vec<(At, usize)> = l.bare.iter().flat_map(|(a, b)| crate::stripboard::bare_holes(*a, *b).into_iter().map(|h| (h, groups.get(a).copied().unwrap_or(usize::MAX)))).collect();
+        for k in &l.links {
+            for e in [k.a, k.b] {
+                copper.push((e, groups.get(&e).copied().unwrap_or(usize::MAX)));
+                link_ends.insert(e);
+            }
+        }
+        for (h, g) in copper.into_iter().filter(|(h, _)| (h.0 as usize) < rows && (h.1 as usize) < cols) {
+            owner[idx(h)] = Some(net_of_group.get(&g).copied().unwrap_or(wired));
+            if net_of_group.contains_key(&g) {
+                piece_holes.entry(g).or_default().push(h);
+            }
+        }
+        for (a, _) in &leads {
+            if let Some(g) = groups.get(a) {
+                piece_holes.entry(*g).or_default().push(*a);
+            }
+        }
+        for (g, hs) in &mut piece_holes {
+            hs.sort();
+            hs.dedup();
+            for h in hs.iter() {
+                piece_of.insert(*h, *g);
+            }
+        }
+        for (_, terms, _) in &mut nets {
+            let mut gs: Vec<usize> = terms.iter().filter_map(|a| groups.get(a).copied()).collect();
+            gs.sort();
+            gs.dedup();
+            *terms = if gs.len() < 2 { vec![] } else { gs.iter().flat_map(|g| piece_holes[g].iter().copied()).collect() };
+        }
+        nets.retain(|(_, v, _)| !v.is_empty());
+    }
     // a state is a hole and how the way came in: 0..4 a step that way along a row or a column, 4..8 a step at 45 degrees (`SLANTS`),
     // 8 the start, 9 landed from a jump
     const WAYS: usize = 10;
@@ -1634,7 +1715,12 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
         let mut first_way: BTreeSet<At> = BTreeSet::new();
         // each start of a forced way (None: from the copper so far)
         let mut forced_from: Vec<Option<At>> = vec![];
-        if let Some([st, a, b]) = fork {
+        if keep {
+            // the wires kept: from the first piece of copper, to any hole of the others
+            let g0 = piece_of[&terms[0]];
+            tree = piece_holes[&g0].clone();
+            left = terms.iter().copied().filter(|t| piece_of.get(t) != Some(&g0)).collect();
+        } else if let Some([st, a, b]) = fork {
             tree = vec![st];
             left = terms.iter().copied().filter(|t| *t != st).collect();
             forced = vec![a, b];
@@ -1855,6 +1941,11 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                 }
             }
             left.remove(path.last().unwrap());
+            // a piece of copper reached (the wires kept): all of it joined now
+            if let Some(g) = piece_of.get(path.last().unwrap()).copied().filter(|_| keep) {
+                left.retain(|h| piece_of.get(h) != Some(&g));
+                tree.extend(piece_holes[&g].iter().copied());
+            }
             if target.is_some() {
                 // the fork's first way: its copper (but the lead) kept off by the second
                 if forced.len() == 2 && fork.is_some() {
@@ -2333,7 +2424,7 @@ mod tests {
             let placed = place(&c, StripOptions::default(), GAPS[0], turned, false, &wants, None);
             for (rails_first, escapes) in [(true, false), (false, false), (true, true), (false, true)] {
                 let mut m = placed.clone();
-                route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &[], forks: &[], along: ALONG_COST, bypass: &[] });
+                route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &[], forks: &[], along: ALONG_COST, bypass: &[], keep: false });
                 tried.push(m);
             }
         }
