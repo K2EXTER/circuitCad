@@ -4010,6 +4010,61 @@ void loop() {
 }
 ";
 
+/// The sketch of the servo sample: the knob on A0 sets the servo's angle on D9 (Arduino's Servo library).
+pub const ARDUINO_SERVO_SKETCH: &str = "// A0 のボリュームを回すと、D9 のサーボが同じだけ回ります (Servo ライブラリ)
+#include <Servo.h>
+
+Servo servo;
+
+void setup() {
+  Serial.begin(9600);
+  servo.attach(9);
+}
+
+void loop() {
+  int angle = map(analogRead(A0), 0, 1023, 0, 180);
+  servo.write(angle);   // 0〜180 度
+  Serial.println(angle);
+  delay(100);
+}
+";
+
+/// The servo sample (W5 ⑤): a micro servo on the Nano's D9 (powered from its 5 V), a potentiometer on A0 setting its angle,
+/// run as the real chip's instructions (the Servo library). `cargo test -p app write_arduino_servo_example -- --ignored`
+#[test]
+#[ignore]
+fn write_arduino_servo_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let nano = library_part("ARDUINO_NANO");
+    let servo = library_part("MICRO_SERVO");
+    let mut s = sch_core::Schematic::default();
+    let u = s.add_custom(nano.symbol(), &nano.default_value(), &nano.footprint_name(), (20, 0), 0);
+    let number = |name: &str| nano.pins.iter().find(|p| p.name == name).map(|p| p.number.clone()).unwrap();
+    label_pin(&mut s, u, &number("D9"), "SIG");
+    label_pin(&mut s, u, &number("A0"), "KNOB");
+    label_pin(&mut s, u, "4", "GND");
+    label_pin(&mut s, u, "29", "GND");
+    label_pin(&mut s, u, &number("5V"), "5V");
+    let m = s.add_custom(servo.symbol(), &servo.default_value(), &servo.footprint_name(), (70, 0), 0);
+    label_pin(&mut s, m, "1", "GND");
+    label_pin(&mut s, m, "2", "5V");
+    label_pin(&mut s, m, "3", "SIG");
+    let vr = s.add(Kind::Pot, (-20, 0), 1);
+    s.components[vr].value = "10k POS=30".into();
+    label_pin(&mut s, vr, "1", "5V");
+    label_pin(&mut s, vr, "2", "KNOB");
+    label_pin(&mut s, vr, "3", "GND");
+    let mut v = serde_json::to_value(&s).unwrap();
+    let refdes = s.components[u].refdes.clone();
+    let settings = crate::schematic::SheetSettings {
+        sketches: [(refdes.clone(), ARDUINO_SERVO_SKETCH.to_string())].into_iter().collect(),
+        sketch_real: [refdes].into_iter().collect(),
+        ..Default::default()
+    };
+    crate::schematic::with_settings(&mut v, &settings);
+    std::fs::write(root.join("arduino_servo.schjson"), serde_json::to_string_pretty(&v).unwrap()).unwrap();
+}
+
 /// The sketch of the ATtiny85 sample: the LED on PB1 blinks, the knob on A1 (PB2) sets how fast.
 pub const ATTINY85_SKETCH: &str = "// ATtiny85 の PB1 の LED を点滅させます。A1 (PB2) のボリュームで速さが変わります
 // ATtiny85 には USB が無いので、8 番 (VCC) と 4 番 (GND) に電源をつなぎます

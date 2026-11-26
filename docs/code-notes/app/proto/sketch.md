@@ -7,6 +7,15 @@
 - 「部品と差す穴」の一覧は、表をやめて 1 部品 1 行の折り返し (30 ピンの板の 1 行がパネルを画面の大半まで広げた)。コードの欄も幅いっぱいを求めない。
 - サンプル `arduino_blink` (D13 → 330 Ω → LED) と `arduino_pot` (A0 のボリュームで D9 の LED の明るさ、シリアルに読んだ値)。生成 `write_arduino_examples`。テスト `the_arduino_sketch_blinks_the_led`・`the_arduino_reads_the_knob_and_sets_the_led` (`live.rs`)。
 
+## サーボ (W5 ⑤、2026-11-26)
+
+- 部品 `MICRO_SERVO` (9 g のマイクロサーボ。1 列 3 ピン GND・V+・SIG。回路のモデルは止まっているときの電流と信号の入力だけ)。
+- 角度は試作のタブの側 (`live.rs` の `Servo`): `power::add_sensors` が回路図のサーボを見つけて `Live::add_servo`。毎フレーム (`read_now` → `step_servos`)、SIG のネットを動かしているマイコンのピンのパルス (`pulses_on`: 本物のチップは `Mcu::drives`、今の読み方は `Machine::drives` の `Drive::Pwm`) の幅から角度 (`servo_angle`: 544 µs で 0°、2400 µs で 180°、40〜400 Hz だけ。Arduino の Servo ライブラリと同じ) を出し、600°/s (0.1 秒で 60°) で向かう。V+ が 3.5〜7.2 V の間だけ動き、パルスが無いとその向きのまま。
+- 絵 (`power::draw_running`): 部品の上に青い本体と白い腕 (濃い縁)。0° で右、90° で上、180° で左。角度、または「信号なし」「電源なし」。
+- 今の読み方には Servo ライブラリが無いので、動かすのは本物のマイコンの命令。avr-sim の側で 50 Hz の細いパルスが回路に渡るようにした (`NARROW_S`)。
+- 回っているときの電流 (数百 mA。電源が下がってマイコンがリセットする、よくある失敗)・トルク・負荷は扱わない (部品の説明に書いた)。
+- サンプル `arduino_servo` (D9 のサーボと A0 のボリューム)。試験 `a_pulse_gives_the_servo_its_angle`・`the_servo_turns_to_the_pulses_angle` (avr-sim の `servo.elf` で 0°・90°・180° へ)。画面で、アプリの中のコンパイル (3228 バイト、IDE で入れた Servo) とボリューム 30 % で 126° (`map` の 125 を Servo がマイクロ秒に丸めて 1° ずれる) を確かめた。
+
 ## スケッチのエディタ (2026-11-26、`breadboard/code_edit.rs`)
 
 - 色分け: `pieces` が文を、コメント (`//`・`/* */`)・文字列と文字・数・`#` の行・型 (`int`・`byte`・`uint8_t`…)・語 (`if`・`HIGH`・`OUTPUT`・`A0`…)・Arduino の関数 (`digitalWrite`・`Serial`…)・呼ばれる名前 (後ろに `(`) に分ける。`layout` が egui の `LayoutJob` にして、誤りの行 (`marked`) に赤い地。暗い地と明るい地で色の組を変える。重い色分けのライブラリ (syntect) は使わない。

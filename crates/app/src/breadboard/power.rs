@@ -297,6 +297,27 @@ pub(super) fn draw_running(painter: &egui::Painter, sch: &SchEditor, l: &Layout,
             painter.line_segment([c, c + Vec2::angled(a) * pitch * 0.8], Stroke::new(3.0, Color32::from_rgb(240, 200, 60)));
             painter.text(c + Vec2::new(pitch * 1.1, 0.0), egui::Align2::LEFT_CENTER, format!("{:.0} rpm", rpm), font.clone(), Color32::from_gray(40));
         }
+        if let Some(s) = lv.servos.iter().find(|s| s.refdes == p.refdes) {
+            // the servo's body above its pins, the horn pointing where the shaft is (0 degrees to the right, 180 to the left)
+            let c = rect.center() - Vec2::new(0.0, pitch * 2.2);
+            let body = Rect::from_center_size(c + Vec2::new(0.0, pitch * 0.35), Vec2::new(pitch * 2.6, pitch * 1.4));
+            painter.rect_filled(body, 3.0, Color32::from_rgb(40, 90, 170));
+            painter.circle_filled(c, pitch * 0.45, Color32::WHITE);
+            let a = s.angle.to_radians() as f32;
+            let arm = Vec2::new(a.cos(), -a.sin()) * pitch * 1.3;
+            // a dark edge round the white arm: it reaches over the light board
+            painter.line_segment([c, c + arm], Stroke::new(pitch * 0.35 + 2.0, Color32::from_gray(50)));
+            painter.line_segment([c, c + arm], Stroke::new(pitch * 0.35, Color32::WHITE));
+            painter.circle_filled(c, pitch * 0.45, Color32::WHITE);
+            let label = if !s.powered {
+                i18n::tr("電源なし").to_string()
+            } else if s.target.is_none() {
+                format!("{:.0}° ({})", s.angle, i18n::tr("信号なし"))
+            } else {
+                format!("{:.0}°", s.angle)
+            };
+            painter.text(body.right_center() + Vec2::new(pitch * 0.3, 0.0), egui::Align2::LEFT_CENTER, label, font.clone(), Color32::from_gray(40));
+        }
         if model.contains("BUZZER") && sounding.iter().any(|(r, v)| *r == p.refdes && sound::loudness(*v).is_some()) {
             // sound waves, pulsing
             let c = rect.center();
@@ -352,13 +373,23 @@ const HUMIDITY: f64 = 50.0;
 
 /// The SHT31 modules of the schematic, with the nets of their pins on the board, to the run (read by a real chip over I2C).
 pub(crate) fn add_sensors(lv: &mut Live, sch: &sch_core::Schematic, nets: &BoardNets) {
-    for c in sch.components.iter().filter(|c| is_sht31(c)) {
+    for c in sch.components.iter() {
         let pin = |name: &str| {
             let number = c.custom.as_ref()?.pins.iter().find(|p| p.name == name)?.number.clone();
             nets.pins.get(&(c.refdes.clone(), number)).cloned()
         };
-        lv.add_sht31(c.refdes.clone(), ["VIN", "GND", "SCL", "SDA", "ADR"].map(pin));
+        if is_sht31(c) {
+            lv.add_sht31(c.refdes.clone(), ["VIN", "GND", "SCL", "SDA", "ADR"].map(pin));
+        } else if is_servo(c) {
+            // a servo's shaft follows the pulses on its SIG
+            lv.add_servo(c.refdes.clone(), ["GND", "V+", "SIG"].map(pin));
+        }
     }
+}
+
+/// A servo (`MICRO_SERVO`): its shaft turns to the angle of the pulses on its SIG.
+fn is_servo(c: &sch_core::Component) -> bool {
+    c.custom.as_ref().and_then(|s| s.sim.as_ref()).is_some_and(|m| m.name == "MICRO_SERVO")
 }
 
 /// An SHT31 module (`SHT31_MODULE`): a real chip reads it over I2C.

@@ -1,0 +1,73 @@
+{
+  "name": "MICRO_SERVO",
+  "category": "モーター",
+  "description": "9 g のマイクロサーボ (SG90 などと同じ大きさの目安。4.8〜6 V、0.1 秒で 60°)。信号 (SIG) に 20 ms ごとのパルスを入れると、その幅の角度まで軸が回る: Arduino の Servo ライブラリと同じく 544 µs で 0°、2400 µs で 180°。ピンは 1 列 2.54 mm の 3 本 (1 GND 茶・2 V+ 赤・3 SIG 橙)。試作のタブで電源を入れると、軸の向きと角度が絵で出る",
+  "prefix": "M",
+  "value": "MICRO_SERVO",
+  "footprint_name": "PinHeader_1x03_P2.54mm",
+  "pins": [
+    {
+      "number": "1",
+      "name": "GND",
+      "side": "bottom",
+      "kind": "power_in"
+    },
+    {
+      "number": "2",
+      "name": "V+",
+      "side": "top",
+      "kind": "power_in"
+    },
+    {
+      "number": "3",
+      "name": "SIG",
+      "side": "left",
+      "kind": "input"
+    }
+  ],
+  "package": {
+    "type": "single_row",
+    "pins": 3,
+    "pitch": 2.54,
+    "pad_d": 1.7,
+    "drill": 1.0
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "MICRO_SERVO",
+    "text": ".subckt MICRO_SERVO gnd vp sig\n* the servo standing still (about 8 mA at 5 V); its angle is the proto tab's (from the width of the pulses on SIG, not from\n* this circuit)\nRq vp gnd 600\n* the signal input\nRs sig gnd 47k\n.ends MICRO_SERVO",
+    "pins": [
+      "1",
+      "2",
+      "3"
+    ],
+    "limits": [
+      "角度は回路の計算ではなく、試作のタブが SIG につながったマイコンのピンのパルスの幅から出します (40〜400 Hz のパルス。544 µs で 0°、2400 µs で 180°。0.1 秒で 60° の速さで向かう)。マイコン以外 (タイマー IC など) のパルスでは動きません。",
+      "電流は止まっているときの約 8 mA だけで、回っているときの数百 mA (電源の電圧が下がってマイコンがリセットする、よくある失敗) は扱いません。トルク・負荷・行き過ぎも扱いません。",
+      "V+ が 3.5〜7.2 V のときだけ動きます。パルスが来なくなると、その向きのまま止まります。"
+    ],
+    "origin": {
+      "kind": "generic",
+      "source": "止まっているときの電流と信号の入力だけの回路。角度はパルスの幅から (Arduino の Servo ライブラリの 544〜2400 µs)"
+    }
+  },
+  "ratings": {
+    "v_max": 6.0,
+    "rows": [
+      {
+        "name": "電源",
+        "value": "4.8〜6 V"
+      },
+      {
+        "name": "速さ",
+        "value": "0.1 s / 60°",
+        "condition": "4.8 V"
+      },
+      {
+        "name": "パルス",
+        "value": "544〜2400 µs で 0〜180°",
+        "condition": "20 ms ごと"
+      }
+    ]
+  }
+}

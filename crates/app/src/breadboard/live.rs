@@ -77,6 +77,9 @@ pub struct Live {
     pub humidity: f64,
     /// Supplies given before their board is added (`set_supply`).
     pending_supply: BTreeMap<String, [Option<String>; 2]>,
+    /// The servos on the board (`add_servo`) and the circuit's time they were last moved at.
+    pub servos: Vec<Servo>,
+    servo_time: f64,
 }
 
 /// An SHT31 module on the board (`SHT31_MODULE`): the nets of its VIN, GND, SCL, SDA, ADR, and the real chips whose I2C bus it is
@@ -237,6 +240,8 @@ impl Live {
             room_c: 25.0,
             humidity: 50.0,
             pending_supply: BTreeMap::new(),
+            servos: vec![],
+            servo_time: 0.0,
         };
         let wanted: Vec<String> = currents.iter().map(|n| format!("I({n})")).collect();
         let keep = |n: &str| n.starts_with("V(") || wanted.iter().any(|w| w.eq_ignore_ascii_case(n));
@@ -589,7 +594,77 @@ impl Live {
                 self.trace.pop_front();
             }
         }
+        self.step_servos();
     }
+
+    /// A servo (`MICRO_SERVO`) and the nets of its GND, V+, SIG: its shaft turns to the angle its pulses ask for.
+    pub fn add_servo(&mut self, refdes: String, nets: [Option<String>; 3]) {
+        self.servos.push(Servo { refdes, nets, angle: SERVO_START, target: None, powered: false });
+        self.read_now();
+    }
+
+    /// The pulses on a net from a microcontroller's pin driving it: their width (s) and how many a second.
+    fn pulses_on(&self, net: &str) -> Option<(f64, f64)> {
+        use sim_core::sketch::Drive;
+        self.mcus.iter().find_map(|m| {
+            let pin = m.nets.iter().position(|n| n.as_deref().is_some_and(|n| n.eq_ignore_ascii_case(net)))?;
+            let drive = if m.real.is_some() { m.drives.get(pin)? } else { m.machine.as_ref()?.drives.get(pin)? };
+            match *drive {
+                Drive::Pwm { duty, hz } if hz > 0.0 => Some((duty / hz, hz)),
+                _ => None,
+            }
+        })
+    }
+
+    /// The servos move towards their pulses' angles by the circuit's time since the last frame.
+    fn step_servos(&mut self) {
+        let now = self.time();
+        let dt = (now - self.servo_time).max(0.0);
+        self.servo_time = now;
+        for k in 0..self.servos.len() {
+            let [gnd, vp, sig] = self.servos[k].nets.clone();
+            let v = |n: &Option<String>| match n.as_deref() {
+                Some(n) if is_ground(n) => Some(0.0),
+                Some(n) => self.voltage(n),
+                None => None,
+            };
+            let supply = v(&vp).unwrap_or(0.0) - v(&gnd).unwrap_or(0.0);
+            let powered = (SERVO_VMIN..=SERVO_VMAX).contains(&supply);
+            let target = sig.as_deref().and_then(|n| self.pulses_on(n)).and_then(|(w, hz)| servo_angle(w, hz));
+            let s = &mut self.servos[k];
+            s.powered = powered;
+            s.target = target.filter(|_| powered);
+            if let Some(t) = s.target {
+                let step = SERVO_DEG_PER_S * dt;
+                s.angle += (t - s.angle).clamp(-step, step);
+            }
+        }
+    }
+}
+
+/// A servo on the board: its nets (GND, V+, SIG), where its shaft points (degrees, 0..180), the angle its pulses ask for (None:
+/// no pulses or no supply: it stays) and whether its supply is in range.
+pub struct Servo {
+    pub refdes: String,
+    nets: [Option<String>; 3],
+    pub angle: f64,
+    pub target: Option<f64>,
+    pub powered: bool,
+}
+
+/// Where a servo points before it is told (the middle), its supply's range and how fast it turns (0.1 s for 60 degrees).
+const SERVO_START: f64 = 90.0;
+const SERVO_VMIN: f64 = 3.5;
+const SERVO_VMAX: f64 = 7.2;
+const SERVO_DEG_PER_S: f64 = 600.0;
+
+/// The angle a pulse of `width` (s), `hz` times a second asks for: Arduino's Servo library's 544 us for 0 degrees, 2400 us for 180
+/// (wider or narrower ones stop at the ends). None for what is no servo signal (outside 40..400 Hz, or no pulse in it).
+pub fn servo_angle(width: f64, hz: f64) -> Option<f64> {
+    if !(40.0..=400.0).contains(&hz) || width < 100e-6 || width > 3e-3 {
+        return None;
+    }
+    Some(((width - 544e-6) / (2400e-6 - 544e-6) * 180.0).clamp(0.0, 180.0))
 }
 
 /// The time-weighted average of a signal over its points (trapezoids); the one point when there is only one.
@@ -944,5 +1019,39 @@ void loop() {{ delay(100); }}"));
         let first = chip.serial.lines().next().unwrap_or("");
         let a1: f64 = first.strip_prefix("a1=").and_then(|r| r.split(' ').next()).and_then(|n| n.parse().ok()).unwrap_or(-1.0);
         assert!((a1 - knob / 5.0 * 1023.0).abs() < 3.0, "{:?} with A1 at {knob} V", chip.serial);
+    }
+
+    /// The angle of a servo's pulse: Arduino's 544 us is 0 degrees, 2400 us 180, between them in proportion; no servo signal at
+    /// 490 Hz (analogWrite) or with no pulse.
+    #[test]
+    fn a_pulse_gives_the_servo_its_angle() {
+        let near = |a: Option<f64>, b: f64| a.is_some_and(|a| (a - b).abs() < 0.5);
+        assert!(near(servo_angle(544e-6, 50.0), 0.0));
+        assert!(near(servo_angle(1472e-6, 50.0), 90.0));
+        assert!(near(servo_angle(2400e-6, 50.0), 180.0));
+        assert!(near(servo_angle(2600e-6, 50.0), 180.0));
+        assert_eq!(servo_angle(1e-3, 490.0), None);
+        assert_eq!(servo_angle(0.0, 50.0), None);
+    }
+
+    /// The servo sample (W5 ⑤) with avr-sim's servo firmware (tests/firmware/servo.ino: 0, 90, 180 degrees, 300 ms each, on D9):
+    /// the shaft turns from the middle to each, at the servo's pace.
+    #[test]
+    fn the_servo_turns_to_the_pulses_angle() {
+        let e = sample("arduino_servo.schjson");
+        assert!(e.sketch_real.contains("U1"));
+        let mut live = with_program(&e, include_bytes!("../../../avr-sim/tests/firmware/servo.elf"));
+        assert_eq!(live.servos.len(), 1);
+        let angle = |live: &Live| live.servos[0].angle;
+        // from 90 to 0 at 600 degrees a second: half way after about 0.1 s (the first pulse comes about 20 ms in)
+        run_for(&mut live, 0.1);
+        assert!(angle(&live) < 80.0 && angle(&live) > 10.0, "{}", angle(&live));
+        run_for(&mut live, 0.18);
+        assert!(angle(&live) < 2.0, "{}", angle(&live));
+        assert!(live.servos[0].powered);
+        run_for(&mut live, 0.3);
+        assert!((angle(&live) - 90.0).abs() < 2.0, "{}", angle(&live));
+        run_for(&mut live, 0.3);
+        assert!(angle(&live) > 178.0, "{}", angle(&live));
     }
 }
