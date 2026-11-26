@@ -2677,34 +2677,48 @@ fn the_electrolytic_life_lesson_ticks_and_its_numbers_hold() {
     assert!((i - 0.272).abs() < 0.01 && (core - 93.2).abs() < 0.3 && (life.unwrap() - 13583.0).abs() < 300.0, "more ripple: {i} {core} {life:?}");
 }
 
-#[test]
-fn the_ldo_vs_buck_lesson_ticks_and_its_numbers_hold() {
+/// (efficiency of the linear regulator, of the buck converter, mean output voltage of both) over the last 0.6 ms of the lesson's run.
+fn ldo_vs_buck_efficiency(e: &SchEditor) -> (f64, f64, f64, f64) {
+    let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+    let t1 = *r.time.last().unwrap();
+    let w = (t1 - 0.6e-3, t1);
+    let mean = |n: &str| signal_stats(&r.time, &r.signal(n).unwrap().values, w.0, w.1).unwrap().mean;
+    let (v1, v2) = (e.sch.components.iter().find(|c| c.refdes == "V1").unwrap().value.parse::<f64>().unwrap(), 12.0);
+    let (pin1, pin2) = (v1 * -mean("I(V1)"), v2 * -mean("I(V2)"));
+    let (po1, po2) = (mean("V(VOUT1)").powi(2) / 40.0, mean("V(VOUT2)").powi(2) / 40.0);
+    (po1 / pin1, po2 / pin2, mean("V(VOUT1)"), mean("V(VOUT2)"))
+}
+
+fn ldo_vs_buck_lesson() -> SchEditor {
     let idx = lesson_ids().iter().position(|l| *l == "ldo_vs_buck").unwrap();
     let mut e = SchEditor::default();
     e.start_lesson(idx);
     e.update_lesson();
     assert_eq!(progress(&e), 0);
-    // (efficiency of the linear regulator, of the buck converter, mean output voltage of both) over the last 0.6 ms
-    let eff = |e: &SchEditor| {
-        let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
-        let t1 = *r.time.last().unwrap();
-        let w = (t1 - 0.6e-3, t1);
-        let mean = |n: &str| signal_stats(&r.time, &r.signal(n).unwrap().values, w.0, w.1).unwrap().mean;
-        let (v1, v2) = (e.sch.components.iter().find(|c| c.refdes == "V1").unwrap().value.parse::<f64>().unwrap(), 12.0);
-        let (pin1, pin2) = (v1 * -mean("I(V1)"), v2 * -mean("I(V2)"));
-        let (po1, po2) = (mean("V(VOUT1)").powi(2) / 40.0, mean("V(VOUT2)").powi(2) / 40.0);
-        (po1 / pin1, po2 / pin2, mean("V(VOUT1)"), mean("V(VOUT2)"))
-    };
+    e
+}
+
+/// The lesson's first step. The steps after it are in the next test, which starts from step 1 marked done: each step runs a 5 ms
+/// transient of about 2 s, and the two tests run them side by side.
+#[test]
+fn the_ldo_vs_buck_lesson_ticks_and_its_numbers_hold() {
+    let mut e = ldo_vs_buck_lesson();
     e.run_tran();
     e.update_lesson();
     assert_eq!(progress(&e), 1, "{}", e.status);
-    let (l, b, v1, v2) = eff(&e);
+    let (l, b, v1, v2) = ldo_vs_buck_efficiency(&e);
     assert!((l - 0.416).abs() < 0.02 && (b - 0.85).abs() < 0.03 && (v1 - 4.99).abs() < 0.05 && (v2 - 4.85).abs() < 0.1, "efficiency {l} {b}");
+}
+
+#[test]
+fn the_ldo_vs_buck_lesson_ticks_its_later_steps() {
+    let mut e = ldo_vs_buck_lesson();
+    e.lesson.as_mut().unwrap().done[0] = true;
     set_value(&mut e, "V1", "6.5");
     e.run_tran();
     e.update_lesson();
     assert_eq!(progress(&e), 2, "{}", e.status);
-    assert!((eff(&e).0 - 0.768).abs() < 0.03, "a small difference suits the linear regulator");
+    assert!((ldo_vs_buck_efficiency(&e).0 - 0.768).abs() < 0.03, "a small difference suits the linear regulator");
     set_value(&mut e, "V1", "12");
     set_value(&mut e, "R1", "20");
     e.run_dc();

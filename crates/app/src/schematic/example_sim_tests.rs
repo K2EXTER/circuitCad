@@ -437,17 +437,19 @@ fn buck_sample_regulates_5v_switches_at_150khz_and_the_lesson_numbers_hold() {
     let sch = example_schematics().into_iter().find(|(n, _)| n == "buck_converter.schjson").unwrap().1;
     // at DC the switch is open: nothing at the output, and the DC solution exists
     assert!(dc_op(&from_schematic(&sch).unwrap()).unwrap().voltage("VOUT").unwrap().abs() < 0.05);
-    let (v, pp, imin, imax, eff) = buck_run("100u DCR=0.05", "20");
+    // the three 5 ms runs side by side (one after another they took 2.8 s)
+    let runs = sim_core::par_map(&[("100u DCR=0.05", "20"), ("22u DCR=0.05", "20"), ("100u DCR=0.05", "10")], |(l, rl)| buck_run(l, rl));
+    let (v, pp, imin, imax, eff) = runs[0];
     assert!((4.5..5.3).contains(&v), "Vout {v}");
     assert!(pp < 0.3, "output ripple {pp}");
     assert!(imin > 0.0 && imax - imin < 0.45, "continuous inductor current {imin}..{imax}");
     assert!((0.88..0.98).contains(&eff), "efficiency {eff}");
     // a small coil: the current swings more and touches zero (discontinuous)
-    let (_, _, imin2, imax2, _) = buck_run("22u DCR=0.05", "20");
+    let (_, _, imin2, imax2, _) = runs[1];
     assert!(imin2 < 0.02 && imax2 - imin2 > 0.55, "{imin2}..{imax2}");
     // twice the load current: the output still holds, and the efficiency is higher (the fixed losses of the
     // control circuit weigh less). ngspice agrees: 0.900 at 20 ohm, 0.916 at 10 ohm; ours 0.894 and 0.911.
-    let (v3, _, _, _, eff3) = buck_run("100u DCR=0.05", "10");
+    let (v3, _, _, _, eff3) = runs[2];
     assert!((4.6..5.3).contains(&v3) && (0.82..0.95).contains(&eff3) && eff3 > eff, "{v3} {eff3} vs {eff}");
 }
 
@@ -463,8 +465,8 @@ fn cout_run(file: &str) -> (f64, f64) {
 
 #[test]
 fn buck_output_cap_swap_samples_differ_in_ripple() {
-    let (ve, ppe) = cout_run("buck_cout_electrolytic.schjson");
-    let (vc, ppc) = cout_run("buck_cout_ceramic.schjson");
+    let runs = sim_core::par_map(&["buck_cout_electrolytic.schjson", "buck_cout_ceramic.schjson"], |f| cout_run(f));
+    let ((ve, ppe), (vc, ppc)) = (runs[0], runs[1]);
     // both regulate the same; the electrolytic's 0.3 ohm ESR (x the ~0.3 A coil ripple) dominates its ripple even though it has 10x the capacitance
     assert!((4.5..5.3).contains(&ve) && (4.5..5.3).contains(&vc), "{ve} {vc}");
     // ngspice measures 0.104 V (electrolytic) and 0.070 V (ceramic) in this window

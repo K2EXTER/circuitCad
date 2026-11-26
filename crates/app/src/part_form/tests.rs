@@ -1188,13 +1188,17 @@ fn the_extra_pad_table_follows_a_text_changed_from_outside() {
     assert_eq!(f.extra_rows.len(), 2, "an example button changed the text");
 }
 
-/// "データシートから下書き" on real data sheets (skipped without them): TI's SN74HC14 gives its name, an IC, 14 pins from the pin
-/// table and a dual-row package; AO3400A gives a MOSFET with the values of its table.
+/// A data sheet of the folder microohm-meter/ (not in the repository), when it is there. The tests of "データシートから下書き" on real
+/// data sheets take one data sheet each, so they read side by side (one after another they took 3.3 s).
+fn real_sheet(name: &str) -> Option<std::path::PathBuf> {
+    Some(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter").join(name)).filter(|p| p.exists())
+}
+
+/// "データシートから下書き" on a real data sheet (skipped without it): TI's SN74HC14 gives its name, an IC, 14 pins from the pin
+/// table and a dual-row package.
 #[test]
 fn a_draft_from_real_data_sheets() {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../microohm-meter");
-    let hc14 = dir.join("sn74hc14.pdf");
-    if hc14.exists() {
+    if let Some(hc14) = real_sheet("sn74hc14.pdf") {
         let mut f = PartForm::default();
         f.sheet.load(&hc14);
         let d = f.make_draft().unwrap();
@@ -1213,8 +1217,12 @@ fn a_draft_from_real_data_sheets() {
         assert_eq!((f.pitch, f.row, f.len, f.width), (0.65, 5.8, 1.5, 0.45), "{done:?}");
         assert!(done.iter().any(|x| x.contains("推奨ランドパターン (p.36)")), "{done:?}");
     }
-    let ao = dir.join("AO3400A_ds.pdf");
-    if ao.exists() {
+}
+
+/// AO3400A gives a MOSFET with the values of its table (skipped without the file).
+#[test]
+fn a_draft_from_a_real_mosfet_data_sheet() {
+    if let Some(ao) = real_sheet("AO3400A_ds.pdf") {
         let mut f = PartForm::default();
         f.sheet.load(&ao);
         let d = f.make_draft().unwrap();
@@ -1236,9 +1244,12 @@ fn a_draft_from_real_data_sheets() {
         let done = f.apply_draft(&d);
         assert!(f.pins_text.starts_with("1 G\n2 S\n3 D") && done.iter().any(|l| l.contains("上から見た図の文字")), "{}: {done:?}", f.pins_text);
     }
+}
+
+#[test]
+fn a_draft_reads_the_leads_of_a_pinout_diagram() {
     // onsemi's NDT3055L: "PINOUT DIAGRAM" with the leads' letters G D S in a row under the tab's D: read and ticked
-    let ndt = dir.join("NDT3055L-D.pdf");
-    if ndt.exists() {
+    if let Some(ndt) = real_sheet("NDT3055L-D.pdf") {
         let mut f = PartForm::default();
         f.sheet.load(&ndt);
         let d = f.make_draft().unwrap();
@@ -1247,9 +1258,12 @@ fn a_draft_from_real_data_sheets() {
         assert!(f.pins_text.starts_with("1 G\n2 D\n3 S"), "{}: {done:?}", f.pins_text);
         assert!(done.iter().any(|l| l.contains("図の文字の並び")), "{done:?}");
     }
+}
+
+#[test]
+fn a_draft_reads_a_transistors_leads_under_its_picture() {
     // PN2222A (onsemi's notice on page 1, the sheet from page 2): its name from page 2, and "E B C" under the TO-92's picture
-    let pn = dir.join("pn2222a-d.pdf");
-    if pn.exists() {
+    if let Some(pn) = real_sheet("pn2222a-d.pdf") {
         let mut f = PartForm::default();
         f.sheet.load(&pn);
         let d = f.make_draft().unwrap();

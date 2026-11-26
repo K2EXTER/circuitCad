@@ -591,13 +591,14 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let stored = read_golden(&std::fs::read_to_string(root.join(GOLDEN_TRAN)).expect("stored ngspice runs missing: see the doc comment of this test"));
         assert!(stored.len() >= 20, "only {} circuits are stored", stored.len());
-        let mut bad = vec![];
-        for (name, g) in &stored {
+        // the circuits side by side: one after another they took 3 s
+        let bad: Vec<String> = sim_core::par_map(&stored, |(name, g)| {
             let s: Schematic = serde_json::from_str(&std::fs::read_to_string(root.join(format!("docs/examples/{name}.schjson"))).unwrap()).unwrap();
-            if let Err(m) = check_against_stored(&s, g) {
-                bad.push(format!("{name}: {m}"));
-            }
-        }
+            check_against_stored(&s, g).err().map(|m| format!("{name}: {m}"))
+        })
+        .into_iter()
+        .flatten()
+        .collect();
         assert!(bad.is_empty(), "differs from ngspice:\n{}", bad.join("\n"));
     }
 
