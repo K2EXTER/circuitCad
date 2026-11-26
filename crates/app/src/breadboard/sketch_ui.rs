@@ -182,7 +182,7 @@ impl BreadboardView {
                     sch.sketches.remove(&refdes);
                 }
             });
-            self.serial_ui(ui, &refdes);
+            self.serial_ui(ui, &refdes, &text, SERIAL_PANEL_HEIGHT);
         }
         self.sketch_window_ui(ui.ctx(), sch);
     }
@@ -236,7 +236,8 @@ impl BreadboardView {
     }
 
     /// While it runs: a mistake met on the way, the serial monitor, and (on a real chip with a UART) the line to send it.
-    fn serial_ui(&mut self, ui: &mut egui::Ui, refdes: &str) {
+    /// `text`: the sketch (the speed its `Serial.begin` says goes in the monitor's title); `height`: how tall the monitor is.
+    fn serial_ui(&mut self, ui: &mut egui::Ui, refdes: &str, text: &str, height: f32) {
         let refdes = refdes.to_string();
         let Some(m) = self.live.as_ref().and_then(|lv| lv.mcus.iter().find(|m| m.refdes == refdes)) else { return };
         if let Some(e) = m.machine.as_ref().and_then(|x| x.error.as_ref()) {
@@ -248,26 +249,31 @@ impl BreadboardView {
         if let Some(why) = m.real.as_ref().and_then(|n| n.avr.stopped()) {
             ui.colored_label(crate::theme::error(), i18n::trf!("止まりました: {}", i18n::tr_dyn(why)));
         }
-        let serial = m.machine.as_ref().map(|x| &x.serial).or(m.real.as_ref().map(|n| &n.serial));
-        if let Some(serial) = serial {
-            ui.label(egui::RichText::new(i18n::tr("シリアルモニタ (Serial.print の出力)")).small().color(NOTE));
-            let tail: Vec<&str> = serial.lines().rev().take(12).collect();
-            let shown: String = tail.into_iter().rev().collect::<Vec<_>>().join("\n");
-            egui::Frame::NONE.fill(ui.visuals().extreme_bg_color).inner_margin(4.0).show(ui, |ui| {
-                ui.label(egui::RichText::new(if shown.is_empty() { "—".to_string() } else { shown }).monospace().small());
-            });
+        let serial = m.machine.as_ref().map(|x| &x.serial).or(m.real.as_ref().map(|n| &n.serial)).cloned();
+        if let Some(serial) = serial
+            && terminal(ui, &refdes, &serial, serial_baud(text), height)
+            && let Some(m) = self.live.as_mut().and_then(|lv| lv.mcus.iter_mut().find(|m| m.refdes == refdes))
+        {
+            // クリア: what the program has sent so far is gone (it goes on sending)
+            if let Some(x) = m.machine.as_mut() {
+                x.serial.clear();
+            }
+            if let Some(n) = m.real.as_mut() {
+                n.serial.clear();
+            }
         }
         // the real chip reads what is typed here (Serial.read); the built-in reader has no Serial.read
         // (a chip with no UART, the ATtiny85, only sends: its Serial is software on one pin)
         let real_running = self.live.as_ref().and_then(|lv| lv.mcus.iter().find(|m| m.refdes == refdes)).is_some_and(|m| m.real.as_ref().is_some_and(|c| c.def.soft_tx.is_none()));
         if real_running {
             let mut sent = None;
-            ui.horizontal(|ui| {
-                let text = self.serial_input.entry(refdes.clone()).or_default();
-                let w = (ui.available_width() - 50.0).max(60.0);
-                let r = ui.add(egui::TextEdit::singleline(text).desired_width(w).hint_text(i18n::tr("送る文字")).font(egui::TextStyle::Monospace));
-                let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            // the button from the right first, the box the width left (a box of a guessed width pushed the panel wider each frame)
+            let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+            ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let send = ui.small_button(i18n::tr("送る")).on_hover_text(i18n::tr("打った文字に改行を付けて、マイコンのシリアル (Serial.read で読めます) に送ります。Enter でも送れます"));
+                let text = self.serial_input.entry(refdes.clone()).or_default();
+                let r = ui.add(egui::TextEdit::singleline(text).desired_width(ui.available_width()).hint_text(i18n::tr("送る文字")).font(egui::TextStyle::Monospace));
+                let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                 if (send.clicked() || enter) && !text.is_empty() {
                     sent = Some(std::mem::take(text));
                     r.request_focus();
@@ -317,14 +323,58 @@ impl BreadboardView {
                 let size = egui::vec2(ui.available_width(), (ui.available_height() - below).max(120.0));
                 let edit = ui.allocate_ui(size, |ui| super::code_edit::numbered_box(ui, &mut text, marked)).inner;
                 if edit.changed() {
-                    sch.sketches.insert(refdes.clone(), text);
+                    sch.sketches.insert(refdes.clone(), text.clone());
                 }
                 if running {
-                    self.serial_ui(ui, &refdes);
+                    self.serial_ui(ui, &refdes, &text, (ui.available_height() - 40.0).max(80.0));
                 }
             });
         if !open {
             self.sketch_window = None;
         }
     }
+}
+
+/// How tall the serial monitor is in the panel (the sketch's window gives it the rest of its height).
+const SERIAL_PANEL_HEIGHT: f32 = 150.0;
+
+/// The most lines the serial monitor shows (the board keeps up to 20 000 characters).
+const TERMINAL_LINES: usize = 500;
+
+/// The serial monitor drawn as a terminal: light text on black whatever the theme, its title with the speed, the lines kept
+/// (scrolled back with the wheel; it follows the newest), a blinking block where the next character goes. True when クリア is
+/// pressed.
+fn terminal(ui: &mut egui::Ui, refdes: &str, serial: &str, baud: u32, height: f32) -> bool {
+    const BG: Color32 = Color32::from_rgb(12, 12, 12);
+    const FG: Color32 = Color32::from_rgb(204, 230, 204);
+    const DIM: Color32 = Color32::from_rgb(120, 130, 120);
+    let mut clear = false;
+    egui::Frame::NONE.fill(BG).stroke(egui::Stroke::new(1.0, Color32::from_gray(70))).corner_radius(4.0).inner_margin(6.0).show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("●").color(Color32::from_rgb(90, 200, 110)).small());
+            ui.label(egui::RichText::new(i18n::trf!("シリアルモニタ  {baud} bps")).monospace().small().color(DIM))
+                .on_hover_text(i18n::tr("スケッチの Serial.print / println が送った文字です (速さはスケッチの Serial.begin のもの)。ホイールで前の行に戻れます。新しい行が来ると下に付いていきます"));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                clear = ui
+                    .add(egui::Button::new(egui::RichText::new(i18n::tr("クリア")).small().color(DIM)).fill(Color32::from_gray(30)))
+                    .on_hover_text(i18n::tr("ここまでの出力を消します (マイコンは送り続けます)"))
+                    .clicked();
+            });
+        });
+        ui.add_space(2.0);
+        // the last lines (an egui label of many thousand lines would be slow)
+        let lines: Vec<&str> = serial.lines().collect();
+        let mut shown = lines[lines.len().saturating_sub(TERMINAL_LINES)..].join("\n");
+        if serial.ends_with('\n') && !shown.is_empty() {
+            shown.push('\n');
+        }
+        // the cursor, on for half a second, off for half
+        let on = (ui.input(|i| i.time) * 2.0) as i64 % 2 == 0;
+        shown.push(if on { '█' } else { ' ' });
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
+        egui::ScrollArea::vertical().id_salt(("serial", refdes)).max_height(height).stick_to_bottom(true).auto_shrink([false, true]).show(ui, |ui| {
+            ui.add(egui::Label::new(egui::RichText::new(shown).monospace().color(FG)).wrap());
+        });
+    });
+    clear
 }
