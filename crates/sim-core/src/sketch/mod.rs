@@ -3,7 +3,8 @@
 //! The sketch is compiled to a stack machine (`vm.rs`) that stops at `delay` and goes on when the simulated time has come; the
 //! circuit is solved in between. The pins are given to the circuit through `Io`: an output is a voltage (a fraction of the
 //! supply), an input is left to the circuit and read as a voltage. Not the instructions of the real chip (that is W5 (b)): the time
-//! the sketch takes between two `delay`s is none, and `analogWrite` gives its average voltage, not the 490 Hz pulses.
+//! the sketch takes between two `delay`s is none. `analogWrite` gives the pulses of the real board (`Drive::Pwm`: 490 Hz, 980 Hz on
+//! D5 and D6), so an LED on it lights for that share of the time.
 
 mod lex;
 mod parse;
@@ -15,8 +16,13 @@ use vm::{Bi, Code, Op, Val};
 pub const VCC: f64 = 5.0;
 /// The pin numbers: D0..D13, then A0..A7.
 pub const PINS: usize = 22;
-/// The pins `analogWrite` gives a level on (the others go High from 128).
+/// The pins `analogWrite` gives pulses on (the others go High from 128).
 pub const PWM_PINS: [u8; 6] = [3, 5, 6, 9, 10, 11];
+
+/// The frequency of `analogWrite`'s pulses on a pin of the Nano: timer 0 (D5, D6) runs twice as fast as timers 1 and 2.
+pub fn pwm_hz(pin: u8) -> f64 {
+    if pin == 5 || pin == 6 { 980.0 } else { 490.0 }
+}
 /// Instructions one call of `run` may take before it gives the circuit its turn (a loop without `delay` goes on next frame).
 const BUDGET: usize = 200_000;
 /// The most text the serial window keeps.
@@ -34,8 +40,22 @@ pub enum Drive {
     Input,
     /// An input with the chip's pull-up resistor to the supply (`INPUT_PULLUP`).
     Pullup,
-    /// An output at this share of the supply (0 = Low, 1 = High, between for `analogWrite`).
+    /// An output at this share of the supply (0 = Low, 1 = High).
     Out(f64),
+    /// An output switching between Low and High: High for `duty` of each period, `hz` times a second (`analogWrite`, `tone`).
+    Pwm { duty: f64, hz: f64 },
+}
+
+impl Drive {
+    /// The share of the supply on average (a PWM's duty).
+    pub fn average(self) -> f64 {
+        match self {
+            Drive::Out(x) => x,
+            Drive::Pwm { duty, .. } => duty,
+            Drive::Pullup => 1.0,
+            Drive::Input => 0.0,
+        }
+    }
 }
 
 /// The circuit as the sketch sees it.
@@ -251,7 +271,7 @@ impl Machine {
                         let pin = self.pin(&a(0))?;
                         let high = vm::truthy(&a(1));
                         let d = match self.drives[pin as usize] {
-                            Drive::Out(_) => Drive::Out(if high { 1.0 } else { 0.0 }),
+                            Drive::Out(_) | Drive::Pwm { .. } => Drive::Out(if high { 1.0 } else { 0.0 }),
                             // a write to an input turns its pull-up on or off, as on the real chip
                             _ => if high { Drive::Pullup } else { Drive::Input },
                         };
@@ -273,8 +293,14 @@ impl Machine {
                     Bi::AnalogWrite => {
                         let pin = self.pin(&a(0))?;
                         let v = vm::val_i(&a(1)).clamp(0, 255);
-                        let level = if PWM_PINS.contains(&pin) { v as f64 / 255.0 } else if v >= 128 { 1.0 } else { 0.0 };
-                        self.set(pin, Drive::Out(level), io);
+                        // as the real board: 0 and 255 are a steady Low and High, the rest pulses on the PWM pins
+                        let d = match v {
+                            0 => Drive::Out(0.0),
+                            255 => Drive::Out(1.0),
+                            _ if PWM_PINS.contains(&pin) => Drive::Pwm { duty: v as f64 / 255.0, hz: pwm_hz(pin) },
+                            _ => Drive::Out(if v >= 128 { 1.0 } else { 0.0 }),
+                        };
+                        self.set(pin, d, io);
                         Val::I(0)
                     }
                     Bi::Delay | Bi::DelayUs => {
@@ -361,11 +387,7 @@ mod tests {
             if pin == 14 {
                 return self.a0;
             }
-            match self.out[pin as usize] {
-                Some(Drive::Out(x)) => x * VCC,
-                Some(Drive::Pullup) => VCC,
-                _ => 0.0,
-            }
+            self.out[pin as usize].map_or(0.0, |d| d.average() * VCC)
         }
         fn drive(&mut self, pin: u8, d: Drive) {
             self.out[pin as usize] = Some(d);
@@ -425,8 +447,11 @@ mod tests {
         let mut m = machine("void setup() { pinMode(9, OUTPUT); }\nvoid loop() { int v = analogRead(A0); analogWrite(9, v / 4); delay(10); }");
         let mut io = Pins { a0: 2.5, ..Default::default() };
         m.run(0.0, &mut io);
-        // 2.5 V of 5: 512 of 1023, 128 of 255: half the supply on average
-        assert!((io.volts(9) - 2.5).abs() < 0.03, "{}", io.volts(9));
+        // 2.5 V of 5: 512 of 1023, 128 of 255: pulses of 490 Hz, High half the time
+        match io.out[9] {
+            Some(Drive::Pwm { duty, hz }) => assert!((duty - 0.5).abs() < 0.01 && hz == 490.0, "{duty} {hz}"),
+            d => panic!("{d:?}"),
+        }
     }
 
     #[test]

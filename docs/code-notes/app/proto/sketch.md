@@ -20,9 +20,17 @@
   - 画面の撮影は、ビルドが終わるまで待つ (`real_busy`)。
 - 動かす: `run_mcus` で、`avr_sim::Nano::advance(今 − real_from, ピンの電圧)` を呼ぶ。返ってきた `PinOut` を、今の読み方と同じ `RunIo::drive` (`Drive`) で回路に渡す (変わったピンだけ)。
 - `next_wake` は、本物のチップがあると「今」を返す。なので 1 ms ごとに、回路を解く → チップを進める、をくり返す。
-- 出力は、その 1 ms の間に High だった割合 (平均の電圧)。PWM と `tone` も平均になる (今の読み方の `analogWrite` と同じ扱い)。
-  - そのため 25 % の PWM は 1.25 V になり、LED は点かない (本物は 1/4 の明るさで光る)。
-  - 直すには、PWM のピンを「全開の電流 × 割合」として扱うか、刻みを細かくする。候補表の W5 の残り。
+- 出力は、止まった High / Low か、パルス (`PinOut::Pwm`) のどちらか。
+  - チップの側 (`Nano::advance`) は、ピンの立ち上がりから次の立ち上がりまでで、周期と High の長さを測る。
+  - 100 Hz (`PWM_MIN_HZ`) 以上で続いて切り替わっているピン (最後の変化が 1.5 周期より前でない) は、最後の 1 周期のデューティと周波数を返す。それより遅い変化は、1 ms ごとの終わりの値で追う。
+- PWM のパルス (W5 ①、2026-11-26): 1 ms の刻みでは追えないので、回路にはパルスの波形そのものを渡す。
+  - `RunIo::drive` の `Drive::Pwm { duty, hz }` → `pulses`: `Waveform::Pulse` (0 V → 5 V、今の時刻から、辺は周期の 1/1000)。
+  - ソルバはパルスの角を刻みの区切りにするので、LED は High の間だけ光る (25 % で全開の 1/4 の電流)。RC は平均に均される。
+  - 今の読み方の `analogWrite` も同じ: 0 と 255 は止まった Low と High、ほかは PWM のピンで `Drive::Pwm` (490 Hz、D5・D6 は 980 Hz、`pwm_hz`)。前は平均の電圧で、25 % (1.25 V) では LED が点かなかった。
+- 表示は 1 フレームの平均 (`read_now` の `average`: 前のフレームから解いた点の台形の平均)。
+  - LED の明るさ・テスター・定格の点検は、目やテスターが見るのと同じ平均。オシロは解いた点そのものなので、パルスが見える。
+  - 速さ: ボリュームのサンプルで 1 秒分が、今の読み方の 490 Hz で 0.1 秒、本物のチップの 1 kHz で 0.4〜0.5 秒 (release)。
 - 試験 (`live.rs`):
   - `the_real_chip_blinks_the_led`: 点滅のサンプルに `avr-sim/tests/firmware/check.elf` を入れ、D13 の 10 ms ごとの反転で LED が点いたり消えたりする。
-  - `the_real_chips_pwm_reaches_the_circuit_as_its_average`: ボリュームのサンプルで、D9 の 25 % の PWM がピンのネットに 1.25 V で出る。
+  - `the_real_chips_pwm_dims_the_led`: ボリュームのサンプルで、D9 の 25 % の PWM で LED が全開の 1/4 の電流、ピンのネットは平均 1.25 V。
+  - `analog_write_lights_an_led_for_its_share_of_the_time`: 今の読み方の `analogWrite(9, 64)` と `255` で、LED の電流の比が 1/4。

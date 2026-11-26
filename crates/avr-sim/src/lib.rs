@@ -268,8 +268,22 @@ pub enum PinOut {
     Input,
     /// An input with the chip's pull-up.
     Pullup,
-    /// An output at this share of the supply: 0 or 1, or the share of the step it was High (PWM, `tone`).
+    /// An output at this share of the supply (0 or 1).
     Out(f64),
+    /// An output switching between Low and High: High for `duty` of each period, `hz` times a second (PWM, `tone`).
+    Pwm { duty: f64, hz: f64 },
+}
+
+/// The slowest switching taken as pulses (`PinOut::Pwm`); a slower one is followed step by step (a millisecond each).
+pub const PWM_MIN_HZ: f64 = 100.0;
+
+/// A pin's last edges (cycles), its level, and the duty and frequency of its last whole period.
+#[derive(Clone, Copy, Debug, Default)]
+struct Edges {
+    level: bool,
+    rise: Option<u64>,
+    fall: Option<u64>,
+    pwm: Option<(f64, f64)>,
 }
 
 /// An Arduino Nano running its program beside the circuit.
@@ -277,6 +291,7 @@ pub struct Nano {
     pub avr: Avr,
     /// What the program sent on Serial (the oldest cut off past `SERIAL_MAX`).
     pub serial: String,
+    edges: [Edges; nano::PINS],
 }
 
 /// The most text the serial window keeps.
@@ -284,12 +299,13 @@ const SERIAL_MAX: usize = 20_000;
 
 impl Nano {
     pub fn new(image: &Image) -> Result<Nano, String> {
-        Ok(Nano { avr: Avr::new(nano::MCU, nano::FREQ, nano::VCC, image)?, serial: String::new() })
+        Ok(Nano { avr: Avr::new(nano::MCU, nano::FREQ, nano::VCC, image)?, serial: String::new(), edges: [Edges::default(); nano::PINS] })
     }
 
     /// Runs the chip to the time `t` with the circuit's voltages on its pins now (`volts(pin)`: an input is High above half the
-    /// supply; A0..A7 also go to the ADC), and gives what each pin D0..D13, A0..A7 does for the circuit: an output's level is
-    /// the share of the step it was High.
+    /// supply; A0..A7 also go to the ADC), and gives what each pin D0..D13, A0..A7 does for the circuit: an output switching
+    /// steadily at `PWM_MIN_HZ` or faster (PWM, `tone`) is `PinOut::Pwm` with its last whole period's duty and frequency (the
+    /// circuit is given the pulses: the step is too long to follow them), any other output its level at the end of the step.
     pub fn advance(&mut self, t: f64, volts: impl Fn(u8) -> f64) -> [PinOut; nano::PINS] {
         let before = self.avr.ports();
         for pin in 0..nano::PINS as u8 {
@@ -322,31 +338,46 @@ impl Nano {
         let mut out = [PinOut::Input; nano::PINS];
         for (pin, o) in out.iter_mut().enumerate() {
             let Some((p, b)) = nano::port_bit(pin as u8) else { continue };
-            *o = if after.output(p, b) {
-                // the share of the step it was High, from its level at the start and its changes on the way
-                let mut level = before.output(p, b) && before.high(p, b);
-                let (mut at, mut high, mut changed) = (start, 0u64, false);
-                // while a timer has the pin, only its changes count (simavr also passes on the writes of the port)
-                let mine: Vec<&PinEvent> = events.iter().filter(|e| e.port == p && e.bit == b).collect();
-                let timer = mine.iter().any(|e| e.timer);
-                for e in mine.into_iter().filter(|e| e.timer || !timer) {
-                    let c = e.cycle.clamp(start, end);
-                    if level {
-                        high += c - at;
+            let edges = &mut self.edges[pin];
+            // while a timer has the pin, only its changes count (simavr also passes on the writes of the port)
+            let mine: Vec<&PinEvent> = events.iter().filter(|e| e.port == p && e.bit == b).collect();
+            let timer = mine.iter().any(|e| e.timer);
+            for e in mine.into_iter().filter(|e| e.timer || !timer) {
+                if e.high == edges.level {
+                    continue;
+                }
+                edges.level = e.high;
+                if e.high {
+                    // a rise ends a period: High from the last rise to the fall between
+                    if let (Some(r), Some(f)) = (edges.rise, edges.fall)
+                        && f > r
+                        && e.cycle > r
+                    {
+                        let per = (e.cycle - r) as f64;
+                        edges.pwm = Some(((f - r) as f64 / per, self.avr.freq as f64 / per));
                     }
-                    at = c;
-                    changed |= e.high != level;
-                    level = e.high;
+                    edges.rise = Some(e.cycle);
+                } else {
+                    edges.fall = Some(e.cycle);
                 }
-                if level {
-                    high += end - at;
+            }
+            *o = if after.output(p, b) {
+                let last = edges.rise.max(edges.fall).unwrap_or(0);
+                match edges.pwm {
+                    // still switching: the last edge within one and a half periods
+                    Some((duty, hz)) if hz >= PWM_MIN_HZ && ((end - last) as f64) < 1.5 * self.avr.freq as f64 / hz => {
+                        PinOut::Pwm { duty: (duty * 1000.0).round() / 1000.0, hz: hz.round() }
+                    }
+                    _ => PinOut::Out(after.high(p, b) as u8 as f64),
                 }
-                if changed || timer { PinOut::Out(high as f64 / (end - start) as f64) } else { PinOut::Out(after.high(p, b) as u8 as f64) }
             } else if after.high(p, b) {
                 PinOut::Pullup
             } else {
                 PinOut::Input
             };
+            if !after.output(p, b) {
+                *edges = Edges::default();
+            }
         }
         out
     }

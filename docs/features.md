@@ -106,7 +106,7 @@
 - **壊れる**: 定格を超えた部品は焦げて、回路の中でも断線・ショートになる
 - **テスター**: 電圧・**電流** (直列に入れる。電源に当てるとヒューズ)・**抵抗** (電源を切って、OL も)
 - **オシロ**: 探り針のネットの波形
-- **Arduino のスケッチ**: Arduino Nano の部品にスケッチ (setup / loop、pinMode・digitalWrite/Read・analogRead/Write・delay・millis・Serial) を書くと、電源を入れたときに回路と一緒に動く。シリアルモニタ、誤りは行と理由
+- **Arduino のスケッチ**: Arduino Nano の部品にスケッチ (setup / loop、pinMode・digitalWrite/Read・analogRead/Write・delay・millis・Serial) を書くと、電源を入れたときに回路と一緒に動く。`analogWrite` は本物と同じパルス (490 Hz) で、LED はその割合の明るさ。シリアルモニタ、誤りは行と理由
 - **本物のマイコンの命令で動かす**: スケッチの欄の「本物のマイコンの命令で動かす (arduino-cli)」で、スケッチを arduino-cli でコンパイルし、Nano のマイコン (ATmega328P) の命令を 1 クロックずつ回路と一緒に動かす (simavr)。ライブラリ・`String`・`tone`・割り込み・EEPROM も動く。arduino-cli は Arduino IDE 2 に入っているものも見つける
 - **デジタル回路を回路図の上で動かす** (ボタン)
 - **モジュールはメスのピンヘッダに差す**: ストリップ基板・ユニバーサル基板で、Arduino Nano・Raspberry Pi Pico などのモジュールは、はんだ付けしたメスのピンヘッダに差す形で並べ (列の間は実物どおり 0.6 インチなど)、買う物の表にピンヘッダを出す

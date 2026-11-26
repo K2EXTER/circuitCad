@@ -102,6 +102,15 @@ const PIN_OUT_OHM: f64 = 25.0;
 const PIN_PULLUP_OHM: f64 = 35e3;
 const PIN_INPUT_OHM: f64 = 1e9;
 
+/// Pulses between 0 and the supply from `now`: High for `duty` of each period of `hz` (edges a thousandth of the period).
+fn pulses(now: f64, duty: f64, hz: f64) -> Waveform {
+    use sim_core::sketch::VCC;
+    let per = 1.0 / hz.max(1.0);
+    let edge = per * 1e-3;
+    let pw = (duty.clamp(0.0, 1.0) * per - edge).max(0.0);
+    Waveform::Pulse { v1: 0.0, v2: VCC, td: now, tr: edge, tf: edge, pw, per }
+}
+
 impl sim_core::sketch::Io for RunIo<'_> {
     fn volts(&self, pin: u8) -> f64 {
         match self.nets.get(pin as usize).and_then(|n| n.as_deref()) {
@@ -113,12 +122,14 @@ impl sim_core::sketch::Io for RunIo<'_> {
     fn drive(&mut self, pin: u8, d: sim_core::sketch::Drive) {
         use sim_core::sketch::{pin_name, Drive, VCC};
         let name = pin_name(pin);
-        let (v, r) = match d {
-            Drive::Input => (0.0, PIN_INPUT_OHM),
-            Drive::Pullup => (VCC, PIN_PULLUP_OHM),
-            Drive::Out(x) => (x.clamp(0.0, 1.0) * VCC, PIN_OUT_OHM),
+        let (wave, r) = match d {
+            Drive::Input => (Waveform::Dc(0.0), PIN_INPUT_OHM),
+            Drive::Pullup => (Waveform::Dc(VCC), PIN_PULLUP_OHM),
+            Drive::Out(x) => (Waveform::Dc(x.clamp(0.0, 1.0) * VCC), PIN_OUT_OHM),
+            // the pulses themselves from now on (an LED lights for that share of the time; an RC smooths them to the average)
+            Drive::Pwm { duty, hz } => (pulses(self.run.time(), duty, hz), PIN_OUT_OHM),
         };
-        self.run.set_source(&format!("{}.Vp{name}", self.refdes), Waveform::Dc(v));
+        self.run.set_source(&format!("{}.Vp{name}", self.refdes), wave);
         self.run.set_resistance(&format!("{}.Rp{name}", self.refdes), r);
     }
 }
@@ -220,6 +231,7 @@ impl Live {
                         avr_sim::PinOut::Input => Drive::Input,
                         avr_sim::PinOut::Pullup => Drive::Pullup,
                         avr_sim::PinOut::Out(x) => Drive::Out(x),
+                        avr_sim::PinOut::Pwm { duty, hz } => Drive::Pwm { duty, hz },
                     };
                     if m.drives[pin] != d {
                         m.drives[pin] = d;
@@ -406,13 +418,23 @@ impl Live {
     fn read_now(&mut self) {
         let Some(run) = self.run.as_mut() else { return };
         let got = run.drain();
+        // what the frame shows is the average over the points solved since the last one (as an eye sees an LED driven by PWM,
+        // and as a meter reads); the voltages that were not kept are the ones now
+        let mean = |values: &[f64]| average(&got.time, values);
         self.currents.clear();
         for s in &got.signals {
-            if let (Some(name), Some(v)) = (s.name.strip_prefix("I(").and_then(|n| n.strip_suffix(')')), s.values.last()) {
-                self.currents.insert(name.to_string(), *v);
+            if let (Some(name), Some(v)) = (s.name.strip_prefix("I(").and_then(|n| n.strip_suffix(')')), mean(&s.values)) {
+                self.currents.insert(name.to_string(), v);
             }
         }
         self.volts = run.voltages().into_iter().collect();
+        for s in &got.signals {
+            if let (Some(name), Some(v)) = (s.name.strip_prefix("V(").and_then(|n| n.strip_suffix(')')), mean(&s.values))
+                && let Some(slot) = self.volts.get_mut(name)
+            {
+                *slot = v;
+            }
+        }
         if let Some(p) = &self.probe {
             let want = format!("V({p})");
             if let Some(sig) = got.signals.iter().find(|s| s.name.eq_ignore_ascii_case(&want)) {
@@ -432,6 +454,17 @@ impl Live {
             }
         }
     }
+}
+
+/// The time-weighted average of a signal over its points (trapezoids); the one point when there is only one.
+fn average(time: &[f64], values: &[f64]) -> Option<f64> {
+    let n = time.len().min(values.len());
+    let span = if n >= 2 { time[n - 1] - time[0] } else { 0.0 };
+    if span <= 0.0 {
+        return values.get(n.wrapping_sub(1)).copied();
+    }
+    let area: f64 = (1..n).map(|k| (time[k] - time[k - 1]) * (values[k] + values[k - 1]) / 2.0).sum();
+    Some(area / span)
 }
 
 fn is_ground(n: &str) -> bool {
@@ -569,7 +602,9 @@ mod tests {
         let k = live.knob_index("VR1").unwrap();
         let at = |live: &mut Live, pos: f64| {
             live.set_knob(k, pos);
+            // the sketch reads the knob every 200 ms: the LED is read over a frame after it has
             live.advance(0.5);
+            live.advance(0.05);
             live.current("D1").unwrap_or(0.0)
         };
         let (low, high) = (at(&mut live, 0.9), at(&mut live, 0.1));
@@ -613,15 +648,39 @@ mod tests {
         assert!(live.mcus[0].real.as_ref().unwrap().serial.starts_with("ee=42"));
     }
 
-    /// The real chip's timer PWM on D9 (25 %) reaches the circuit as its average (like `analogWrite` in the built-in reader): a
-    /// quarter of the supply on the pin's net.
+    /// The pot sample's LED on D9 with a sketch of the built-in reader writing `analogWrite(9, v)`: its current over a frame.
+    fn led_with_analog_write(v: u8) -> f64 {
+        let mut e = sample("arduino_pot.schjson");
+        e.sketches.insert("U1".into(), format!("void setup() {{ pinMode(9, OUTPUT); analogWrite(9, {v}); }}
+void loop() {{ delay(100); }}"));
+        let mut live = with_sketch(&e);
+        live.advance(0.02);
+        live.advance(0.05);
+        live.current("D1").unwrap_or(0.0)
+    }
+
+    /// `analogWrite` gives pulses, not their average voltage: a quarter of the time High lights the LED with a quarter of its
+    /// current (the average voltage, 1.25 V, would be under the LED's forward voltage and leave it dark).
     #[test]
-    fn the_real_chips_pwm_reaches_the_circuit_as_its_average() {
+    fn analog_write_lights_an_led_for_its_share_of_the_time() {
+        let (dim, bright) = (led_with_analog_write(64), led_with_analog_write(255));
+        assert!(bright > 5e-3, "{bright}");
+        assert!((dim / bright - 0.25).abs() < 0.03, "dim {dim} bright {bright}");
+    }
+
+    /// The real chip's timer PWM on D9 (25 % of 1 kHz) reaches the circuit as pulses: the LED has a quarter of its full current,
+    /// and the pin's net reads a quarter of the supply on average.
+    #[test]
+    fn the_real_chips_pwm_dims_the_led() {
         let e = sample("arduino_pot.schjson");
         let mut live = with_real(&e);
+        live.advance(0.02);
         live.advance(0.05);
+        let dim = live.current("D1").unwrap_or(0.0);
+        let bright = led_with_analog_write(255);
+        assert!((dim / bright - 0.25).abs() < 0.03, "dim {dim} bright {bright}");
         let net = live.mcus[0].nets[9].clone().expect("D9 is wired");
         let v = live.voltage(&net).unwrap();
-        assert!((v - 1.25).abs() < 0.15, "D9 {v} V");
+        assert!((v - 1.25).abs() < 0.1, "D9 {v} V");
     }
 }

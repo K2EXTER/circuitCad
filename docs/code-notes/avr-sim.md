@@ -30,7 +30,7 @@
   - `Nano::advance(t, volts)`:
     1. 入力のピンに、回路の電圧 (電源の半分より上で High) を入れる。A0〜A7 は ADC にも入れる。
     2. `t` まで回す。
-    3. 出力のピンは、その間の High の割合を `PinOut::Out` で返す。
+    3. 出力のピンは、終わりの値 `PinOut::Out` か、100 Hz 以上で続いて切り替わっていれば最後の 1 周期の `PinOut::Pwm { duty, hz }` を返す (`Edges`: ピンごとの最後の立ち上がり・立ち下がり)。
     4. タイマーが握るピンは、タイマーの変化だけで数える。simavr はポートへの書き込みも、そのピンに知らせてくるため。
     5. 入力は `Input`、ポートのビットが 1 の入力は `Pullup`。
 - **試験** (`tests/nano.rs`): `tests/firmware/check.c` を avr-gcc でビルドした `check.elf` を入れてある。試験に avr-gcc は要らない。作り直すのは `build.sh`。
@@ -101,7 +101,6 @@ exe の大きさは、試しのバイナリ全体で 283 KB (release)。simavr �
 
 ## 残り (候補表 W5)
 
-- PWM・`tone` の明るさ: 今は 1 ms の平均の電圧で渡すので、LED が順方向電圧より下の平均では点かない (上の「本物のマイコンの命令で動かす」)。
 - ADC の変換時間: 1 周の時間が予想より短く出る。simavr の変換の時間の扱いを確かめる。
 - ほかのチップ: Mega (ATmega2560)・ATtiny。コアのファイルを `vendor_simavr.py` の `CORES` に足し、`sim_core_decl.h` に並べる。
 - シリアルモニタから送る欄: `Avr::send` はある。画面の欄はまだ。

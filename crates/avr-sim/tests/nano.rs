@@ -59,9 +59,11 @@ fn the_pins_follow_the_program() {
     let at = |t: f64, pin: u8| level(steps.iter().find(|s| s.0 >= t - 1e-9).unwrap().1[pin as usize]);
     assert_eq!((at(0.09, D11), at(0.09, D12)), (0.0, 0.0));
     assert_eq!((at(0.105, D11), at(0.105, D12)), (1.0, 1.0));
-    // timer 1's PWM on D9: a quarter of each step High
-    let pwm = at(0.15, D9);
-    assert!((pwm - 0.25).abs() < 0.03, "D9 {pwm}");
+    // timer 1's PWM on D9: pulses of 1 kHz, High a quarter of each
+    match steps.iter().find(|s| s.0 >= 0.15).unwrap().1[D9 as usize] {
+        PinOut::Pwm { duty, hz } => assert!((duty - 0.25).abs() < 0.002 && hz == 1000.0, "D9 {duty} {hz}"),
+        o => panic!("D9 {o:?}"),
+    }
     // D4: an input with its pull-up; D2: an input
     assert_eq!(steps[50].1[D4 as usize], PinOut::Pullup);
     assert_eq!(steps[50].1[D2 as usize], PinOut::Input);
