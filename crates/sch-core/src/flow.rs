@@ -123,7 +123,7 @@ mod tests {
     use crate::{Component, Kind, Wire};
 
     fn comp(kind: Kind, refdes: &str, value: &str, pos: Pt, rot: u8) -> Component {
-        Component { refdes: refdes.into(), kind, value: value.into(), pos, rot, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default(), mount: None }
+        Component { refdes: refdes.into(), kind, value: value.into(), pos, rot, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default(), mount: None , two_columns: false}
     }
 
     #[test]

@@ -24,7 +24,7 @@ fn refdes_are_numbered_per_prefix() {
 
 #[test]
 fn rotation_moves_pins() {
-    let c = Component { refdes: "R1".into(), kind: Kind::Resistor, value: "1k".into(), pos: (10, 10), rot: 1, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default(), mount: None };
+    let c = Component { refdes: "R1".into(), kind: Kind::Resistor, value: "1k".into(), pos: (10, 10), rot: 1, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default(), mount: None , two_columns: false};
     let pins = c.pins();
     assert_eq!(pins[0].1, (10, 8));
     assert_eq!(pins[1].1, (10, 12));
@@ -59,6 +59,54 @@ fn the_pin_names_of_a_header_are_looked_up_by_pin_number_and_saved_only_when_the
     assert_eq!((c.pin_name("1"), c.pin_name("2"), c.pin_name("3"), c.pin_name("4"), c.pin_name("0")), (Some("F+"), None, Some("GND"), None, None));
     let back: Component = serde_json::from_str(&serde_json::to_string(c).unwrap()).unwrap();
     assert_eq!(back.pin_names, c.pin_names);
+}
+
+/// A pin header's shape lives in its footprint's name: one row or two, a header or a socket. Two rows put the odd pins on the left
+/// and the even ones on the right, row by row (the board's numbering); the board reads the same name; on the breadboard (and the
+/// stripboard and perfboard, which read the same circuit) a header of two rows stays beside the board, wired by its pins in use.
+#[test]
+fn a_header_has_rows_and_a_socket_kept_in_its_footprint() {
+    assert_eq!(crate::header_footprint(8, 1, false), "PinHeader_1x8");
+    assert_eq!(crate::header_footprint(10, 2, true), "PinSocket_2x5");
+    assert_eq!(crate::header_form("PinSocket_2x5"), (2, true));
+    assert_eq!(crate::header_form("PinHeader_1x4"), (1, false));
+    assert_eq!(crate::header_form(""), (1, false), "a header of before has one row and is male");
+    let mut s = Schematic::default();
+    let j = s.add(Kind::Header(6), (10, 10), 0);
+    assert_eq!(s.components[j].pins()[5].1, (12, 20), "one row: pin 6 at the bottom on the right");
+    // a header of before with a 2-row footprint keeps its one column (its wires stay on its pins)
+    s.components[j].footprint = crate::header_footprint(6, 2, true);
+    assert_eq!(s.components[j].pins()[5].1, (12, 20));
+    // chosen in two columns: the odd pins left, the even ones right
+    s.components[j].two_columns = true;
+    let pins = s.components[j].pins();
+    assert_eq!(pins.iter().map(|(n, p)| (n.as_str(), *p)).collect::<Vec<_>>(), vec![("1", (8, 10)), ("2", (12, 10)), ("3", (8, 12)), ("4", (12, 12)), ("5", (8, 14)), ("6", (12, 14))]);
+    // its symbol's box takes the two columns
+    assert_eq!(crate::symbol_shapes::comp_extents(&s.components[j]), (-2., 2., -1., 5.));
+    // saved and read back with its shape
+    let back: Component = serde_json::from_str(&serde_json::to_string(&s.components[j]).unwrap()).unwrap();
+    assert_eq!((back.header_form(), back.two_columns), ((2, true), true));
+    // a resistor from pin 1 to pin 4 through the board: the header beside it, wired by those two pins only
+    let r = s.add(Kind::Resistor, (30, 10), 0);
+    let (p1, p4) = (s.components[j].pins()[0].1, s.components[j].pins()[3].1);
+    let (ra, rb) = (s.components[r].pins()[0].1, s.components[r].pins()[1].1);
+    s.wires.push(Wire { a: p1, b: (p1.0, p1.1 - 4) });
+    s.labels.push(Label { pos: (p1.0, p1.1 - 4), text: "A".into() });
+    s.wires.push(Wire { a: p4, b: (p4.0 + 4, p4.1) });
+    s.labels.push(Label { pos: (p4.0 + 4, p4.1), text: "B".into() });
+    s.labels.push(Label { pos: ra, text: "A".into() });
+    s.labels.push(Label { pos: rb, text: "B".into() });
+    let jr = s.components[j].refdes.clone();
+    assert!(crate::breadboard::is_board_beside(&s.components[j]));
+    let l = crate::breadboard::auto_layout(&s);
+    assert!(!l.parts.iter().any(|p| p.refdes == jr), "not plugged into the breadboard");
+    let off = l.off_board.iter().find(|o| o.refdes == jr).expect("beside the board");
+    assert_eq!(off.pins.iter().map(|(p, ..)| p.as_str()).collect::<Vec<_>>(), vec!["1", "4"], "only the pins in use get a wire");
+    // the stripboard and the perfboard lay it out too (beside the board)
+    let st = crate::stripboard::strip_layout(&s);
+    assert!(!st.parts.iter().any(|p| p.refdes == jr));
+    let pf = crate::perfboard::perf_layout_with(&s, crate::stripboard::StripOptions::default());
+    assert!(!pf.parts.iter().any(|p| p.refdes == jr));
 }
 
 #[test]
@@ -620,7 +668,7 @@ fn old_two_lead_glyph_sheet_gets_short_leads() {
         companions: vec![],
         glyph: "electrolytic".into(),
     };
-    let c = Component { refdes: "C1".into(), kind: Kind::Custom, value: "100u".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: Some(sym), sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default(), mount: None };
+    let c = Component { refdes: "C1".into(), kind: Kind::Custom, value: "100u".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: Some(sym), sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default(), mount: None , two_columns: false};
     let mut s = Schematic::default();
     s.components.push(c);
     assert_eq!(s.components[0].pins()[0].1, (8, 10)); // new leads are 2 long
@@ -819,7 +867,7 @@ fn buses_follow_their_sheet_and_survive_a_save() {
 
 #[test]
 fn a_part_numbers_of_its_own_win_over_those_of_its_library_part_and_are_not_written_when_empty() {
-    let mut c = Component { refdes: "R1".into(), kind: Kind::Resistor, value: "1k".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default(), mount: None };
+    let mut c = Component { refdes: "R1".into(), kind: Kind::Resistor, value: "1k".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default(), mount: None , two_columns: false};
     assert!(c.shop_numbers().is_empty());
     assert!(!serde_json::to_string(&c).unwrap().contains("shops"), "an empty map must not be written");
     c.shops.insert("digikey".into(), " RC0805FR-071KL ".into());

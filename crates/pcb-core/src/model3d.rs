@@ -121,7 +121,7 @@ pub fn part_kind(refdes: &str, footprint: &str) -> Kind {
     let fp = footprint.to_ascii_lowercase();
     let th = is_through_hole(&fp);
     // a pin header is a pin header whatever its designator says (a source or a probe point on a header is V1, TP1 ...)
-    if fp.contains("pinheader") {
+    if fp.contains("pinheader") || fp.contains("pinsocket") {
         return Kind::Header;
     }
     if fp.contains("to-220") {
@@ -245,11 +245,20 @@ const TALL_FOOTPRINTS: &[(&str, f64, [u8; 3])] = &[
 const TO220_TAB: f64 = 6.5;
 
 /// Body height (mm above the board) and colour guessed from the reference designator and footprint.
+/// A pin socket (female header): `PinSocket_1x8`, `PinSocket_2x5`.
+fn is_socket(footprint: &str) -> bool {
+    footprint.to_ascii_lowercase().contains("pinsocket")
+}
+
 pub fn part_style(refdes: &str, footprint: &str) -> (f64, [u8; 3]) {
     let fp = footprint.to_ascii_lowercase();
     let th = is_through_hole(&fp);
     if fp.contains("pinheader") {
         return (2.5, [24, 24, 26]);
+    }
+    // a pin socket: its body stands 8.5 mm (the usual 2.54 mm socket), its contacts inside
+    if fp.contains("pinsocket") {
+        return (8.5, [24, 24, 26]);
     }
     // parts that stand tall by their footprint, whatever they are called: typical heights, for the case check (a footprint's
     // own `height` wins over these; they are estimates, not a maker's drawing)
@@ -294,7 +303,7 @@ pub fn part_style(refdes: &str, footprint: &str) -> (f64, [u8; 3]) {
 pub fn part_total_height(refdes: &str, footprint: &str) -> f64 {
     let (h, _) = part_style(refdes, footprint);
     match part_kind(refdes, footprint) {
-        Kind::Header => h + 6.0,
+        Kind::Header if !is_socket(footprint) => h + 6.0,
         Kind::To220 => h + TO220_TAB,
         _ => h,
     }
@@ -313,7 +322,7 @@ fn style_in(board: &Board, part: &Part) -> (f64, [u8; 3]) {
 pub fn part_height_on(board: &Board, part: &Part) -> f64 {
     let (h, _) = style_in(board, part);
     match part_kind(&part.refdes, &part.footprint) {
-        Kind::Header => h + 6.0,
+        Kind::Header if !is_socket(&part.footprint) => h + 6.0,
         Kind::To220 if board.footprint(&part.footprint).and_then(|f| f.height).is_none() => h + TO220_TAB,
         _ => h,
     }
@@ -638,7 +647,8 @@ fn solids(board: &Board, part: &Part) -> Vec<Solid> {
         }
         Kind::Header => {
             let mut v = vec![solid([lo.x - 0.5, lo.y - 0.5, 0.0], [hi.x + 0.5, hi.y + 0.5, h], color, b)];
-            for p in &pads {
+            // a socket's contacts are inside its body: only a male header's pins stand above it
+            for p in pads.iter().filter(|_| !is_socket(&part.footprint)) {
                 v.push(solid([p.pos.x - 0.32, p.pos.y - 0.32, 0.0], [p.pos.x + 0.32, p.pos.y + 0.32, h + 6.0], GOLD, b));
             }
             v

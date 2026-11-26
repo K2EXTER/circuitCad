@@ -290,6 +290,10 @@ pub struct Component {
     /// footprint (`mount::mount_of`). See `mount::mount_for`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mount: Option<mount::MountChoice>,
+    /// A pin header drawn in two columns (the odd pins on the left, the even ones on the right: `header2_pins`), set when its rows
+    /// are chosen as two. A header of before (one column, even with a 2-row footprint) keeps its pins where they were.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub two_columns: bool,
 }
 
 impl Component {
@@ -348,6 +352,17 @@ impl Component {
         if let Some(sym) = &self.custom {
             return sym.layout().pins.into_iter().map(|p| (p.number, (self.pos.0 + rotate(p.tip, self.rot).0, self.pos.1 + rotate(p.tip, self.rot).1))).collect();
         }
+        if let Kind::Header(n) = self.kind
+            && self.two_columns
+        {
+            return header2_pins(n)
+                .into_iter()
+                .map(|(num, off)| {
+                    let r = rotate(off, self.rot);
+                    (num, (self.pos.0 + r.0, self.pos.1 + r.1))
+                })
+                .collect();
+        }
         self.kind
             .pins()
             .into_iter()
@@ -357,6 +372,32 @@ impl Component {
             })
             .collect()
     }
+}
+
+impl Component {
+    /// A pin header's rows (1 or 2) and whether it is a socket (female), read from its footprint's name (`header_footprint`).
+    pub fn header_form(&self) -> (u8, bool) {
+        header_form(&self.footprint)
+    }
+}
+
+/// The rows (1 or 2) and the socket of a pin header's footprint name: `PinHeader_1x8`, `PinHeader_2x5`, `PinSocket_1x8`,
+/// `PinSocket_2x5` (one row when the name says neither).
+pub fn header_form(footprint: &str) -> (u8, bool) {
+    let rows = if footprint.contains("_2x") { 2 } else { 1 };
+    (rows, footprint.starts_with("PinSocket"))
+}
+
+/// The footprint of a pin header of `pins` pins in `rows` rows (2: `pins` even), a socket or not: the names the board reads.
+pub fn header_footprint(pins: u8, rows: u8, socket: bool) -> String {
+    let rows = rows.clamp(1, 2);
+    format!("{}_{rows}x{}", if socket { "PinSocket" } else { "PinHeader" }, pins.div_ceil(rows))
+}
+
+/// The pins of a two-row header in the sheet's grid: the odd ones on the left (pointing left), the even ones on the right, row by
+/// row from the top (1 2 / 3 4 / ...: the numbering of the board's 2-row headers).
+pub fn header2_pins(n: u8) -> Vec<(String, Pt)> {
+    (0..n as i32).map(|i| ((i + 1).to_string(), (if i % 2 == 0 { -2 } else { 2 }, 2 * (i / 2)))).collect()
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -668,6 +709,7 @@ impl Schematic {
             sub: None,
             shops: Default::default(),
             mount: None,
+            two_columns: false,
         });
         self.components.len() - 1
     }
@@ -788,6 +830,7 @@ impl Schematic {
             sub: None,
             shops: Default::default(),
             mount: None,
+            two_columns: false,
         });
         self.components.len() - 1
     }

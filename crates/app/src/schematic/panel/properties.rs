@@ -161,7 +161,51 @@ impl SchEditor {
                         }
                     }
                 }
-                if let Kind::Header(n) = c.kind {
+                if let Kind::Header(n0) = c.kind {
+                    // the header's shape: how many pins, one row or two, a header (male) or a socket (female). Kept in its footprint's
+                    // name (`sch_core::header_footprint`), which the board and the prototype tab read; a footprint of another kind (a
+                    // wire pad, chosen by hand) keeps its name, only the pins change
+                    part_heading(ui, "形 (ピンの数・列・オスとメス)", "コネクタの形を決めます。基板パターンのフットプリント (パッドの並び) と、試作のタブの差し方も、この形になります。2 列は 1 2 / 3 4 … の順 (奇数が左の列、偶数が右の列) で、試作ではボードの横に置いてジャンパー線でつなぎます");
+                    let (rows0, socket0) = c.header_form();
+                    let ours = c.footprint.is_empty() || c.footprint.starts_with("PinHeader_") || c.footprint.starts_with("PinSocket_");
+                    let (mut n, mut rows, mut socket) = (n0, rows0, socket0);
+                    ui.horizontal(|ui| {
+                        ui.label(i18n::tr("ピンの数"));
+                        ui.add(egui::DragValue::new(&mut n).range(1..=40)).on_hover_text(i18n::tr("ピンの本数 (1〜40)。減らすと、なくなったピンにつながっていた線は外れます"));
+                    });
+                    for (k, r) in crate::widgets::segment_bar(ui, &[("1 列", None), ("2 列", None)], Some(usize::from(rows == 2))).into_iter().enumerate() {
+                        let tip = if k == 0 { "ピンが 1 列に並んだヘッダ (ブレッドボードに差せます)" } else { "ピンが 2 列に並んだヘッダ (ISP・JTAG・Raspberry Pi など。ピンの数は偶数)" };
+                        if r.on_hover_text(i18n::tr(tip)).clicked() {
+                            rows = (k + 1) as u8;
+                        }
+                    }
+                    for (k, r) in crate::widgets::segment_bar(ui, &[("ピンヘッダ (オス)", None), ("ピンソケット (メス)", None)], Some(usize::from(socket))).into_iter().enumerate() {
+                        let tip = if k == 0 { "ピンが立っているオスのコネクタ。ジャンパー線のメスやソケットを差します" } else { "穴が並んだメスのコネクタ (ピンソケット)。ほかの基板のピンヘッダや、モジュールを差します。高さは約 8.5 mm" };
+                        if r.on_hover_text(i18n::tr(tip)).clicked() {
+                            socket = k == 1;
+                        }
+                    }
+                    // two rows take an even number of pins
+                    if rows == 2 && n % 2 == 1 {
+                        n = (n + 1).min(40);
+                    }
+                    if (n, rows, socket) != (n0, rows0, socket0) {
+                        c.kind = Kind::Header(n);
+                        // the symbol in two columns when two rows are chosen (a header of before keeps its one column until then)
+                        if rows != rows0 {
+                            c.two_columns = rows == 2;
+                        }
+                        if ours {
+                            c.footprint = sch_core::header_footprint(n, rows, socket);
+                        }
+                        if !c.pin_names.is_empty() {
+                            c.pin_names.resize(n as usize, String::new());
+                        }
+                    }
+                    if !ours {
+                        ui.label(egui::RichText::new(i18n::trf!("フットプリントは手で選んだ「{}」のままです (列とオス・メスは変わりません)", c.footprint)).small().color(crate::theme::warn()));
+                    }
+                    let n = n;
                     // headings, not folds, in this band: the band folds already (at most two levels, ui-rules.md)
                     part_heading(ui, "ピンの名前 (信号名)", "ピンごとの名前を、記号のそばと基板のシルクに書きます (配線やネットは変わりません)。コネクタや端子台の各ピンが何の信号かを書いておくと、配線の間違いが減ります。空にすると、そのピンには名前を書きません");
                     c.pin_names.resize(n as usize, String::new());

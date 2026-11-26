@@ -206,8 +206,36 @@ pub fn sym_extents(sym: &CustomSymbol) -> (f32, f32, f32, f32) {
 pub fn comp_extents(c: &Component) -> (f32, f32, f32, f32) {
     match &c.custom {
         Some(sym) => sym_extents(sym),
-        None => extents(c.kind),
+        None => match c.kind {
+            Kind::Header(n) if c.two_columns => (-2., 2., -1., 2. * n.div_ceil(2) as f32 - 1.),
+            _ => extents(c.kind),
+        },
     }
+}
+
+/// A pin header's body and pins: one row (the pins pointing right) or two (odd ones left, even ones right); a male header's
+/// contacts are dots, a socket's are cups open towards the pin.
+pub fn header_symbol(n: u8, rows: u8, socket: bool) -> Vec<Sh> {
+    use Sh::*;
+    let rows_n = if rows == 2 { n.div_ceil(2) } else { n } as f32;
+    let bottom = 2. * rows_n - 1.;
+    let (x0, x1) = if rows == 2 { (-1.2, 1.2) } else { (0., 1.2) };
+    let mut v = vec![L(x0, -1., x1, -1.), L(x0, -1., x0, bottom), L(x1, -1., x1, bottom), L(x0, bottom, x1, bottom)];
+    for i in 0..n as i32 {
+        // (side: +1 the pin points right, -1 left; the contact's middle)
+        let (side, y, mid) = if rows == 2 { (if i % 2 == 0 { -1. } else { 1. }, 2. * (i / 2) as f32, if i % 2 == 0 { -0.6 } else { 0.6 }) } else { (1., 2. * i as f32, 0.6) };
+        v.push(L(side * 1.2, y, side * 2., y));
+        if socket {
+            // a cup open towards the pin
+            let (inner, outer) = (mid - side * 0.25, mid + side * 0.25);
+            v.push(L(inner, y - 0.3, outer, y - 0.3));
+            v.push(L(inner, y + 0.3, outer, y + 0.3));
+            v.push(L(inner, y - 0.3, inner, y + 0.3));
+        } else {
+            v.push(C(mid, y, 0.25));
+        }
+    }
+    v
 }
 
 
@@ -245,7 +273,12 @@ pub fn rot_f(p: (f32, f32), rot: u8) -> (f32, f32) {
 pub fn component_shapes(c: &Component) -> Vec<Sh> {
     use crate::glyphs::{body, body_glyph, is_thermistor, overlay, overlay_glyph, thermistor_mark};
     let Some(sym) = &c.custom else {
-        return if c.kind == Kind::VSource { source_symbol(&c.value) } else { symbol(c.kind) };
+        return match c.kind {
+            Kind::VSource => source_symbol(&c.value),
+            // (drawn in two columns only when chosen so: a header of before keeps its one column, whatever its footprint)
+            Kind::Header(n) => header_symbol(n, if c.two_columns { 2 } else { 1 }, c.header_form().1),
+            _ => symbol(c.kind),
+        };
     };
     let l = sym.layout();
     if let Some(shapes) = body_glyph(sym).and_then(|g| body(g, &l)) {
@@ -285,7 +318,7 @@ mod tests {
     #[test]
     fn every_basic_part_is_drawn_up_to_its_pins() {
         for kind in Kind::PALETTE.iter().copied() {
-            let c = Component { refdes: "X1".into(), kind, value: "5".into(), pos: (0, 0), rot: 0, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default(), mount: None };
+            let c = Component { refdes: "X1".into(), kind, value: "5".into(), pos: (0, 0), rot: 0, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, t_max: 0.0, zth: vec![], theta_jc: 0.0, heatsink: 0.0, sub: None, shops: Default::default(), mount: None , two_columns: false};
             let shapes = component_shapes(&c);
             assert!(!shapes.is_empty(), "{kind:?}");
             for (pin, at) in kind.pins() {

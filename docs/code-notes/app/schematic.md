@@ -184,3 +184,12 @@ IC の電源ピン (VCC/VDD/V+/VIN) のネットは、電圧源・ヘッダ、�
 - 利用者のライブラリの写し: 手を入れていない写し (ユニットを除けば同梱と同じ) は 1 回だけ入れ替える (`.bundled` の鍵 `+gate-units`、`is_original_without_units`)。置いた部品は自分の写しを持つので、前に描いた回路は 1 つの箱のまま動く (「ライブラリの部品が新しくなっています」にピンの違いとして出る。`libsync` はピンを変えない)。テスト `a_gate_ic_from_before_its_units_gets_them_once`。
 - 基板のゲートの入れ替えを回路図へ (`board backannotate`、`backannotate.rs` の `trade_on_sheet`): ピンの先を、同じ部品番号の全部のユニットから探す。置いていないゲートへ入れ替えたときは、そのユニットを先に置く (見ているシートのとき)。テスト `a_gate_trade_goes_back_into_the_schematic`。
 - サンプル: 今のサンプル (logic_basics・seg7_counter・half_adder・sr_latch・mixed_signal) は 1 つの箱のまま。作るコードは `tests/mod.rs` の `one_block` で同じ絵を作る (ゲートごとに描き直すのは残り)。
+
+## ピンヘッダの形: ピンの数・列・オスとメス (2026-11-26)
+
+- 部品の設定の欄 (`panel/properties.rs`、ヘッダを選んだとき) に「形 (ピンの数・列・オスとメス)」: ピンの数 (1〜40)、帯「1 列 | 2 列」、帯「ピンヘッダ (オス) | ピンソケット (メス)」。2 列はピンの数を偶数に (奇数なら 1 足す)。
+- 形はフットプリントの名前で持つ (`sch_core::header_footprint` / `header_form`: `PinHeader_1x8`・`PinHeader_2x5`・`PinSocket_1x8`・`PinSocket_2x5`)。基板パターンはこの名前をそのまま読む (`pcb-core/footprints.rs`: ソケットはヘッダと同じパッド、2 列は 1 2 / 3 4 … の番号)。3D はソケットを高さ 8.5 mm の箱でピンを立てない (`model3d.rs` の `is_socket`)。手で選んだ別のフットプリント (ワイヤーパッドなど) は名前を変えず、ピンの数だけ変える (欄に注意を出す)。保存の形は変えないので、前のファイルはそのまま開ける。
+- 回路図の記号: `symbol_shapes::header_symbol` (1 列は今までどおり、2 列は奇数のピンが左・偶数が右、ソケットは丸の代わりに受け口の形)。2 列で描くかは部品の `two_columns` (設定の欄で列を選んだときに入る)。前からある 2 列のフットプリント (`PinHeader_2x3` を付けた 1 列の記号、`system.rs` の 2 列のコネクタの照合が使う) は、ピンの位置が変わると線が外れるので 1 列の記号のまま (`Component::pins` は `two_columns` のときだけ `header2_pins`)。2 列の記号のピンの名前は、各ピンの線の下 (線の端のラベルと重ならない)。
+- 試作のタブ: 2 列のヘッダ (フットプリントが 2 列) は、溝をまたげず (番号の付け方が IC と違う)、同じ縦の列に差すと向かい合うピンがつながるので、Mega と同じくボードの横に置き、使うピンだけジャンパー線 (`breadboard::is_board_beside`。ストリップ基板・ユニバーサル基板も同じ回路を読むので横)。横の箱のピンはヘッダのピンの名前で出す (5V・GND)。1 列のソケットは 1 列のヘッダと同じく差す。
+- クイック追加は「ソケット」「メス」でもヘッダが出る (`quick.rs`)。
+- 試験: `a_header_has_rows_and_a_socket_kept_in_its_footprint` (sch-core: 名前と形の行き来・2 列のピンの位置・前のファイルの 1 列・ブレッドボードの横・ストリップ基板とユニバーサル基板)、`a_socket_has_the_pads_of_a_header_and_a_taller_body` (pcb-core)。

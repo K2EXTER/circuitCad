@@ -317,7 +317,10 @@ impl BreadboardView {
             for (i, (pin, net, h)) in o.pins.iter().enumerate() {
                 let from = off_pin(&l, k, i, origin, pitch);
                 draw_wire(&painter, from, to(*h), wire_colour(net, &l), pitch);
-                let name = part.and_then(|c| c.custom.as_ref()).and_then(|s| s.pins.iter().find(|q| q.number == *pin)).map_or(pin.as_str(), |q| q.name.as_str());
+                // (a pin header's own names for its pins: 5V, GND ...)
+                let name = part
+                    .and_then(|c| c.custom.as_ref().and_then(|s| s.pins.iter().find(|q| q.number == *pin)).map(|q| q.name.as_str()).or_else(|| c.pin_name(pin)))
+                    .unwrap_or(pin.as_str());
                 painter.text(from + Vec2::new(-0.2 * pitch, 0.0), egui::Align2::RIGHT_CENTER, name, small.clone(), Color32::WHITE);
             }
         }

@@ -136,6 +136,13 @@ pub fn names() -> Vec<String> {
     for n in [3, 4, 5, 8, 10, 20] {
         v.push(format!("PinHeader_2x{n}"));
     }
+    // pin sockets (female) of the same sizes; any 1xN or 2xN is read by `get`
+    for n in [2, 3, 4, 6, 8] {
+        v.push(format!("PinSocket_1x{n}"));
+    }
+    for n in [3, 5] {
+        v.push(format!("PinSocket_2x{n}"));
+    }
     for n in 2..=6 {
         v.push(format!("WirePad_1x{n}"));
     }
@@ -291,15 +298,16 @@ pub fn get(name: &str) -> Option<Footprint> {
             }
             wire_pads(name, &(1..=n).map(|i| i.to_string()).collect::<Vec<_>>())
         }
-        _ if name.starts_with("PinHeader_2x") => {
-            let n: usize = name.strip_prefix("PinHeader_2x")?.parse().ok()?;
+        // a pin socket (female) has a header's pads: only its body differs (the 3D view, `model3d`)
+        _ if name.starts_with("PinHeader_2x") || name.starts_with("PinSocket_2x") => {
+            let n: usize = name.strip_prefix("PinHeader_2x").or_else(|| name.strip_prefix("PinSocket_2x"))?.parse().ok()?;
             if !(1..=40).contains(&n) {
                 return None;
             }
             crate::package::PackageSpec::DoubleRow { pins: 2 * n, pitch: 2.54, row_spacing: 2.54, pad_d: 1.7, drill: 1.0 }.build(name).ok()?
         }
         _ => {
-            let n: usize = name.strip_prefix("PinHeader_1x")?.parse().ok()?;
+            let n: usize = name.strip_prefix("PinHeader_1x").or_else(|| name.strip_prefix("PinSocket_1x"))?.parse().ok()?;
             if !(1..=40).contains(&n) {
                 return None;
             }
@@ -455,5 +463,22 @@ mod wire_pad_tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod socket_tests {
+    /// A pin socket has a header's pads (one row, or two numbered 1 2 / 3 4 ...); only its body differs: 8.5 mm tall in the 3D
+    /// view, no pins standing above it.
+    #[test]
+    fn a_socket_has_the_pads_of_a_header_and_a_taller_body() {
+        for (socket, header) in [("PinSocket_1x8", "PinHeader_1x8"), ("PinSocket_2x5", "PinHeader_2x5")] {
+            let (s, h) = (super::get(socket).unwrap(), super::get(header).unwrap());
+            let at = |f: &super::Footprint| f.pads.iter().map(|p| (p.pin.clone(), (p.pos.x * 100.0).round(), (p.pos.y * 100.0).round())).collect::<Vec<_>>();
+            assert_eq!(at(&s), at(&h), "{socket}");
+        }
+        assert_eq!(super::get("PinSocket_2x5").unwrap().pads.len(), 10);
+        assert_eq!(crate::model3d::part_total_height("J1", "PinSocket_1x8"), 8.5);
+        assert!(crate::model3d::part_total_height("J1", "PinHeader_1x8") > 8.0, "a header's pins stand above its body");
     }
 }

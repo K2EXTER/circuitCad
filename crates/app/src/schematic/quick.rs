@@ -38,7 +38,7 @@ fn aliases(k: Kind) -> &'static str {
         Kind::ISource => "current source i load 電流源 定電流 負荷 電子負荷",
         Kind::Pot => "potentiometer pot volume trimmer vr variable resistor knob ボリューム 可変抵抗 半固定 つまみ",
         Kind::Npn => "npn transistor bjt q トランジスタ",
-        Kind::Header(_) => "header connector pin コネクタ ヘッダ ピン",
+        Kind::Header(_) => "header connector pin socket コネクタ ヘッダ ピン ピンヘッダ ピンソケット ソケット メス オス 2列",
         Kind::Ground => "ground gnd 0v アース グランド",
         Kind::Power => "vcc vdd 3v3 5v rail 電源ネット",
         Kind::Custom => "",

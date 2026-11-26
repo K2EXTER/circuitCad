@@ -156,9 +156,10 @@ impl Problem {
 /// The models of the boards too big for a breadboard (an Arduino Mega): they stay beside it, wired to it.
 const BOARDS_BESIDE: &[&str] = &["ARDUINO_MEGA"];
 
-/// A board that stays beside the breadboard (`BOARDS_BESIDE`): only its pins that are used get a wire.
+/// A board that stays beside the breadboard (`BOARDS_BESIDE`), or a pin header of two rows (its pins 1 2 / 3 4 ... cannot straddle
+/// the groove as a chip's, and two rows 2.54 mm apart would short each pair on one column): only its pins that are used get a wire.
 pub fn is_board_beside(c: &Component) -> bool {
-    c.custom.as_ref().and_then(|s| s.sim.as_ref()).is_some_and(|m| BOARDS_BESIDE.contains(&m.name.as_str()))
+    c.custom.as_ref().and_then(|s| s.sim.as_ref()).is_some_and(|m| BOARDS_BESIDE.contains(&m.name.as_str())) || (matches!(c.kind, Kind::Header(_)) && c.header_form().0 == 2)
 }
 
 /// The supplies and sources that stay off the board (a source marked simulation-only too: a bench supply is wired in), and the
