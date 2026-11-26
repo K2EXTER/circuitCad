@@ -31,6 +31,8 @@ mod logic_plot;
 mod plot;
 /// Starting width of the left tool panels. The panels only grow to fit their widest line (the analysis tab, a selected part's
 /// form, the wire tool's settings), so a narrow start made the circuit shift sideways whenever the tab or the selection changed.
+/// The left panels' width, fixed (2026-11-26): a panel that could be resized was pushed wider by its contents (a box of a
+/// guessed width grew it every frame). Change it here if a panel needs more.
 const PANEL_WIDTH: f32 = 400.0;
 
 mod prefs;
@@ -885,7 +887,7 @@ impl eframe::App for App {
         }
         if self.mode == Mode::Proto {
             self.update_mates();
-            egui::Panel::left("proto_steps").default_size(PANEL_WIDTH).min_size(240.0).frame(egui::Frame::side_top_panel(ui.style()).inner_margin(egui::Margin::symmetric(12, 8))).show(ui, |ui| self.breadboard.panel(ui, &mut self.sch));
+            egui::Panel::left("proto_steps").exact_size(PANEL_WIDTH).resizable(false).frame(egui::Frame::side_top_panel(ui.style()).inner_margin(egui::Margin::symmetric(12, 8))).show(ui, |ui| self.breadboard.panel(ui, &mut self.sch));
             if std::mem::take(&mut self.breadboard.want_live_logic) {
                 if !self.sch.live_logic_active() {
                     self.sch.start_live_logic();
@@ -923,7 +925,7 @@ impl eframe::App for App {
             return;
         }
         if self.mode == Mode::Bench {
-            let from_panel = egui::Panel::left("bench_steps").default_size(PANEL_WIDTH).min_size(240.0).frame(egui::Frame::side_top_panel(ui.style()).inner_margin(egui::Margin::symmetric(12, 8))).show(ui, |ui| self.bench_tab.panel(ui, &mut self.sch, &self.board_ed.board, &mut self.power_on)).inner;
+            let from_panel = egui::Panel::left("bench_steps").exact_size(PANEL_WIDTH).resizable(false).frame(egui::Frame::side_top_panel(ui.style()).inner_margin(egui::Margin::symmetric(12, 8))).show(ui, |ui| self.bench_tab.panel(ui, &mut self.sch, &self.board_ed.board, &mut self.power_on)).inner;
             let from_canvas = egui::CentralPanel::default().show(ui, |ui| self.bench_tab.canvas(ui, &self.board_ed.board, &self.sch, &self.power_on)).inner;
             if let Some(a) = from_panel.or(from_canvas) {
                 self.bench_action(a);
@@ -931,7 +933,7 @@ impl eframe::App for App {
             return;
         }
         if self.mode == Mode::Schematic {
-            egui::Panel::left("sch_tools").default_size(PANEL_WIDTH).min_size(220.0).frame(egui::Frame::side_top_panel(ui.style()).inner_margin(egui::Margin::symmetric(12, 8))).show(ui, |ui| self.sch.side_panel(ui));
+            egui::Panel::left("sch_tools").exact_size(PANEL_WIDTH).resizable(false).frame(egui::Frame::side_top_panel(ui.style()).inner_margin(egui::Margin::symmetric(12, 8))).show(ui, |ui| self.sch.side_panel(ui));
             if self.sch.has_wave() {
                 egui::Panel::bottom("wave").resizable(true).default_size(380.0).show(ui, |ui| self.sch.wave_panel(ui));
             }
@@ -951,7 +953,7 @@ impl eframe::App for App {
         self.board_ed.thermal_window(ui.ctx());
         self.board_ed.view3d_window(ui.ctx());
         self.board_ed.lesson_window(ui.ctx());
-        egui::Panel::left("board_tools").default_size(PANEL_WIDTH).min_size(240.0).show(ui, |ui| self.board_ed.side_panel(ui, &self.sch));
+        egui::Panel::left("board_tools").exact_size(PANEL_WIDTH).resizable(false).show(ui, |ui| self.board_ed.side_panel(ui, &self.sch));
         egui::CentralPanel::default().show(ui, |ui| self.board_ed.canvas(ui));
     }
 }
