@@ -35,7 +35,7 @@
   - `Board::advance(t, volts)` (`Board::new(&NANO か &MEGA, image)`):
     1. 入力のピンに、回路の電圧 (電源の半分より上で High) を入れる。A0〜A7 は ADC にも入れる。
     2. `t` まで回す。
-    3. 出力のピンは、終わりの値 `PinOut::Out` か、100 Hz 以上で続いて切り替わっていれば最後の 1 周期の `PinOut::Pwm { duty, hz }` を返す (`Edges`: ピンごとの最後の立ち上がり・立ち下がり)。
+    3. 出力のピンは、終わりの値 `PinOut::Out` か、100 Hz 以上で続いて切り替わっていれば (20 Hz 以上でも、短いほうの幅が 5 ms より短い細いパルスなら: サーボの 50 Hz・0.5〜2.4 ms は 1 ms の刻みでは取りこぼす。`NARROW_S`) 最後の 1 周期の `PinOut::Pwm { duty, hz }` を返す (`Edges`: ピンごとの最後の立ち上がり・立ち下がり)。
     4. タイマーが握るピンは、タイマーの変化だけで数える。simavr はポートへの書き込みも、そのピンに知らせてくるため。
     5. 入力は `Input`、ポートのビットが 1 の入力は `Pullup`。
 - **試験** (`tests/nano.rs`): `tests/firmware/check.c` を avr-gcc でビルドした `check.elf` を入れてある。試験に avr-gcc は要らない。作り直すのは `build.sh`。
@@ -44,6 +44,7 @@
   - シリアルの `ee=42` と `a0=409`、受けた文字を送り返す。60 文字の行 (`Board::send_text`) もそのまま返る。
   - `adc_time.elf` (`adc_time.c`): ADC の変換時間が 200 µs (1 回目)・104 µs (2 回目から)。
   - `mega.elf` (`mega.c`、ATmega2560): Mega のピン番号で、D13 (PB7) の反転・D2 (PE4) → D22 (PA0)・A8 (ADC8、MUX5) → D53 (PB0)・D11 (OC1A) の PWM・シリアル。
+  - `servo.elf` (`servo.ino`、Arduino の Servo 1.3.0 を arduino-cli で入れてビルド。試験 `tests/servo.rs`): D9 に 20 ms ごと、0° で 544 µs・90° で 1472 µs・180° で 2400 µs のパルス (タイマー 1 の割り込みでポートに書く)。回路には 50 Hz のパルスのまま渡る。
   - `libs.elf` (`libs.ino`、arduino-cli で `arduino-cli compile -b arduino:avr:nano --output-dir …` してできた ELF を写した。試験は `tests/libs.rs`): Arduino の AVR のコアに付いてくるライブラリ。EEPROM (書いて読む)・SPI (MISO の 5 V を 0xFF で読む)・Wire (相手のいないアドレスに 2 = アドレスに応答なし。止まらない)・SoftwareSerial (D7 に 9600 bps で "soft"。ピンの変化を試験が読み解く)・`attachInterrupt` (D2 を 2 回押して 2)・`tone(8, 1000)` (D8 が 1 kHz の PWM として出る)・`millis`。
 - **SPI** (W5 ⑤、2026-11-26): simavr の SPI はバイトだけを動かし、ピン (SCK・MOSI) は動かさない。相手がいないと、送ったバイトが SPDR に残る (MISO と MOSI をつないだのと同じ)。glue は、マスターが 1 バイト送り終えたとき (`SPI_IRQ_OUTPUT`) に、MISO のピン (328 は PB4、2560 は PB3) のレベルを 8 ビット分 (0xFF か 0x00) として返す (`SPI_IRQ_INPUT`)。回路の側に SPI の部品のモデルは無いので、それ以上は読めない。SCK・MOSI のピンが回路の中で動かないのも残り (D13 の LED が SPI の間に点かない)。
 - **I²C の相手の部品** (W5 ⑤、2026-11-26、`c/i2c_parts.c`): simavr の TWI は、バスの出来事を通知で出す (START とアドレスの 8 ビット・書いた 1 バイト・読む 1 バイト・STOP)。相手は、その通知の中で入力の IRQ に答えを返す (アドレスと書いたバイトには ACK、読むときはそのバイト)。答えなければ NACK になる。今の相手は Sensirion の **SHT3x** (温湿度センサー、アドレス 0x44 / 0x45):
@@ -117,4 +118,4 @@ exe の大きさは、試しのバイナリ全体で 283 KB (release)。simavr �
 ## 残り (候補表 W5)
 
 - ほかのチップ: ATtiny など。コアのファイルを `vendor_simavr.py` の `CORES` に足し、`sim_core_config.h`・`sim_core_decl.h` に並べ、`BoardDef` を書く (Mega はこの形で 2026-11-26 に足した)。
-- ライブラリ: Servo (ダウンロードが要る)。I²C の相手は SHT3x だけ (ほかのセンサー・EEPROM は、`i2c_parts.c` に同じ形で足す)。SPI の相手の部品は無い (MISO のレベルしか返らない)。SCK・MOSI・SDA・SCL のピンを回路の中で動かすこと。
+- ライブラリ: Servo は 2026-11-26 に試した (上の `servo.elf`)。I²C の相手は SHT3x だけ (ほかのセンサー・EEPROM は、`i2c_parts.c` に同じ形で足す)。SPI の相手の部品は無い (MISO のレベルしか返らない)。SCK・MOSI・SDA・SCL のピンを回路の中で動かすこと。

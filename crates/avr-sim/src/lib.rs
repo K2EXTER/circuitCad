@@ -341,8 +341,17 @@ pub enum PinOut {
     Pwm { duty: f64, hz: f64 },
 }
 
-/// The slowest switching taken as pulses (`PinOut::Pwm`); a slower one is followed step by step (a millisecond each).
+/// The slowest switching taken as pulses (`PinOut::Pwm`); a slower one is followed step by step (a millisecond each)...
 pub const PWM_MIN_HZ: f64 = 100.0;
+/// ...but for narrow pulses down to `NARROW_MIN_HZ`: a pin whose shorter part of the period is under `NARROW_S` (a servo's
+/// 0.5 to 2.4 ms every 20 ms) would be caught by the steps only now and then. A 50 Hz square wave (10 ms each way) is followed.
+pub const NARROW_MIN_HZ: f64 = 20.0;
+pub const NARROW_S: f64 = 5e-3;
+
+/// Whether a pin switching at `hz` with `duty` is given to the circuit as pulses (`PWM_MIN_HZ`, `NARROW_S`).
+fn pulses(duty: f64, hz: f64) -> bool {
+    hz >= PWM_MIN_HZ || hz >= NARROW_MIN_HZ && duty.min(1.0 - duty) / hz < NARROW_S
+}
 
 /// A pin's last edges (cycles), its level, and the duty and frequency of its last whole period.
 #[derive(Clone, Copy, Debug, Default)]
@@ -450,7 +459,7 @@ impl Board {
                 let last = edges.rise.max(edges.fall).unwrap_or(0);
                 match edges.pwm {
                     // still switching: the last edge within one and a half periods
-                    Some((duty, hz)) if hz >= PWM_MIN_HZ && ((end - last) as f64) < 1.5 * self.avr.freq as f64 / hz => {
+                    Some((duty, hz)) if pulses(duty, hz) && ((end - last) as f64) < 1.5 * self.avr.freq as f64 / hz => {
                         PinOut::Pwm { duty: (duty * 1000.0).round() / 1000.0, hz: hz.round() }
                     }
                     _ => PinOut::Out(after.high(p, b) as u8 as f64),
