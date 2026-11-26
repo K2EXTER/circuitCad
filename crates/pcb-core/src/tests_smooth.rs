@@ -401,6 +401,24 @@ fn a_fillet_is_concave_and_its_base_is_flat_on_the_pads_edge() {
 }
 
 #[test]
+fn on_a_pad_with_rounded_corners_the_fillets_stay_on_the_flat_part_of_its_edge() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    // a 2 x 3 mm pad with corners of 0.5 mm (25 % of 2 mm): the top edge (y = 6.5) is flat from x = 4.5 to 5.5
+    let mut p = Pad::new(Point::new(5.0, 5.0), PadShape::RoundRect { w: 2.0, h: 3.0, r: 0.25 }, None, Side::Top);
+    p.net = "A".into();
+    b.pads.push(p);
+    pad_sized(&mut b, 5.0, 14.0, "A", 1.0);
+    b.tracks.push(trk((5.0, 5.0), (5.0, 14.0), 0.6));
+    let f = finished(&b).unwrap();
+    let patch = f.patches.iter().find(|p| p.outline.iter().any(|q| q.y < 8.0)).expect("the fillet at the first pad");
+    // nothing reaches into the rounded corners (|x - 5| > 0.5 there), where the pad's edge falls away below y = 6.5
+    assert!(patch.outline.iter().all(|q| (q.x - 5.0).abs() <= 0.5 + 1e-6), "{:?}", patch.outline);
+    // the fillets are as big as the flat part leaves room for: 0.5 - 0.3 = 0.2 mm on each side
+    let (x0, x1) = patch.outline.iter().fold((f64::MAX, f64::MIN), |(l, h), q| (l.min(q.x), h.max(q.x)));
+    assert!((x0 - 4.5).abs() < 1e-6 && (x1 - 5.5).abs() < 1e-6, "{x0} {x1}");
+}
+
+#[test]
 fn two_tracks_leaving_one_pad_side_by_side_get_one_round_arch_between_them() {
     let mut b = Board::new("t", 40.0, 30.0);
     let mut p = Pad::new(Point::new(5.0, 5.0), PadShape::Rect { w: 1.025, h: 1.4 }, None, Side::Top);
@@ -618,4 +636,42 @@ fn a_width_exception_is_left_out_of_the_current_check() {
     // the file keeps it
     let back: crate::NetClass = serde_json::from_str(&serde_json::to_string(&b.net_classes[0]).unwrap()).unwrap();
     assert_eq!(back.width_exceptions.len(), 1);
+}
+
+#[test]
+fn a_pour_of_another_net_keeps_its_clearance_from_the_fillets_and_follows_their_curve() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    let mut p = Pad::new(Point::new(10.0, 10.0), PadShape::RoundRect { w: 3.0, h: 3.0, r: 0.25 }, None, Side::Top);
+    p.net = "A".into();
+    b.pads.push(p);
+    pad_sized(&mut b, 10.0, 22.0, "A", 1.0);
+    b.tracks.push(trk((10.0, 10.0), (10.0, 22.0), 0.5));
+    b.zones.push(Zone::new("GND", Side::Top, vec![Point::new(1.0, 1.0), Point::new(39.0, 1.0), Point::new(39.0, 29.0), Point::new(1.0, 29.0)]));
+    // a pad of the pour's net, so that the pour is not an island
+    pad_sized(&mut b, 30.0, 20.0, "GND", 1.0);
+    let f = finished(&b).unwrap();
+    assert!(!f.board.pour_cuts.is_empty(), "the fillets are handed to the pours");
+    let c = f.board.zones[0].clearance;
+    let conn = crate::drc::connectivity(&f.board);
+    let fill = crate::zonefill::zone_fill(&f.board, &f.board.zones[0], &conn);
+    // the distance from a point to the copper of the patches (0 inside one)
+    let seg = |p: Point, a: Point, q: Point| {
+        let (dx, dy) = (q.x - a.x, q.y - a.y);
+        let t = (((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy).max(1e-18)).clamp(0.0, 1.0);
+        p.dist(Point::new(a.x + dx * t, a.y + dy * t))
+    };
+    let to_patch = |p: Point| {
+        f.patches.iter().map(|pt| if crate::geom::inside_polygon(&pt.outline, p) { 0.0 } else { (0..pt.outline.len()).map(|i| seg(p, pt.outline[i], pt.outline[(i + 1) % pt.outline.len()])).fold(f64::MAX, f64::min) }).fold(f64::MAX, f64::min)
+    };
+    let near = fill.iter().flat_map(|s| s.outer.iter().chain(s.holes.iter().flatten())).map(|&p| to_patch(p)).fold(f64::MAX, f64::min);
+    // the pour's edge is a polygon round the grown curve: a few µm inside it at most
+    assert!(near >= c - 0.01, "the pour comes {near} mm from a fillet (clearance {c})");
+    // and it follows the fillet: somewhere the pour's edge is at the clearance from it, not only from the pad and the track
+    assert!(near <= c + 0.01, "{near}");
+    // cut round the pad and the track only, the pour's corner between them came too close to the fillet
+    let mut bare = f.board.clone();
+    bare.pour_cuts.clear();
+    let old = crate::zonefill::zone_fill(&bare, &bare.zones[0], &conn);
+    let near_old = old.iter().flat_map(|s| s.outer.iter().chain(s.holes.iter().flatten())).map(|&p| to_patch(p)).fold(f64::MAX, f64::min);
+    assert!(near_old < c - 0.02, "{near_old}");
 }

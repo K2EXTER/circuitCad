@@ -599,9 +599,11 @@ fn holder(board: &Board, p: Point, side: Side, (ux, uy): (f64, f64)) -> Option<(
             // leaving through a side face of the pad: the edge is as long as the pad is tall, and the round end of the
             // track must still fit into the pad's depth
             let (edge, depth) = if tx <= ty { (h, w) } else { (w, h) };
-            // the edge is centred on the pad, the track may leave it a little to the side
+            // the edge is centred on the pad, the track may leave it a little to the side. A pad with rounded corners is
+            // flat only between them: a base as long as the whole side would stick out past the corners
             let off = (q.pos.x - p.x) * -uy + (q.pos.y - p.y) * ux;
-            return Some((edge.min(2.0 * depth), tx.min(ty).max(0.0), false, off));
+            let flat = edge - 2.0 * q.shape.corner_radius();
+            return Some((flat.min(2.0 * depth), tx.min(ty).max(0.0), false, off));
         }
     }
     board.vias.iter().find(|v| v.pos.dist(p) <= v.diameter / 2.0 + 1e-6).and_then(|v| (p.dist(v.pos) < 0.05).then_some((v.diameter, 0.0, true, 0.0)))
@@ -852,7 +854,7 @@ fn trunk_blocks(board: &Board, conn: &crate::drc::Connectivity) -> Vec<(Vec<Poin
 }
 
 /// The face of a rectangular pad that a track leaves straight out of (at a right angle): which pad, how far (mm) along the
-/// track from its end `p` the face is, and where the face's two ends lie to the sides of the track's line (`lo` < 0 <
+/// track from its end `p` the face is, and where the flat part of the face (between the rounded corners) ends to the sides of the track's line (`lo` < 0 <
 /// `hi` when the track leaves between them; measured to the left of the way out, `(-uy, ux)`).
 struct Face {
     pad: usize,
@@ -884,7 +886,9 @@ fn flat_face(board: &Board, p: Point, side: Side, (ux, uy): (f64, f64)) -> Optio
             };
             let (nx, ny) = (-uy, ux);
             let (ta, tb) = ((a.x - p.x) * nx + (a.y - p.y) * ny, (b.x - p.x) * nx + (b.y - p.y) * ny);
-            return Some(Face { pad: n, exit: tx.min(ty).max(0.0), lo: ta.min(tb), hi: ta.max(tb) });
+            // rounded corners: the face is flat only between them, and a fillet that ran on into a corner would stick out of the pad
+            let cr = q.shape.corner_radius();
+            return Some(Face { pad: n, exit: tx.min(ty).max(0.0), lo: ta.min(tb) + cr, hi: ta.max(tb) - cr });
         }
     }
     None
@@ -1236,5 +1240,9 @@ fn finished_with(board: &Board, fast: bool) -> Option<Finished> {
             }
         }
     }
+    let mut new = new;
+    // the pours of other nets go round the patches (the board's pours are cut round the tracks and pads it has; the patches
+    // are copper too, and without this the pour kept a sharp step where a teardrop met the pad)
+    new.pour_cuts = patches.iter().map(|p| crate::model::PourCut { side: p.side, outline: p.outline.clone(), net: conn.track_net(p.track).map(str::to_string) }).collect();
     Some(Finished { board: new, patches })
 }

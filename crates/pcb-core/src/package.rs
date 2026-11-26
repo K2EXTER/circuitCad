@@ -2,7 +2,7 @@
 //! few dimensions printed in a datasheet's "recommended land pattern" drawing.
 
 use crate::footprints::{Footprint, FpHole, FpPad};
-use crate::model::{PadShape, Point, ROUNDRECT_DEFAULT};
+use crate::model::{PadShape, Point};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -92,7 +92,8 @@ impl PadSpec {
         Ok(match self.shape.as_str() {
             "rect" => PadShape::Rect { w: self.w, h },
             "oval" => PadShape::Oval { w: self.w, h },
-            "roundrect" => PadShape::RoundRect { w: self.w, h, r: if self.r > 0.0 { self.r.min(0.5) } else { ROUNDRECT_DEFAULT } },
+            "roundrect" if self.r > 0.0 => PadShape::RoundRect { w: self.w, h, r: self.r.min(0.5) },
+            "roundrect" => PadShape::default_round(self.w, h),
             "circle" => PadShape::Circle { d: self.w },
             other => return Err(format!("未知のパッド形状: {other}")),
         })

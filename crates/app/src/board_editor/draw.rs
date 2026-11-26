@@ -48,7 +48,15 @@ impl BoardEditor {
     /// they are worked out on another thread (50 ms or more on a board with guards) and the last ones stay on the screen until the new
     /// ones are in, so that drawing a track with the pours shown does not stop at each corner. While parts or a group are dragged they stay as they were.
     fn refresh_zone_caches(&self, ctx: &egui::Context, conn: Option<&drc::Connectivity>) {
-        let key = pcb_core::zonefill::geometry_key(&self.board);
+        // the pours go round the finish's copper (teardrops, fillets) as the Gerber's do: the cuts of the last finish, while it is
+        // for the tracks as they are
+        let cuts = self.pour_cuts();
+        let key = pcb_core::zonefill::geometry_key(&self.board) ^ pcb_core::zonefill::cuts_key(&cuts);
+        let with_cuts = |b: &pcb_core::Board| {
+            let mut b = b.clone();
+            b.pour_cuts = cuts.clone();
+            b
+        };
         let make = |board: &pcb_core::Board, conn: &drc::Connectivity| {
             let pours: Vec<PourCache> = pcb_core::zonefill::merged_fills(board, conn)
                 .into_iter()
@@ -91,7 +99,7 @@ impl BoardEditor {
                     &*fresh
                 }
             };
-            let (pours, islands) = make(&self.board, conn);
+            let (pours, islands) = if cuts.is_empty() { make(&self.board, conn) } else { make(&with_cuts(&self.board), conn) };
             *self.zone_cache.borrow_mut() = Some((key, pours));
             *self.island_cache.borrow_mut() = Some((key, islands));
             return;
@@ -99,7 +107,7 @@ impl BoardEditor {
         // the board changed since the last answer: a new one is asked for, unless one is on its way (it is asked for again when it is in)
         if self.zone_job.borrow().is_none() {
             let (tx, rx) = std::sync::mpsc::channel();
-            let board = self.board.clone();
+            let board = with_cuts(&self.board);
             std::thread::spawn(move || {
                 let conn = drc::connectivity(&board);
                 let _ = tx.send(make(&board, &conn));

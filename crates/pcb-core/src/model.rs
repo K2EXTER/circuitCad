@@ -83,6 +83,9 @@ pub enum PadShape {
 
 /// The corner ratio KiCad and IPC-7351 use by default for rounded-rectangle pads.
 pub const ROUNDRECT_DEFAULT: f64 = 0.25;
+/// The largest corner radius (mm) of the default rounding: IPC-7351C and KiCad's footprint library round 25 % of the shorter
+/// side but never more than 0.25 mm, so a big pad keeps most of its flat edges (and the room for a track's fillets).
+pub const ROUNDRECT_MAX_RADIUS: f64 = 0.25;
 
 impl PadShape {
     /// Bounding box size (w, h).
@@ -131,9 +134,17 @@ impl PadShape {
     /// and IPC-7351's); other shapes, and every pad with a hole (whose square pad marks pin 1), are kept.
     pub fn smd_default(self, drill: Option<f64>) -> PadShape {
         match self {
-            PadShape::Rect { w, h } if drill.is_none() => PadShape::RoundRect { w, h, r: ROUNDRECT_DEFAULT },
+            PadShape::Rect { w, h } if drill.is_none() => PadShape::default_round(w, h),
             s => s,
         }
+    }
+
+    /// A `w` x `h` rectangle with the default corners: 25 % of the shorter side, at most [`ROUNDRECT_MAX_RADIUS`] (the ratio
+    /// is stored, so a big pad gets a smaller one).
+    pub fn default_round(w: f64, h: f64) -> PadShape {
+        let short = w.min(h);
+        let r = if short > 0.0 { (ROUNDRECT_DEFAULT * short).min(ROUNDRECT_MAX_RADIUS) / short } else { ROUNDRECT_DEFAULT };
+        PadShape::RoundRect { w, h, r }
     }
 
     /// The same shape turned 90°.
@@ -715,6 +726,14 @@ impl Default for Rules {
     }
 }
 
+/// A polygon of finished copper (see [`Board::pour_cuts`]) and its net.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PourCut {
+    pub side: Side,
+    pub outline: Vec<Point>,
+    pub net: Option<String>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Board {
     pub name: String,
@@ -817,22 +836,46 @@ pub struct Board {
     /// Keep-out areas: no tracks / vias / pours / parts inside (`keepout.rs`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keepouts: Vec<crate::keepout::Keepout>,
+    /// The finish's copper polygons (teardrops, fillets, filled notches: `smooth::finished` puts them on the board it makes),
+    /// which the pours of other nets keep their clearance from. Not saved: worked out again from the tracks.
+    #[serde(skip)]
+    pub pour_cuts: Vec<PourCut>,
     pub rules: Rules,
 }
 
+/// The shape [`Board::round_smd_pads`] gives `p`, or `None` when it is left as it is.
+fn rounded(p: &Pad, ratio: Option<f64>) -> Option<PadShape> {
+    if p.drill.is_some() || p.mask_open != 0.0 {
+        return None;
+    }
+    let new = match (p.shape, ratio) {
+        (PadShape::Rect { w, h }, Some(r)) => PadShape::RoundRect { w, h, r: r.clamp(0.0, 0.5) },
+        (PadShape::Rect { w, h }, None) => PadShape::default_round(w, h),
+        (PadShape::RoundRect { w, h, r }, None) if r == ROUNDRECT_DEFAULT => PadShape::default_round(w, h),
+        _ => return None,
+    };
+    (new != p.shape).then_some(new)
+}
+
 impl Board {
-    /// Gives the sharp rectangular surface-mount pads corners of radius `ratio` x the shorter side (0..=0.5; KiCad's default
-    /// 0.25), and returns how many changed. Pads with a hole (the square one marks pin 1) and fiducials are kept.
-    pub fn round_smd_pads(&mut self, ratio: f64) -> usize {
-        let r = ratio.clamp(0.0, 0.5);
+    /// Gives the sharp rectangular surface-mount pads rounded corners and returns how many changed: `ratio` x the shorter side
+    /// (0..=0.5), or with `None` the default ([`PadShape::default_round`]: 25 %, at most 0.25 mm). The default also brings
+    /// pads rounded by the default before it had the 0.25 mm limit (a ratio of exactly 0.25 on a pad wider than 1 mm) down to
+    /// it. Pads with a hole (the square one marks pin 1) and fiducials are kept.
+    pub fn round_smd_pads(&mut self, ratio: Option<f64>) -> usize {
         let mut n = 0;
-        for p in self.pads.iter_mut().filter(|p| p.drill.is_none() && p.mask_open == 0.0) {
-            if let PadShape::Rect { w, h } = p.shape {
-                p.shape = PadShape::RoundRect { w, h, r };
+        for p in self.pads.iter_mut() {
+            if let Some(new) = rounded(p, ratio) {
+                p.shape = new;
                 n += 1;
             }
         }
         n
+    }
+
+    /// How many pads [`Board::round_smd_pads`] with the default would change.
+    pub fn pads_to_round(&self) -> usize {
+        self.pads.iter().filter(|p| rounded(p, None).is_some()).count()
     }
 
     /// All copper layers from the top face to the bottom face.
@@ -927,6 +970,7 @@ impl Board {
             hidden_labels: vec![],
             dimensions: vec![],
             keepouts: vec![],
+            pour_cuts: vec![],
             rules: Rules::default(),
         }
     }

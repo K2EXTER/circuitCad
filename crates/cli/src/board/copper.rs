@@ -429,11 +429,12 @@ impl Session {
 
     pub(super) fn board_roundpads(&mut self, rest: &[String]) -> Res {
         // board roundpads [r=0.25]: the app's 「パッドの角を丸める」: the sharp rectangular surface-mount pads get corners of r x the
-        // shorter side (0 to 0.5; KiCad's and IPC-7351's default 0.25), which the DRC, the pours and the Gerber files then use
+        // shorter side (0 to 0.5), which the DRC, the pours and the Gerber files then use. Without r, KiCad's and IPC-7351's
+        // default: 25 % of the shorter side, at most 0.25 mm (pads rounded before that limit are brought down to it)
         let (_, kv) = options(rest);
         let r = match opt(&kv, "r") {
-            None => pcb_core::model::ROUNDRECT_DEFAULT,
-            Some(s) => s.parse::<f64>().ok().filter(|v| (0.0..=0.5).contains(v)).ok_or_else(|| format!("r={s}: the corner radius as a share of the shorter side, 0 to 0.5 (0.25 is usual)"))?,
+            None => None,
+            Some(s) => Some(s.parse::<f64>().ok().filter(|v| (0.0..=0.5).contains(v)).ok_or_else(|| format!("r={s}: the corner radius as a share of the shorter side, 0 to 0.5 (0.25 is usual)"))?),
         };
         let board = self.board_mut()?;
         let before = pcb_core::drc::check_final(board).len();

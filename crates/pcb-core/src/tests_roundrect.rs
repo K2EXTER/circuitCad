@@ -88,7 +88,7 @@ fn the_gerber_writes_a_macro_and_reads_back_rounded() {
 #[test]
 fn built_in_smd_pads_are_rounded_and_explicit_ones_keep_their_shape() {
     let fp = footprints::get("R_0805").unwrap();
-    assert!(fp.pads.iter().all(|p| matches!(p.shape, PadShape::RoundRect { r, .. } if r == ROUNDRECT_DEFAULT)), "{:?}", fp.pads);
+    assert!(fp.pads.iter().all(|p| p.shape == PadShape::default_round(p.shape.size().0, p.shape.size().1)), "{:?}", fp.pads);
     // a pin header keeps the square pin 1 (it has a hole)
     let hdr = footprints::get("PinHeader_1x3").unwrap();
     assert!(matches!(hdr.pads[0].shape, PadShape::Rect { .. }));
@@ -109,8 +109,28 @@ fn rounding_a_board_leaves_holes_and_fiducials_alone() {
     let mut fid = Pad::new(Point::new(2.0, 2.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
     fid.mask_open = 2.0;
     b.pads.push(fid);
-    assert_eq!(b.round_smd_pads(ROUNDRECT_DEFAULT), 1);
+    assert_eq!(b.round_smd_pads(None), 1);
     assert!(matches!(b.pads[0].shape, PadShape::RoundRect { .. }));
     assert!(matches!(b.pads[1].shape, PadShape::Rect { .. }) && matches!(b.pads[2].shape, PadShape::Rect { .. }));
-    assert_eq!(b.round_smd_pads(ROUNDRECT_DEFAULT), 0);
+    assert_eq!(b.round_smd_pads(None), 0);
+    assert_eq!(b.pads_to_round(), 0);
+}
+
+#[test]
+fn the_default_corners_are_a_quarter_of_the_shorter_side_but_at_most_a_quarter_millimetre() {
+    // a small pad: 25 % of 0.6 mm = 0.15 mm
+    assert!((PadShape::default_round(1.0, 0.6).corner_radius() - 0.15).abs() < 1e-12);
+    // a big one: 25 % of 2 mm would be 0.5 mm, the limit keeps 0.25 mm
+    assert!((PadShape::default_round(3.0, 2.0).corner_radius() - 0.25).abs() < 1e-12);
+    // a board rounded by the default before the limit: its big pads are brought down to it, its small ones and the pads with
+    // a ratio of their own are left
+    let mut b = Board::new("t", 30.0, 20.0);
+    b.pads.push(Pad::new(Point::new(5.0, 5.0), PadShape::RoundRect { w: 3.0, h: 2.0, r: ROUNDRECT_DEFAULT }, None, Side::Top));
+    b.pads.push(Pad::new(Point::new(10.0, 5.0), PadShape::RoundRect { w: 1.0, h: 0.6, r: ROUNDRECT_DEFAULT }, None, Side::Top));
+    b.pads.push(Pad::new(Point::new(15.0, 5.0), PadShape::RoundRect { w: 3.0, h: 2.0, r: 0.3 }, None, Side::Top));
+    assert_eq!(b.pads_to_round(), 1);
+    assert_eq!(b.round_smd_pads(None), 1);
+    assert!((b.pads[0].shape.corner_radius() - 0.25).abs() < 1e-12);
+    assert_eq!(b.pads[1].shape, PadShape::RoundRect { w: 1.0, h: 0.6, r: ROUNDRECT_DEFAULT });
+    assert_eq!(b.pads[2].shape, PadShape::RoundRect { w: 3.0, h: 2.0, r: 0.3 });
 }

@@ -212,15 +212,15 @@ impl BoardEditor {
                         self.load_snippet_dialog();
                     }
                 }
-                let sharp = self.board.pads.iter().filter(|p| p.drill.is_none() && p.mask_open == 0.0 && matches!(p.shape, pcb_core::PadShape::Rect { .. })).count();
+                let sharp = self.board.pads_to_round();
                 if sharp > 0
                     && ui
                         .button(i18n::trf!("パッドの角を丸める ({sharp} 個)"))
-                        .on_hover_text(i18n::tr("四角い面実装のパッドの角を、短い辺の 25% の半径で丸めます (KiCad と IPC-7351 の既定)。細かいピッチの IC (0.5 mm 以下) や 45° に置いた部品では、四角の角どうしがいちばん近く、発注先の最小間隔を割ることがあります。丸めると角のすき間が広がり、DRC・ベタの逃げ・ガーバーもその形で作ります。穴のあるパッド (1 番ピンの四角) は変えません。「元に戻す」で戻せます"))
+                        .on_hover_text(i18n::tr("四角い面実装のパッドの角を、短い辺の 25% (大きくても 0.25 mm) の半径で丸めます (KiCad と IPC-7351 の既定)。前の版で 0.25 mm より大きく丸めたパッドも 0.25 mm に直します。細かいピッチの IC (0.5 mm 以下) や 45° に置いた部品では、四角の角どうしがいちばん近く、発注先の最小間隔を割ることがあります。丸めると角のすき間が広がり、DRC・ベタの逃げ・ガーバーもその形で作ります。穴のあるパッド (1 番ピンの四角) は変えません。「元に戻す」で戻せます"))
                         .clicked()
                 {
                     self.checkpoint();
-                    let n = self.board.round_smd_pads(pcb_core::ROUNDRECT_DEFAULT);
+                    let n = self.board.round_smd_pads(None);
                     self.status = format!("{n} 個のパッドの角を丸めました");
                 }
                 if !self.board.parts.is_empty() {

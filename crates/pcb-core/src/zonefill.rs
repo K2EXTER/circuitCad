@@ -645,6 +645,15 @@ fn raw_fill_uncached(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<Fil
             }
         }
     }
+    // the finish's copper (teardrops, fillets) of other nets, grown by the clearance: the polygon and a disc swept along its edges,
+    // so the pour follows its curves at the same distance
+    for pc in board.pour_cuts.iter().filter(|pc| pc.side == side && pc.outline.len() >= 3 && !same(pc.net.as_deref())) {
+        cuts.push(ccw(&pc.outline));
+        let m = pc.outline.len();
+        for i in 0..m {
+            cuts.push(capsule(pc.outline[i], pc.outline[(i + 1) % m], c));
+        }
+    }
     for k in board.keepouts.iter().filter(|k| k.pours && k.on(side) && k.polygon.len() >= 3) {
         cuts.push(k.polygon.iter().map(|p| [p.x, p.y]).collect());
     }
@@ -825,6 +834,7 @@ pub fn geometry_key(board: &Board) -> u64 {
         let (w, hh) = p.shape.size();
         f(&mut h, w);
         f(&mut h, hh);
+        f(&mut h, p.shape.corner_radius());
         p.drill.map(f64::to_bits).hash(&mut h);
         p.side.hash(&mut h);
         p.net.hash(&mut h);
@@ -843,6 +853,24 @@ pub fn geometry_key(board: &Board) -> u64 {
         pt(&mut h, *p);
     }
     f(&mut h, board.rules.edge_clearance);
+    h.finish() ^ cuts_key(&board.pour_cuts)
+}
+
+/// The part of [`geometry_key`] for the finish's copper that the pours go round ([`Board::pour_cuts`]; 0 for none).
+pub fn cuts_key(cuts: &[crate::model::PourCut]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    if cuts.is_empty() {
+        return 0;
+    }
+    let mut h = FastHasher::default();
+    for pc in cuts {
+        pc.side.hash(&mut h);
+        pc.net.hash(&mut h);
+        for p in &pc.outline {
+            p.x.to_bits().hash(&mut h);
+            p.y.to_bits().hash(&mut h);
+        }
+    }
     h.finish()
 }
 

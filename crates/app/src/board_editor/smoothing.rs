@@ -90,6 +90,15 @@ impl BoardEditor {
         self.finish_cache.borrow().as_ref().map(|(_, v)| v.clone())
     }
 
+    /// The finish's copper polygons that the pours keep clear of ([`pcb_core::Board::pour_cuts`]), from the last finish while it is
+    /// for the tracks as they are (none while the finish is off or being worked out again).
+    pub(super) fn pour_cuts(&self) -> Vec<pcb_core::model::PourCut> {
+        if !smooth::finish_active(&self.board) || self.finish_tracks.get() != self.tracks_key() {
+            return vec![];
+        }
+        self.finish_cache.borrow().as_ref().map(|(_, f)| f.board.pour_cuts.clone()).unwrap_or_default()
+    }
+
     pub(super) fn finished(&self) -> Option<Rc<Finished>> {
         if !smooth::finish_active(&self.board) {
             return None;

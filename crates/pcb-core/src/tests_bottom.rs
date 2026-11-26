@@ -39,7 +39,7 @@ fn rotation_is_applied_after_mirroring() {
     assert!((pad_pos(&b, "R2", "1").y - (20.0 + 0.9125)).abs() < 1e-9);
     // pad shapes are turned with the part
     let s = b.pads.iter().find(|p| p.refdes == "R2").unwrap().shape;
-    assert_eq!(s, PadShape::RoundRect { w: 1.4, h: 1.025, r: ROUNDRECT_DEFAULT });
+    assert_eq!(s, PadShape::default_round(1.4, 1.025));
 }
 
 #[test]
@@ -47,9 +47,9 @@ fn gerber_layers_follow_the_part_side() {
     let mut b = board();
     b.set_part(part("R1", "R_0805", 10.0, 10.0, 0, Side::Bottom)).unwrap();
     let (gtl, gbl) = (gerber::copper(&b, Side::Top), gerber::copper(&b, Side::Bottom));
-    assert!(gbl.contains("RoundRect,1.025000X1.400000X0.256250") && !gtl.contains("RoundRect,1.025000X1.400000X0.256250"));
+    assert!(gbl.contains("RoundRect,1.025000X1.400000X0.250000") && !gtl.contains("RoundRect,1.025000X1.400000X0.250000"));
     let (gts, gbs) = (gerber::mask(&b, Side::Top), gerber::mask(&b, Side::Bottom));
-    assert!(gbs.contains("RoundRect,1.125000X1.500000X0.306250") && !gts.contains("RoundRect,1.125000X1.500000X0.306250"), "mask opening = pad + 2 x 0.05");
+    assert!(gbs.contains("RoundRect,1.125000X1.500000X0.300000") && !gts.contains("RoundRect,1.125000X1.500000X0.300000"), "mask opening = pad + 2 x 0.05");
     let (gto, gbo) = (gerber::silk(&b, Side::Top), gerber::silk(&b, Side::Bottom));
     assert!(!gto.contains("D01*"), "nothing on the top silk");
     assert!(gbo.matches("D01*").count() > 4, "outline and designator on the bottom silk");
