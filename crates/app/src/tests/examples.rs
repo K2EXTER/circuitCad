@@ -4010,6 +4010,62 @@ void loop() {
 }
 ";
 
+/// The sketch of the ATtiny85 sample: the LED on PB1 blinks, the knob on A1 (PB2) sets how fast.
+pub const ATTINY85_SKETCH: &str = "// ATtiny85 の PB1 の LED を点滅させます。A1 (PB2) のボリュームで速さが変わります
+// ATtiny85 には USB が無いので、8 番 (VCC) と 4 番 (GND) に電源をつなぎます
+void setup() {
+  pinMode(1, OUTPUT);
+}
+
+void loop() {
+  int wait = map(analogRead(A1), 0, 1023, 50, 500);
+  digitalWrite(1, HIGH);
+  delay(wait);
+  digitalWrite(1, LOW);
+  delay(wait);
+}
+";
+
+/// The ATtiny85 sample (W5 ③): an ATtiny85 (DIP-8) on a 5 V bench supply, an LED on PB1 (330 ohm) blinking at the pace a
+/// potentiometer on A1 (PB2) sets. `cargo test -p app write_attiny85_example -- --ignored`
+#[test]
+#[ignore]
+fn write_attiny85_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let tiny = library_part("ATTINY85-20PU");
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (-40, 0), 0);
+    s.components[v1].value = "5".into();
+    label_pin(&mut s, v1, "+", "5V");
+    label_pin(&mut s, v1, "-", "GND");
+    let u = s.add_custom(tiny.symbol(), &tiny.default_value(), &tiny.footprint_name(), (20, 0), 0);
+    // pins: 8 VCC, 4 GND, 6 PB1, 7 PB2
+    label_pin(&mut s, u, "8", "5V");
+    label_pin(&mut s, u, "4", "GND");
+    label_pin(&mut s, u, "6", "OUT");
+    label_pin(&mut s, u, "7", "KNOB");
+    let r = s.add(Kind::Resistor, (60, -10), 1);
+    s.components[r].value = "330".into();
+    label_pin(&mut s, r, "1", "OUT");
+    label_pin(&mut s, r, "2", "LEDA");
+    let d = s.add(Kind::Led, (60, 10), 1);
+    label_pin(&mut s, d, "A", "LEDA");
+    label_pin(&mut s, d, "K", "GND");
+    let vr = s.add(Kind::Pot, (-10, 30), 1);
+    s.components[vr].value = "10k POS=30".into();
+    label_pin(&mut s, vr, "1", "5V");
+    label_pin(&mut s, vr, "2", "KNOB");
+    label_pin(&mut s, vr, "3", "GND");
+    let c = s.add(Kind::Capacitor, (0, -30), 1);
+    s.components[c].value = "100n".into();
+    label_pin(&mut s, c, "1", "5V");
+    label_pin(&mut s, c, "2", "GND");
+    let mut v = serde_json::to_value(&s).unwrap();
+    let settings = crate::schematic::SheetSettings { sketches: [(s.components[u].refdes.clone(), ATTINY85_SKETCH.to_string())].into_iter().collect(), ..Default::default() };
+    crate::schematic::with_settings(&mut v, &settings);
+    std::fs::write(root.join("attiny85_blink.schjson"), serde_json::to_string_pretty(&v).unwrap()).unwrap();
+}
+
 /// The SHT31 sample (W5 ⑤): an SHT31 module on the Nano's I2C bus (SDA A4, SCL A5, powered from its 5 V; the module's own
 /// pull-ups), read by the real chip's instructions; an LED on D13 (330 ohm) lit from 28 degrees.
 /// `cargo test -p app write_arduino_sht31_example -- --ignored`

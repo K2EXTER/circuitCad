@@ -305,7 +305,9 @@ pub fn missing(steps: &[Step]) -> Vec<(String, &'static str)> {
 /// A line of a tool's output said in the app's words, for the errors met most (None: nothing to add).
 pub fn explain(line: &str) -> Option<&'static str> {
     let l = line.to_ascii_lowercase();
-    if l.contains("platform not installed") || l.contains("platform '") && l.contains("not found") {
+    if l.contains("attinycore") && (l.contains("not installed") || l.contains("not found") || l.contains("unknown")) {
+        Some("ATtiny85 のボードの定義 (ATTinyCore) が入っていません。Arduino IDE の「基本設定」の「追加のボードマネージャの URL」に https://drazzy.com/package_drazzy.com_index.json を足し、ボードマネージャで ATTinyCore を入れてください")
+    } else if l.contains("platform not installed") || l.contains("platform '") && l.contains("not found") {
         Some("ボードの種類が arduino-cli に入っていません。「arduino-cli core install arduino:avr」(Mega・UNO など) のように入れてください")
     } else if l.contains("no such file or directory") && l.contains(".h") {
         Some("インクルードするファイル (ライブラリ) が見つかりません。Arduino IDE のライブラリマネージャか「arduino-cli lib install <名前>」で入れるか、名前の綴りを確かめてください")

@@ -1,4 +1,4 @@
-"""Copy the part of simavr that crates/avr-sim builds (the simulator core `sim/` and the ATmega328 and ATmega2560 cores) out of a simavr checkout, and
+"""Copy the part of simavr that crates/avr-sim builds (the simulator core `sim/` and the ATmega328, ATmega2560 and ATtiny85 cores) out of a simavr checkout, and
 rewrite the few GCC-only bits so that MSVC compiles it too (gcc and clang take the rewritten text the same).
 
     git clone --depth 1 https://github.com/buserror/simavr.git <dir>
@@ -27,8 +27,9 @@ OUT = ROOT / "crates" / "avr-sim" / "simavr"
 # sim/ files left out: the gdb server (sockets), the ELF and DWARF readers (libelf: the ELF is read in Rust), the command-line
 # program, USB (not on the ATmega328)
 SKIP = {"sim_gdb.c", "sim_elf.c", "sim_dwarf.c", "run_avr.c", "avr_usb.c", "avr_usb.h"}
-CORES = ["sim_mega328.c", "sim_megax8.c", "sim_megax8.h", "sim_mega2560.c", "sim_mega2560.h", "sim_core_declare.h"]
-AVR_HEADERS = ["iom328p.h", "iom2560.h", "iomxx0_1.h"]
+CORES = ["sim_mega328.c", "sim_megax8.c", "sim_megax8.h", "sim_mega2560.c", "sim_mega2560.h", "sim_tiny85.c", "sim_tinyx5.c",
+         "sim_tinyx5.h", "sim_core_declare.h"]
+AVR_HEADERS = ["iom328p.h", "iom2560.h", "iomxx0_1.h", "iotn85.h"]
 
 # (file, text, what it becomes)
 FIXES = [
@@ -42,6 +43,22 @@ FIXES = [
 		// circuitCad: sampled after 2 ADC clocks (14 for the first conversion), done 11 later: 13 and 25 as the datasheet says
                 p->current_prescale = div;
                 avr_cycle_timer_register(avr, div * (p->first ? 14 : 2), avr_adc_convert, p);"""),
+    # the ATtiny85's timer 1 counted only (NORMAL8): its PWM (PWM1A in TCCR1, PWM1B in GTCCR) never switched OC1A / OC1B, and
+    # analogWrite on PB4 (ATTinyCore) stayed Low
+    ("sim_tinyx5.h", """		.wgm_op = {
+			[0] = AVR_TIMER_WGM_NORMAL8(),
+		},
+		.cs = { AVR_IO_REGBIT(TCCR1, CS10)""",
+     """		// circuitCad: PWM1A (TCCR1) and PWM1B (GTCCR) as the mode bits: either makes it a PWM up to OCR1C (taken as 255, what
+		// ATTinyCore sets), so that OC1A (PB1) and OC1B (PB4) switch
+		.wgm = { AVR_IO_REGBIT(TCCR1, PWM1A), AVR_IO_REGBIT(GTCCR, PWM1B) },
+		.wgm_op = {
+			[0] = AVR_TIMER_WGM_NORMAL8(),
+			[1] = AVR_TIMER_WGM_FASTPWM8(),
+			[2] = AVR_TIMER_WGM_FASTPWM8(),
+			[3] = AVR_TIMER_WGM_FASTPWM8(),
+		},
+		.cs = { AVR_IO_REGBIT(TCCR1, CS10)"""),
 ]
 
 

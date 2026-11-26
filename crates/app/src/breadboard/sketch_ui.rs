@@ -25,7 +25,11 @@ pub fn board_of(sch: &Schematic, refdes: &str) -> sim_core::sketch::Board {
 
 /// The text of a board's sketch (the blink one until the person writes their own).
 pub fn sketch_of(sch: &SchEditor, refdes: &str) -> String {
-    sch.sketches.get(refdes).cloned().unwrap_or_else(|| BLINK.to_string())
+    sch.sketches.get(refdes).cloned().unwrap_or_else(|| {
+        // LED_BUILTIN is D13 on the Arduino boards, PB1 on the ATtiny85
+        let led = board_of(&sch.sch, refdes).pin_name(board_of(&sch.sch, refdes).led());
+        BLINK.replace("(D13)", &format!("({led})"))
+    })
 }
 
 /// The nets of a board's pins (D0.., A0..) on the breadboard (by the pins' names in its symbol).
@@ -35,10 +39,27 @@ pub fn pin_nets(sch: &Schematic, refdes: &str, nets: &BoardNets) -> Vec<Option<S
     (0..board.pins() as u8)
         .map(|p| {
             let name = board.pin_name(p);
-            let number = sym?.pins.iter().find(|q| q.name == name)?.number.clone();
+            // "PB5/RESET": the pin by its first name
+            let number = sym?.pins.iter().find(|q| q.name.split('/').next() == Some(name.as_str()))?.number.clone();
             nets.pins.get(&(refdes.to_string(), number)).cloned()
         })
         .collect()
+}
+
+/// The nets of a board's supply pins (VCC, GND) when it has no USB of its own (`Board::supply_pins`: the ATtiny85).
+pub fn supply_nets(sch: &Schematic, refdes: &str, nets: &BoardNets) -> Option<(Option<String>, Option<String>)> {
+    let (vcc, gnd) = board_of(sch, refdes).supply_pins()?;
+    let sym = sch.components.iter().find(|c| c.refdes == refdes).and_then(|c| c.custom.as_ref())?;
+    let net = |name: &str| {
+        let number = sym.pins.iter().find(|q| q.name == name)?.number.clone();
+        nets.pins.get(&(refdes.to_string(), number)).cloned()
+    };
+    Some((net(vcc), net(gnd)))
+}
+
+/// The speed of `Serial.begin(…)` in a sketch (9600 when it says none or not as a number).
+pub fn serial_baud(text: &str) -> u32 {
+    text.split("Serial.begin(").nth(1).and_then(|r| r.split(')').next()).and_then(|n| n.trim().parse().ok()).unwrap_or(9600)
 }
 
 /// A number for the sketches as they are now (and which boards run the real chip): a change of one starts the run again.
@@ -95,10 +116,13 @@ impl BreadboardView {
             match self.real_build(&text, board) {
                 None => ctx.request_repaint_after(std::time::Duration::from_millis(250)),
                 Some(Ok(img)) => {
-                    if let Some(lv) = self.live.as_mut()
-                        && let Err(e) = lv.give_program(&refdes, &img)
-                    {
-                        self.real_builds.insert(text_key(&text, board), std::sync::Arc::new(std::sync::Mutex::new(Some(Err(e)))));
+                    if let Some(lv) = self.live.as_mut() {
+                        if let Err(e) = lv.give_program(&refdes, &img) {
+                            self.real_builds.insert(text_key(&text, board), std::sync::Arc::new(std::sync::Mutex::new(Some(Err(e)))));
+                        } else if let Some(chip) = lv.mcus.iter_mut().find(|m| m.refdes == refdes).and_then(|m| m.real.as_mut()) {
+                            // a chip without a UART sends its Serial in software: read back at the speed the sketch begins it at
+                            chip.set_soft_baud(serial_baud(&text));
+                        }
                     }
                 }
                 // the build failed: the board stays still (the sketch box says why)
@@ -197,7 +221,8 @@ impl BreadboardView {
                 });
             }
             // the real chip reads what is typed here (Serial.read); the built-in reader has no Serial.read
-            let real_running = self.live.as_ref().and_then(|lv| lv.mcus.iter().find(|m| m.refdes == refdes)).is_some_and(|m| m.real.is_some());
+            // (a chip with no UART, the ATtiny85, only sends: its Serial is software on one pin)
+            let real_running = self.live.as_ref().and_then(|lv| lv.mcus.iter().find(|m| m.refdes == refdes)).is_some_and(|m| m.real.as_ref().is_some_and(|c| c.def.soft_tx.is_none()));
             if real_running {
                 let mut sent = None;
                 ui.horizontal(|ui| {

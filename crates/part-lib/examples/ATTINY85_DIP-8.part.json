@@ -1,0 +1,139 @@
+{
+  "name": "ATTINY85-20PU",
+  "category": "マイコン",
+  "description": "ATtiny85 (ATTINY85-20PU: 8 ビット AVR、DIP-8、8 KB のフラッシュ)。ブレッドボードの中央の溝をまたいで差す。試作のタブでスケッチを書くと、電源を入れたとき回路と一緒に動く (ATTinyCore のピン番号: 0〜5 が PB0〜PB5、A0〜A3 は 5・2・4・3 の別名、LED_BUILTIN は 1、analogWrite は 0・1・4)。VCC (8 番) と GND (4 番) に電源 (1.8〜5.5 V) が要り、無いと動かない。「本物のマイコンの命令で動かす」なら ATTinyCore (arduino-cli に追加のボード) でコンパイルし、ATtiny85 の命令で動く (Serial は PB0 からソフトウェアで送る)",
+  "prefix": "U",
+  "value": "ATTINY85-20PU",
+  "footprint_name": "DIP-8_W7.62mm",
+  "pins": [
+    {
+      "number": "1",
+      "name": "PB5/RESET",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "2",
+      "name": "PB3",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "3",
+      "name": "PB4",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "4",
+      "name": "GND",
+      "side": "bottom",
+      "kind": "power_in"
+    },
+    {
+      "number": "5",
+      "name": "PB0",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "6",
+      "name": "PB1",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "7",
+      "name": "PB2",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "8",
+      "name": "VCC",
+      "side": "top",
+      "kind": "power_in"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 8,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "body": {
+    "shape": "rect",
+    "w": 6.4,
+    "h": 9.8,
+    "mark": "dot",
+    "mark_pin": "1"
+  },
+  "programming": [
+    {
+      "name": "ISP (SPI)",
+      "pins": [
+        "PB5/RESET",
+        "PB0",
+        "PB1",
+        "PB2",
+        "VCC",
+        "GND"
+      ]
+    }
+  ],
+  "companions": [
+    {
+      "name": "CVCC",
+      "kind": "C",
+      "value": "100n",
+      "pin": "8",
+      "to": "GND",
+      "note": "VCC のバイパス"
+    }
+  ],
+  "sim": {
+    "kind": "subckt",
+    "name": "ATTINY85",
+    "text": ".subckt ATTINY85 pb5 pb3 pb4 gnd pb0 pb1 pb2 vcc\n* ATtiny85 for the sketch beside the circuit: each of PB0..PB5 is a source behind a resistor. The sketch sets the source VpPBn\n* (0 to 5 V as on the boards: TranRun::set_source) and RpPBn (an output 25 ohm, an input 1 Gohm, the pull-up 35 kohm); the pin\n* follows its share of VCC, so a chip without its supply drives nothing. The chip takes about 5 mA (8 MHz, 5 V).\nVpPB0 c0 gnd DC 0\nBpPB0 s0 gnd V=V(c0,gnd)*max(V(vcc,gnd),0)/5\nRpPB0 s0 pb0 1G\nVpPB1 c1 gnd DC 0\nBpPB1 s1 gnd V=V(c1,gnd)*max(V(vcc,gnd),0)/5\nRpPB1 s1 pb1 1G\nVpPB2 c2 gnd DC 0\nBpPB2 s2 gnd V=V(c2,gnd)*max(V(vcc,gnd),0)/5\nRpPB2 s2 pb2 1G\nVpPB3 c3 gnd DC 0\nBpPB3 s3 gnd V=V(c3,gnd)*max(V(vcc,gnd),0)/5\nRpPB3 s3 pb3 1G\nVpPB4 c4 gnd DC 0\nBpPB4 s4 gnd V=V(c4,gnd)*max(V(vcc,gnd),0)/5\nRpPB4 s4 pb4 1G\nVpPB5 c5 gnd DC 0\nBpPB5 s5 gnd V=V(c5,gnd)*max(V(vcc,gnd),0)/5\nRpPB5 s5 pb5 1G\nRq vcc gnd 1k\n.ends ATTINY85",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8"
+    ],
+    "limits": [
+      "ピンの出力は VCC × (0 か 1) の 25 Ω、入力は 1 GΩ、INPUT_PULLUP は 35 kΩ。入力の High / Low は 2.5 V で分けます (VCC が 5 V のときの値)。",
+      "circuitCad の読み方のとき: 命令にかかる時間・割り込み・タイマー・ライブラリは扱いません。「本物のマイコンの命令で動かす」ならこれらも動きます (クロックは内蔵の 8 MHz)。RESET のピン (PB5) は普通のピンとして扱い、ヒューズ・ピンの電流の上限 (40 mA) の点検は扱いません。",
+      "電源を切ってまた入れても、プログラムは最初からやり直しません (止まっていた所から続きます)。"
+    ],
+    "origin": {
+      "kind": "generic",
+      "source": "ピンごとの電源と抵抗だけの形。命令は avr-sim (simavr の ATtiny85) が動かす"
+    }
+  },
+  "ratings": {
+    "v_max": 5.5,
+    "rows": [
+      {
+        "name": "電源",
+        "value": "1.8〜5.5 V",
+        "condition": "ATtiny85V は 1.8 V から"
+      },
+      {
+        "name": "ピンの電流",
+        "value": "40 mA (絶対最大)"
+      },
+      {
+        "name": "クロック",
+        "value": "内蔵 8 MHz"
+      }
+    ]
+  }
+}

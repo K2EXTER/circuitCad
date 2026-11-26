@@ -108,7 +108,8 @@ pub(super) fn windows(app: &mut App, a: &Args) {
         });
     }
     if let Some(p) = a.val("--screenshot") {
-        app.auto_shot = Some((p.into(), 40));
+        // `--shot-frames N`: wait longer (a running circuit's serial monitor filling up)
+        app.auto_shot = Some((p.into(), a.num::<u32>("--shot-frames").unwrap_or(40)));
     }
     // `--palette [words]`: the command palette open (with the words typed)
     if a.has("--palette") {

@@ -266,6 +266,12 @@ pub struct BoardDef {
     pub ports: &'static [Option<(char, u8)>],
     /// The number of the first analog pin (A0); A0.. are the ADC's channels 0.. in order.
     pub a0: u8,
+    /// The ADC channel of each pin, where the analog inputs are pins of their own (empty: A0.. from `a0`; the ATtiny85's ADC0..3
+    /// are PB5, PB2, PB4, PB3).
+    pub adc_of: &'static [Option<u8>],
+    /// A chip with no UART: the pin its Serial sends on in software (ATTinyCore's Serial on the ATtiny85: PB0), read back into
+    /// `Board::serial` at the speed `Board::set_soft_baud` gives.
+    pub soft_tx: Option<(char, u8)>,
 }
 
 impl BoardDef {
@@ -280,6 +286,9 @@ impl BoardDef {
 
     /// The ADC channel of a pin (A0..).
     pub fn adc(&self, pin: u8) -> Option<u8> {
+        if !self.adc_of.is_empty() {
+            return self.adc_of.get(pin as usize).copied().flatten();
+        }
         (pin >= self.a0 && (pin as usize) < self.pins()).then(|| pin - self.a0)
     }
 }
@@ -295,6 +304,8 @@ pub static NANO: BoardDef = BoardDef {
     freq: 16_000_000,
     vcc: 5.0,
     a0: 14,
+    adc_of: &[],
+    soft_tx: None,
     ports: &[
         p('D', 0), p('D', 1), p('D', 2), p('D', 3), p('D', 4), p('D', 5), p('D', 6), p('D', 7),
         p('B', 0), p('B', 1), p('B', 2), p('B', 3), p('B', 4), p('B', 5),
@@ -309,6 +320,8 @@ pub static MEGA: BoardDef = BoardDef {
     freq: 16_000_000,
     vcc: 5.0,
     a0: 54,
+    adc_of: &[],
+    soft_tx: None,
     ports: &[
         // D0..D13
         p('E', 0), p('E', 1), p('E', 4), p('E', 5), p('G', 5), p('E', 3), p('H', 3), p('H', 4), p('H', 5), p('H', 6),
@@ -353,6 +366,58 @@ fn pulses(duty: f64, hz: f64) -> bool {
     hz >= PWM_MIN_HZ || hz >= NARROW_MIN_HZ && duty.min(1.0 - duty) / hz < NARROW_S
 }
 
+/// ATtiny85 (8 MHz from its own oscillator, 5 V) as ATTinyCore numbers its pins: 0..5 are PB0..PB5 (PB5 is RESET unless a fuse
+/// frees it); A0..A3 are ADC0..3 on PB5, PB2, PB4, PB3. Its Serial is sent in software on PB0 (AIN0).
+pub static TINY85: BoardDef = BoardDef {
+    name: "ATtiny85",
+    mcu: "attiny85",
+    freq: 8_000_000,
+    vcc: 5.0,
+    a0: 6,
+    adc_of: &[None, None, Some(1), Some(3), Some(2), Some(0)],
+    soft_tx: Some(('B', 0)),
+    ports: &[p('B', 0), p('B', 1), p('B', 2), p('B', 3), p('B', 4), p('B', 5)],
+};
+
+/// The bytes a pin sends as a UART in software (8N1, idle High): its changes kept until a whole frame has passed.
+#[derive(Debug)]
+struct SoftUart {
+    baud: u32,
+    edges: std::collections::VecDeque<(u64, bool)>,
+}
+
+impl SoftUart {
+    /// The frames done by the cycle `now`, read at the middle of each bit.
+    fn take(&mut self, now: u64, freq: u64) -> Vec<u8> {
+        let bit = freq as f64 / self.baud.max(1) as f64;
+        let mut out = vec![];
+        loop {
+            // the line is idle (High) until a fall: the start bit
+            while self.edges.front().is_some_and(|e| e.1) {
+                self.edges.pop_front();
+            }
+            let Some(&(start, _)) = self.edges.front() else { break };
+            if (now as f64) < start as f64 + 10.0 * bit {
+                break;
+            }
+            let level = |t: f64| self.edges.iter().take_while(|e| e.0 as f64 <= t).last().is_none_or(|e| e.1);
+            // a start bit still Low at its middle, as a UART checks: a glitch (the pin made an output, Low for an instant before
+            // Serial.begin sets it High) is no frame
+            if level(start as f64 + 0.5 * bit) {
+                self.edges.pop_front();
+                continue;
+            }
+            out.push((0..8).fold(0u8, |b, k| b | (u8::from(level(start as f64 + (1.5 + k as f64) * bit)) << k)));
+            // the frame's changes are used: the stop bit (High) is where the next one starts from
+            let end = start as f64 + 9.5 * bit;
+            while self.edges.front().is_some_and(|e| (e.0 as f64) <= end) {
+                self.edges.pop_front();
+            }
+        }
+        out
+    }
+}
+
 /// A pin's last edges (cycles), its level, and the duty and frequency of its last whole period.
 #[derive(Clone, Copy, Debug, Default)]
 struct Edges {
@@ -371,6 +436,8 @@ pub struct Board {
     edges: Vec<Edges>,
     /// What the serial monitor sent and the chip has not been given yet (`BYTES_PER_STEP` a step).
     input: std::collections::VecDeque<u8>,
+    /// The Serial sent in software (`BoardDef::soft_tx`).
+    soft: Option<SoftUart>,
 }
 
 /// The most text the serial window keeps.
@@ -387,7 +454,29 @@ impl Board {
 
     pub fn new(def: &'static BoardDef, image: &Image) -> Result<Board, String> {
         let avr = Avr::new(def.mcu, def.freq, def.vcc, image)?;
-        Ok(Board { def, avr, serial: String::new(), edges: vec![Edges::default(); def.pins()], input: Default::default() })
+        let soft = def.soft_tx.map(|_| SoftUart { baud: 9600, edges: Default::default() });
+        Ok(Board { def, avr, serial: String::new(), edges: vec![Edges::default(); def.pins()], input: Default::default(), soft })
+    }
+
+    /// The speed the program's Serial sends at in software (`Serial.begin(…)`), on a chip with no UART (9600 until said).
+    pub fn set_soft_baud(&mut self, baud: u32) {
+        if let Some(s) = self.soft.as_mut() {
+            s.baud = baud;
+        }
+    }
+
+    fn push_serial(&mut self, text: &[u8]) {
+        if text.is_empty() {
+            return;
+        }
+        self.serial.push_str(&String::from_utf8_lossy(text));
+        if self.serial.len() > SERIAL_MAX {
+            let mut cut = self.serial.len() - SERIAL_MAX;
+            while !self.serial.is_char_boundary(cut) {
+                cut += 1;
+            }
+            self.serial.drain(..cut);
+        }
     }
 
     /// Runs the chip to the time `t` with the circuit's voltages on its pins now (`volts(pin)`: an input is High above half the
@@ -417,17 +506,12 @@ impl Board {
         self.avr.run_to(t);
         let end = self.avr.cycle().max(start + 1);
         let events = self.avr.take_events();
-        let text = self.avr.take_serial();
-        if !text.is_empty() {
-            self.serial.push_str(&String::from_utf8_lossy(&text));
-            if self.serial.len() > SERIAL_MAX {
-                let mut cut = self.serial.len() - SERIAL_MAX;
-                while !self.serial.is_char_boundary(cut) {
-                    cut += 1;
-                }
-                self.serial.drain(..cut);
-            }
+        let mut text = self.avr.take_serial();
+        if let (Some(soft), Some((p, b))) = (self.soft.as_mut(), def.soft_tx) {
+            soft.edges.extend(events.iter().filter(|e| e.port == p && e.bit == b && !e.timer).map(|e| (e.cycle, e.high)));
+            text.extend(soft.take(end, self.avr.freq));
         }
+        self.push_serial(&text);
         let after = self.avr.ports();
         let mut out = vec![PinOut::Input; def.pins()];
         for (pin, o) in out.iter_mut().enumerate() {

@@ -1,0 +1,459 @@
+{
+  "components": [
+    {
+      "custom": null,
+      "footprint": "PinHeader_1x2_PM",
+      "kind": "VSource",
+      "pos": [
+        -40,
+        0
+      ],
+      "refdes": "V1",
+      "rot": 0,
+      "value": "5"
+    },
+    {
+      "custom": {
+        "companions": [
+          {
+            "kind": "C",
+            "name": "CVCC",
+            "note": "VCC のバイパス",
+            "pin": "8",
+            "to": "GND",
+            "value": "100n"
+          }
+        ],
+        "name": "ATTINY85-20PU",
+        "pins": [
+          {
+            "kind": "bidir",
+            "name": "PB5/RESET",
+            "number": "1",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "PB3",
+            "number": "2",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "PB4",
+            "number": "3",
+            "side": "left"
+          },
+          {
+            "kind": "power_in",
+            "name": "GND",
+            "number": "4",
+            "side": "bottom"
+          },
+          {
+            "kind": "bidir",
+            "name": "PB0",
+            "number": "5",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "PB1",
+            "number": "6",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "PB2",
+            "number": "7",
+            "side": "right"
+          },
+          {
+            "kind": "power_in",
+            "name": "VCC",
+            "number": "8",
+            "side": "top"
+          }
+        ],
+        "prefix": "U",
+        "programming": [
+          {
+            "name": "ISP (SPI)",
+            "pins": [
+              "PB5/RESET",
+              "PB0",
+              "PB1",
+              "PB2",
+              "VCC",
+              "GND"
+            ]
+          }
+        ],
+        "ratings": {
+          "rows": [
+            {
+              "condition": "ATtiny85V は 1.8 V から",
+              "name": "電源",
+              "value": "1.8〜5.5 V"
+            },
+            {
+              "name": "ピンの電流",
+              "value": "40 mA (絶対最大)"
+            },
+            {
+              "name": "クロック",
+              "value": "内蔵 8 MHz"
+            }
+          ],
+          "v_max": 5.5
+        },
+        "sim": {
+          "element": "",
+          "kind": "subckt",
+          "limits": [
+            "ピンの出力は VCC × (0 か 1) の 25 Ω、入力は 1 GΩ、INPUT_PULLUP は 35 kΩ。入力の High / Low は 2.5 V で分けます (VCC が 5 V のときの値)。",
+            "circuitCad の読み方のとき: 命令にかかる時間・割り込み・タイマー・ライブラリは扱いません。「本物のマイコンの命令で動かす」ならこれらも動きます (クロックは内蔵の 8 MHz)。RESET のピン (PB5) は普通のピンとして扱い、ヒューズ・ピンの電流の上限 (40 mA) の点検は扱いません。",
+            "電源を切ってまた入れても、プログラムは最初からやり直しません (止まっていた所から続きます)。"
+          ],
+          "name": "ATTINY85",
+          "origin": {
+            "kind": "generic",
+            "source": "ピンごとの電源と抵抗だけの形。命令は avr-sim (simavr の ATtiny85) が動かす"
+          },
+          "params": {},
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8"
+          ],
+          "text": ".subckt ATTINY85 pb5 pb3 pb4 gnd pb0 pb1 pb2 vcc\n* ATtiny85 for the sketch beside the circuit: each of PB0..PB5 is a source behind a resistor. The sketch sets the source VpPBn\n* (0 to 5 V as on the boards: TranRun::set_source) and RpPBn (an output 25 ohm, an input 1 Gohm, the pull-up 35 kohm); the pin\n* follows its share of VCC, so a chip without its supply drives nothing. The chip takes about 5 mA (8 MHz, 5 V).\nVpPB0 c0 gnd DC 0\nBpPB0 s0 gnd V=V(c0,gnd)*max(V(vcc,gnd),0)/5\nRpPB0 s0 pb0 1G\nVpPB1 c1 gnd DC 0\nBpPB1 s1 gnd V=V(c1,gnd)*max(V(vcc,gnd),0)/5\nRpPB1 s1 pb1 1G\nVpPB2 c2 gnd DC 0\nBpPB2 s2 gnd V=V(c2,gnd)*max(V(vcc,gnd),0)/5\nRpPB2 s2 pb2 1G\nVpPB3 c3 gnd DC 0\nBpPB3 s3 gnd V=V(c3,gnd)*max(V(vcc,gnd),0)/5\nRpPB3 s3 pb3 1G\nVpPB4 c4 gnd DC 0\nBpPB4 s4 gnd V=V(c4,gnd)*max(V(vcc,gnd),0)/5\nRpPB4 s4 pb4 1G\nVpPB5 c5 gnd DC 0\nBpPB5 s5 gnd V=V(c5,gnd)*max(V(vcc,gnd),0)/5\nRpPB5 s5 pb5 1G\nRq vcc gnd 1k\n.ends ATTINY85"
+        }
+      },
+      "footprint": "DIP-8_W7.62mm",
+      "kind": "Custom",
+      "pos": [
+        20,
+        0
+      ],
+      "refdes": "U1",
+      "rot": 0,
+      "value": "ATTINY85-20PU"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        60,
+        -10
+      ],
+      "refdes": "R1",
+      "rot": 1,
+      "value": "330"
+    },
+    {
+      "custom": null,
+      "footprint": "LED_0805",
+      "kind": "Led",
+      "pos": [
+        60,
+        10
+      ],
+      "refdes": "D1",
+      "rot": 1,
+      "value": "LED"
+    },
+    {
+      "custom": null,
+      "footprint": "Pot_1x3_P2.54",
+      "kind": "Pot",
+      "pos": [
+        -10,
+        30
+      ],
+      "refdes": "VR1",
+      "rot": 1,
+      "value": "10k POS=30"
+    },
+    {
+      "custom": null,
+      "footprint": "C_0805",
+      "kind": "Capacitor",
+      "pos": [
+        0,
+        -30
+      ],
+      "refdes": "C1",
+      "rot": 1,
+      "value": "100n"
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        -40,
+        -5
+      ],
+      "text": "5V"
+    },
+    {
+      "pos": [
+        -40,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        -8
+      ],
+      "text": "5V"
+    },
+    {
+      "pos": [
+        20,
+        8
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        27,
+        0
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        27,
+        2
+      ],
+      "text": "KNOB"
+    },
+    {
+      "pos": [
+        60,
+        -15
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        60,
+        -5
+      ],
+      "text": "LEDA"
+    },
+    {
+      "pos": [
+        60,
+        5
+      ],
+      "text": "LEDA"
+    },
+    {
+      "pos": [
+        60,
+        15
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        -10,
+        25
+      ],
+      "text": "5V"
+    },
+    {
+      "pos": [
+        -5,
+        30
+      ],
+      "text": "KNOB"
+    },
+    {
+      "pos": [
+        -10,
+        35
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        -35
+      ],
+      "text": "5V"
+    },
+    {
+      "pos": [
+        0,
+        -25
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1,
+  "sketches": {
+    "U1": "// ATtiny85 の PB1 の LED を点滅させます。A1 (PB2) のボリュームで速さが変わります\n// ATtiny85 には USB が無いので、8 番 (VCC) と 4 番 (GND) に電源をつなぎます\nvoid setup() {\n  pinMode(1, OUTPUT);\n}\n\nvoid loop() {\n  int wait = map(analogRead(A1), 0, 1023, 50, 500);\n  digitalWrite(1, HIGH);\n  delay(wait);\n  digitalWrite(1, LOW);\n  delay(wait);\n}\n"
+  },
+  "wires": [
+    {
+      "a": [
+        -40,
+        -2
+      ],
+      "b": [
+        -40,
+        -5
+      ]
+    },
+    {
+      "a": [
+        -40,
+        2
+      ],
+      "b": [
+        -40,
+        5
+      ]
+    },
+    {
+      "a": [
+        20,
+        -5
+      ],
+      "b": [
+        20,
+        -8
+      ]
+    },
+    {
+      "a": [
+        20,
+        5
+      ],
+      "b": [
+        20,
+        8
+      ]
+    },
+    {
+      "a": [
+        24,
+        0
+      ],
+      "b": [
+        27,
+        0
+      ]
+    },
+    {
+      "a": [
+        24,
+        2
+      ],
+      "b": [
+        27,
+        2
+      ]
+    },
+    {
+      "a": [
+        60,
+        -12
+      ],
+      "b": [
+        60,
+        -15
+      ]
+    },
+    {
+      "a": [
+        60,
+        -8
+      ],
+      "b": [
+        60,
+        -5
+      ]
+    },
+    {
+      "a": [
+        60,
+        8
+      ],
+      "b": [
+        60,
+        5
+      ]
+    },
+    {
+      "a": [
+        60,
+        12
+      ],
+      "b": [
+        60,
+        15
+      ]
+    },
+    {
+      "a": [
+        -10,
+        28
+      ],
+      "b": [
+        -10,
+        25
+      ]
+    },
+    {
+      "a": [
+        -8,
+        30
+      ],
+      "b": [
+        -5,
+        30
+      ]
+    },
+    {
+      "a": [
+        -10,
+        32
+      ],
+      "b": [
+        -10,
+        35
+      ]
+    },
+    {
+      "a": [
+        0,
+        -32
+      ],
+      "b": [
+        0,
+        -35
+      ]
+    },
+    {
+      "a": [
+        0,
+        -28
+      ],
+      "b": [
+        0,
+        -25
+      ]
+    }
+  ]
+}

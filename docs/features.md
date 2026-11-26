@@ -107,6 +107,7 @@
 - **テスター**: 電圧・**電流** (直列に入れる。電源に当てるとヒューズ)・**抵抗** (電源を切って、OL も)
 - **オシロ**: 探り針のネットの波形
 - **Arduino のスケッチ**: Arduino Nano の部品にスケッチ (setup / loop、pinMode・digitalWrite/Read・analogRead/Write・delay・millis・Serial) を書くと、電源を入れたときに回路と一緒に動く。`analogWrite` は本物と同じパルス (490 Hz) で、LED はその割合の明るさ。シリアルモニタ、誤りは行と理由
+- **ATtiny85**: 8 ピンのマイコン ATtiny85 (DIP-8) にスケッチを書いて、試作のタブで回路と一緒に動かせる (ATTinyCore のピン番号。VCC と GND に電源が要り、無いと止まる)。本物のマイコンの命令でも動き (ATTinyCore を arduino-cli に入れる)、ソフトウェアのシリアルの出力がシリアルモニタに出る。サンプル「ATtiny85 で LED を点滅」
 - **I²C のセンサー (SHT31)**: 温湿度センサー SHT31 のモジュールを、試作のタブで本物のマイコンの命令が Wire で読める (コマンド・測定の時間・CRC はデータシートどおり。Sensirion のライブラリでも読める)。温度は「周りの温度」、湿度は「周りの湿度」のつまみ。配線・電源・プルアップが無いと応答しない。サンプル「Arduino で温度と湿度を測る (SHT31、I²C)」
 - **Arduino Mega**: Arduino Mega 2560 のボード (D0〜D53・A0〜A15)。ブレッドボードには差さらないので、試作のタブではボードの横に置き、使うピンだけジャンパー線でつなぐ。スケッチは Nano と同じく、circuitCad の読み方でも本物のマイコンの命令 (ATmega2560) でも動く。サンプル「Arduino Mega で流れる光」
 - **本物のマイコンの命令で動かす**: スケッチの欄の「本物のマイコンの命令で動かす (arduino-cli)」で、スケッチを arduino-cli でコンパイルし、Nano のマイコン (ATmega328P) の命令を 1 クロックずつ回路と一緒に動かす (simavr)。ライブラリ・`String`・`tone`・割り込み・EEPROM も動く (コアに付いてくる SPI・Wire・SoftwareSerial と、Arduino IDE で入れたライブラリも。I²C の相手は SHT31 だけ、SPI の相手の部品はまだ無い)。シリアルモニタから文字を送れる (`Serial.read`)。arduino-cli は Arduino IDE 2 に入っているものも見つける

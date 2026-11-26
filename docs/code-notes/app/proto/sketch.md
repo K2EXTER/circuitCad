@@ -7,6 +7,16 @@
 - 「部品と差す穴」の一覧は、表をやめて 1 部品 1 行の折り返し (30 ピンの板の 1 行がパネルを画面の大半まで広げた)。コードの欄も幅いっぱいを求めない。
 - サンプル `arduino_blink` (D13 → 330 Ω → LED) と `arduino_pot` (A0 のボリュームで D9 の LED の明るさ、シリアルに読んだ値)。生成 `write_arduino_examples`。テスト `the_arduino_sketch_blinks_the_led`・`the_arduino_reads_the_knob_and_sets_the_led` (`live.rs`)。
 
+## ATtiny85 (W5 ③、2026-11-26)
+
+- 部品 `ATTINY85-20PU` (`part-lib/examples/ATTINY85_DIP-8.part.json`、DIP-8)。モデルは Nano と同じくピンごとの電源と抵抗だが、電源は VCC に比例する (`BpPBn = V(cn) × V(vcc)/5`): 電源の無いチップは何も出さない。既存の `ATtiny85` (SOIC-8) はモデル無しのまま。
+- ボードは `sim_core::sketch::Board::Tiny85`: ピン 0〜5 (`pin_name` は PB0〜PB5、部品のピン「PB5/RESET」は `/` の前の名前で引く)、A0〜A3 はピン 5・2・4・3 の別名 (`analog_pin`。`analogRead(0)` を A0 と読む決まりは使わない)、`LED_BUILTIN` は 1 (`led`)、`analogWrite` のパルスは 0・1・4。arduino-cli の FQBN は ATTinyCore の `ATTinyCore:avr:attinyx5:chip=85,clock=8internal` (ATTinyCore はボードマネージャに追加の URL で入れる。無いときの説明は `firmware::explain`)。
+- USB が無いので、`Board::supply_pins` (VCC・GND) のネットを `Live::set_supply` で渡す (ボードを足す前に。`setup` も電源を待つ)。電圧が 1.8 V より低い間は止まり、ピンを放す (入力に)。今の読み方は `delay` の待ちを止まっていた時間だけ後ろへ (`Machine::delay_by`) ずらし、電源が戻るとピンの出力を戻す。本物のチップは時間が止まる (リセットからやり直さない。部品の説明に書いた)。
+- シリアルモニタ: 本物のチップはソフトウェアのシリアルを avr-sim が読み戻す (`serial_baud` でスケッチの `Serial.begin` の速さ)。送る欄は UART のあるチップだけに出す。
+- 見本のスケッチ (点滅) のコメントの「(D13)」は、ボードの LED のピン (PB1) に。
+- サンプル `attiny85_blink` (5 V の電源・PB1 の LED・A1 のボリューム)。試験 `the_attiny85_blinks_on_its_own_supply_only` (今の読み方。電源のつまみを 0 V にすると消え、戻すとまた点滅) と `the_real_attiny85_sends_its_serial_in_software` (avr-sim の `tiny85.elf`、ボリュームの電圧がシリアルに)。画面で、今の読み方の点滅と、本物の命令 (アプリの中で ATTinyCore でコンパイル、1492 バイト) でシリアルモニタに行が出るのを確かめた。
+- `--shot-frames N`: `--screenshot` の前に待つフレームの数 (シリアルモニタがたまるのを撮るとき)。
+
 ## I²C のセンサー (SHT31、W5 ⑤、2026-11-26)
 
 - 部品 `SHT31_MODULE` (`part-lib/examples/`、1 列 5 ピン VIN・GND・SCL・SDA・ADR。回路のモデルはモジュールの上の 10 kΩ の引き上げ・ADR の引き下げ・待機の電流だけ)。測る値と I²C の応答は avr-sim の側 (`c/i2c_parts.c`、`docs/code-notes/avr-sim.md`)。

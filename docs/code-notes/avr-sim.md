@@ -53,6 +53,12 @@
   - ステータスのビット 6〜9: 古いデータシートでは予約だが、Sensirion の Arduino のドライバ (`SensirionI2cSht3x::blockingReadMeasurement`) は周期の測定でこれが 0 でなくなるのを待つ。周期の結果が取り出せるときはビット 6 を立てる。このドライバの 2 つの例 (周期・単発) が読めるのを確かめた (ライブラリは BSD なので、ELF はリポジトリに入れていない)。
   - Rust の窓口: `Avr::add_sht3x(addr)` と `set_sht3x(addr, present, temp_c, rh)` (`present` が false なら何にも答えない: 電源が無い・バスにいない)。1 つのチップに 8 個まで。
   - 試験: `tests/sht3x.rs` (`firmware/sht3x.ino` → `sht3x.elf`、Wire だけで読む。早すぎる読みは 0 バイト、ステータス 0x10、温度と湿度、居ない・アドレス違い・電源なしは「no sensor」)。
+- **ATtiny85** (W5 ③、2026-11-26): simavr の `sim_tiny85.c`・`sim_tinyx5.*`・`iotn85.h` を写した (`vendor_simavr.py` の `CORES`)。ボードの表 `TINY85` (内蔵の 8 MHz・5 V、ピン 0〜5 = PB0〜PB5)。
+  - ADC のチャンネルが飛び飛び (ADC0〜3 = PB5・PB2・PB4・PB3) なので、`BoardDef::adc_of` にピンごとのチャンネルを持たせた (空なら今までどおり A0 から順)。
+  - simavr の直し (`FIXES`): ATtiny85 のタイマー 1 は数えるだけ (NORMAL8) で、PWM1A (TCCR1)・PWM1B (GTCCR) の PWM が無く、ATTinyCore の `analogWrite(4, …)` (OC1B) が Low のままだった。PWM1A・PWM1B をモードのビットにして、どちらかで上限 255 の高速 PWM (ATTinyCore は OCR1C = 255 にする)。上流にはまだ報告していない。
+  - UART が無いので、ATTinyCore の `Serial` は PB0 からソフトウェアで送る (`BoardDef::soft_tx`)。`Board` はそのピンの変化をためて、8N1 のフレームを各ビットの真ん中で読み、`serial` に足す (`SoftUart`)。開始のビットは真ん中でもまだ Low のときだけ (`Serial.begin` でピンを出力にした瞬間の Low をフレームと取らない)。速さはアプリがスケッチの `Serial.begin(…)` から読んで `set_soft_baud` で渡す (読めなければ 9600)。送るほう (シリアルモニタ → チップ) は無い。
+  - 試験 `tests/tiny85.rs` (`firmware/tiny85.ino` → `tiny85.elf`、ATTinyCore 1.5.2 の `ATTinyCore:avr:attinyx5:chip=85,clock=8internal`): PB1 の反転、PB4 の 25 % の PWM、A1 (PB2) の 409 / 818、PB3 のプルアップ、シリアルの行。
+- **細いパルス** (2026-11-26): 100 Hz より遅くても、20 Hz 以上で短いほうの幅が 5 ms より短ければパルスのまま渡す (`NARROW_MIN_HZ`・`NARROW_S`。サーボの 50 Hz・0.5〜2.4 ms)。
 
 ## はじめの試し (simavr を MSVC で通せるか)
 
@@ -112,10 +118,10 @@ exe の大きさは、試しのバイナリ全体で 283 KB (release)。simavr �
 
 - 1 の D13 の周期は 1.019 ms × 100 だった。予想は 1.1 ms 前後 (ADC の 104 µs 込み)。原因は simavr の ADC の不具合で、上の `FIXES` で直した。
 - コアは ATmega328 だけ試した。Mega (2560)・ATtiny も同じ作りなので通るはず。
-- ライブラリ: コアに付いてくるもの (EEPROM・SPI・Wire・SoftwareSerial) は 2026-11-26 に試した (上の `libs.elf`)。Servo はこの PC の arduino-cli に入っていない (入れるにはダウンロードが要る)。
+- ライブラリ: コアに付いてくるもの (EEPROM・SPI・Wire・SoftwareSerial) は 2026-11-26 に試した (上の `libs.elf`)。Servo も 2026-11-26 に入れて試した (`servo.elf`)。
 - CI: 書き換えの `_alloca` で Linux・macOS が落ちていた。`shim/gcc_first.h` で直した。
 
 ## 残り (候補表 W5)
 
-- ほかのチップ: ATtiny など。コアのファイルを `vendor_simavr.py` の `CORES` に足し、`sim_core_config.h`・`sim_core_decl.h` に並べ、`BoardDef` を書く (Mega はこの形で 2026-11-26 に足した)。
+- ほかのチップ: ATtiny85 は 2026-11-26 に足した。ATtiny13・ATtiny84 なども、コアのファイルを `vendor_simavr.py` の `CORES` に足し、`sim_core_config.h`・`sim_core_decl.h` に並べ、`BoardDef` を書く (Mega はこの形で 2026-11-26 に足した)。
 - ライブラリ: Servo は 2026-11-26 に試した (上の `servo.elf`)。I²C の相手は SHT3x だけ (ほかのセンサー・EEPROM は、`i2c_parts.c` に同じ形で足す)。SPI の相手の部品は無い (MISO のレベルしか返らない)。SCK・MOSI・SDA・SCL のピンを回路の中で動かすこと。

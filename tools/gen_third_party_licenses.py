@@ -98,7 +98,7 @@ def build():
     w("")
     w("Bundled C library")
     w("-" * 72)
-    w("simavr (crates/avr-sim/simavr/: its simulator core and the ATmega328 and ATmega2560 cores, " + (ROOT / "crates/avr-sim/simavr/VERSION").read_text(encoding="utf-8").strip() + "),")
+    w("simavr (crates/avr-sim/simavr/: its simulator core and the ATmega328, ATmega2560 and ATtiny85 cores, " + (ROOT / "crates/avr-sim/simavr/VERSION").read_text(encoding="utf-8").strip() + "),")
     w("Copyright Michel Pollet and the simavr contributors, GNU General Public License version 3 or (at your option) any later version.")
     w("It runs the real instructions of the AVR microcontroller in the prototype tab. A few lines are rewritten so that MSVC compiles it")
     w("(tools/vendor_simavr.py). The full license text is in crates/avr-sim/simavr/COPYING and is reproduced at the end of this file.")

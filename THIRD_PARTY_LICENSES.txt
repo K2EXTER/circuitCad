@@ -12,7 +12,7 @@ The full license text is in crates/app/assets/fonts/OFL.txt and is reproduced at
 
 Bundled C library
 ------------------------------------------------------------------------
-simavr (crates/avr-sim/simavr/: its simulator core and the ATmega328 and ATmega2560 cores, https://github.com/buserror/simavr 13d4ed32433ad7a37bb757b7e0f7dbb5373396c0 2026-11-19),
+simavr (crates/avr-sim/simavr/: its simulator core and the ATmega328, ATmega2560 and ATtiny85 cores, https://github.com/buserror/simavr 13d4ed32433ad7a37bb757b7e0f7dbb5373396c0 2026-11-19),
 Copyright Michel Pollet and the simavr contributors, GNU General Public License version 3 or (at your option) any later version.
 It runs the real instructions of the AVR microcontroller in the prototype tab. A few lines are rewritten so that MSVC compiles it
 (tools/vendor_simavr.py). The full license text is in crates/avr-sim/simavr/COPYING and is reproduced at the end of this file.

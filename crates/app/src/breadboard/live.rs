@@ -75,6 +75,8 @@ pub struct Live {
     pub sensors: Vec<I2cSensor>,
     pub room_c: f64,
     pub humidity: f64,
+    /// Supplies given before their board is added (`set_supply`).
+    pending_supply: BTreeMap<String, [Option<String>; 2]>,
 }
 
 /// An SHT31 module on the board (`SHT31_MODULE`): the nets of its VIN, GND, SCL, SDA, ADR, and the real chips whose I2C bus it is
@@ -131,13 +133,22 @@ pub struct Mcu {
     real_from: f64,
     /// What the real chip's pins do now (set on the circuit when they change).
     drives: Vec<sim_core::sketch::Drive>,
+    /// The nets of its supply pins (VCC, GND) when it has no USB of its own (the ATtiny85): it runs only while they are given
+    /// `MCU_VMIN` or more.
+    supply: Option<[Option<String>; 2]>,
+    /// When its supply went away (None while it runs).
+    off_at: Option<f64>,
 }
+
+/// The lowest supply a chip without USB runs on (the ATtiny85V's 1.8 V).
+const MCU_VMIN: f64 = 1.8;
 
 /// The chip and pins avr-sim runs for a board.
 fn avr_board(b: sim_core::sketch::Board) -> &'static avr_sim::BoardDef {
     match b {
         sim_core::sketch::Board::Nano => &avr_sim::NANO,
         sim_core::sketch::Board::Mega => &avr_sim::MEGA,
+        sim_core::sketch::Board::Tiny85 => &avr_sim::TINY85,
     }
 }
 
@@ -225,6 +236,7 @@ impl Live {
             sensors: vec![],
             room_c: 25.0,
             humidity: 50.0,
+            pending_supply: BTreeMap::new(),
         };
         let wanted: Vec<String> = currents.iter().map(|n| format!("I({n})")).collect();
         let keep = |n: &str| n.starts_with("V(") || wanted.iter().any(|w| w.eq_ignore_ascii_case(n));
@@ -241,8 +253,9 @@ impl Live {
     /// at once.
     pub fn add_mcu(&mut self, refdes: String, board: sim_core::sketch::Board, sketch: Result<sim_core::sketch::Sketch, sim_core::sketch::SketchError>, nets: Vec<Option<String>>) {
         let machine = sketch.ok().map(sim_core::sketch::Machine::new);
+        let supply = self.pending_supply.remove(&refdes);
         let drives = vec![sim_core::sketch::Drive::Input; board.pins()];
-        self.mcus.push(Mcu { refdes, board, machine, nets, real: None, waiting: false, real_from: 0.0, drives });
+        self.mcus.push(Mcu { refdes, board, machine, nets, real: None, waiting: false, real_from: 0.0, drives, supply, off_at: None });
         self.run_mcus();
         self.read_now();
     }
@@ -250,7 +263,14 @@ impl Live {
     /// A board that runs its program as the chip's real instructions (W5 (b)); it waits (pins as inputs) until `give_program`.
     pub fn add_real_mcu(&mut self, refdes: String, board: sim_core::sketch::Board, nets: Vec<Option<String>>) {
         let drives = vec![sim_core::sketch::Drive::Input; board.pins()];
-        self.mcus.push(Mcu { refdes, board, machine: None, nets, real: None, waiting: true, real_from: 0.0, drives });
+        let supply = self.pending_supply.remove(&refdes);
+        self.mcus.push(Mcu { refdes, board, machine: None, nets, real: None, waiting: true, real_from: 0.0, drives, supply, off_at: None });
+    }
+
+    /// The nets of a board's supply pins (VCC, GND; `Board::supply_pins`): it stops while they are not powered. Given before the
+    /// board is added (so that its `setup` waits for the supply too).
+    pub fn set_supply(&mut self, refdes: &str, vcc: Option<String>, gnd: Option<String>) {
+        self.pending_supply.insert(refdes.to_string(), [vcc, gnd]);
     }
 
     /// An SHT31 module and the nets of its VIN, GND, SCL, SDA, ADR: a real chip whose SDA and SCL are on its SCL and SDA reads it
@@ -292,6 +312,42 @@ impl Live {
         let now = run.time();
         let (sensors, room, rh) = (&self.sensors, self.room_c, self.humidity);
         for m in &mut self.mcus {
+            // a chip without its supply stands still, its pins let go (its time stops: it goes on from there when powered)
+            if let Some([vcc, gnd]) = &m.supply
+                && net_volts(run, vcc) - net_volts(run, gnd) < MCU_VMIN
+            {
+                use sim_core::sketch::{Drive, Io};
+                let mut io = RunIo { run, refdes: &m.refdes, board: m.board, nets: &m.nets };
+                for (pin, d) in m.drives.iter_mut().enumerate() {
+                    if *d != Drive::Input {
+                        *d = Drive::Input;
+                        io.drive(pin as u8, Drive::Input);
+                    }
+                }
+                if let Some(machine) = m.machine.as_ref() {
+                    for (pin, d) in machine.drives.iter().enumerate() {
+                        if *d != Drive::Input {
+                            io.drive(pin as u8, Drive::Input);
+                        }
+                    }
+                }
+                if let Some(chip) = m.real.as_ref() {
+                    m.real_from = now - chip.avr.time();
+                }
+                m.off_at.get_or_insert(now);
+                continue;
+            }
+            // powered again: the sketch's waits move on by the time it stood, its pins as it left them
+            if let Some(off) = m.off_at.take()
+                && let Some(machine) = m.machine.as_mut()
+            {
+                use sim_core::sketch::Io;
+                machine.delay_by(now - off);
+                let mut io = RunIo { run, refdes: &m.refdes, board: m.board, nets: &m.nets };
+                for (pin, d) in machine.drives.iter().enumerate() {
+                    io.drive(pin as u8, *d);
+                }
+            }
             if let Some(machine) = m.machine.as_mut() {
                 machine.run(now, &mut RunIo { run, refdes: &m.refdes, board: m.board, nets: &m.nets });
             }
@@ -649,8 +705,14 @@ mod tests {
         let nets = sch_core::breadboard::board_nets(&e.sch, &l);
         let leds: Vec<String> = e.sch.components.iter().filter(|c| c.kind == sch_core::Kind::Led).map(|c| c.refdes.clone()).collect();
         let pots: Vec<String> = e.sch.components.iter().filter(|c| c.kind == sch_core::Kind::Pot).map(|c| c.refdes.clone()).collect();
-        let mut live = Live::start(e.board_circuit(&nets, None).unwrap(), &leds, vec![], &pots);
+        // the bench supplies are knobs too (to turn a chip's supply off)
+        let supplies = e.sch.components.iter().filter(|c| c.kind == sch_core::Kind::VSource).map(|c| c.refdes.clone());
+        let knobs: Vec<String> = pots.into_iter().chain(supplies).collect();
+        let mut live = Live::start(e.board_circuit(&nets, None).unwrap(), &leds, vec![], &knobs);
         for refdes in crate::breadboard::sketch_ui::boards(&e.sch) {
+            if let Some((vcc, gnd)) = crate::breadboard::sketch_ui::supply_nets(&e.sch, &refdes, &nets) {
+                live.set_supply(&refdes, vcc, gnd);
+            }
             let pins = crate::breadboard::sketch_ui::pin_nets(&e.sch, &refdes, &nets);
             let board = crate::breadboard::sketch_ui::board_of(&e.sch, &refdes);
             live.add_mcu(refdes.clone(), board, sim_core::sketch::compile(&crate::breadboard::sketch_ui::sketch_of(e, &refdes), board), pins);
@@ -710,6 +772,9 @@ mod tests {
         crate::breadboard::power::add_sensors(&mut live, &e.sch, &nets);
         let image = avr_sim::read_elf(elf).unwrap();
         for refdes in crate::breadboard::sketch_ui::boards(&e.sch) {
+            if let Some((vcc, gnd)) = crate::breadboard::sketch_ui::supply_nets(&e.sch, &refdes, &nets) {
+                live.set_supply(&refdes, vcc, gnd);
+            }
             let pins = crate::breadboard::sketch_ui::pin_nets(&e.sch, &refdes, &nets);
             live.add_real_mcu(refdes.clone(), crate::breadboard::sketch_ui::board_of(&e.sch, &refdes), pins);
             assert!(live.mcus.last().unwrap().waiting);
@@ -826,5 +891,49 @@ void loop() {{ delay(100); }}"));
         assert!(live.sensors[0].on.is_empty());
         live.advance(0.3);
         assert!(serial(&live).contains("no sensor") && !serial(&live).contains("t="), "{:?}", serial(&live));
+    }
+
+    /// The ATtiny85 sample (W5 ③) in circuitCad's reading: the LED on PB1 blinks at the knob's pace; with its bench supply at 0 V
+    /// the chip stands still (no LED), and with it back it goes on blinking.
+    #[test]
+    fn the_attiny85_blinks_on_its_own_supply_only() {
+        let e = sample("attiny85_blink.schjson");
+        let mut live = with_sketch(&e);
+        assert!(live.error.is_none(), "{:?}", live.error);
+        assert_eq!(live.mcus[0].board, sim_core::sketch::Board::Tiny85);
+        assert!(live.mcus[0].machine.as_ref().is_some_and(|m| m.error.is_none()));
+        let lit = |live: &mut Live, s: f64| {
+            let mut seen = vec![];
+            for _ in 0..(s / 0.02) as usize {
+                live.advance(0.02);
+                seen.push(live.current("D1").unwrap_or(0.0) > 2e-3);
+            }
+            (seen.iter().filter(|x| **x).count(), seen.len())
+        };
+        let (on, n) = lit(&mut live, 2.0);
+        assert!(on > n / 5 && on < n * 4 / 5, "blinking: lit {on} of {n}");
+        let v1 = live.knob_index("V1").unwrap();
+        live.set_knob(v1, 0.0);
+        assert_eq!(lit(&mut live, 1.0).0, 0, "no supply, no light");
+        live.set_knob(v1, 5.0);
+        let (on, n) = lit(&mut live, 2.0);
+        assert!(on > n / 5 && on < n * 4 / 5, "blinking again: lit {on} of {n}");
+    }
+
+    /// The real ATtiny85 (avr-sim's tests/firmware/tiny85.ino: PB1 turns over every 10 ms, A1 is read and sent on the Serial in
+    /// software on PB0) on the sample's board: the knob's voltage comes back on the serial monitor.
+    #[test]
+    fn the_real_attiny85_sends_its_serial_in_software() {
+        let e = sample("attiny85_blink.schjson");
+        let mut live = with_program(&e, include_bytes!("../../../avr-sim/tests/firmware/tiny85.elf"));
+        while live.time() < 0.35 {
+            live.advance(0.05);
+        }
+        let knob = live.voltage("KNOB").unwrap();
+        let chip = live.mcus[0].real.as_ref().unwrap();
+        assert!(chip.avr.stopped().is_none());
+        let first = chip.serial.lines().next().unwrap_or("");
+        let a1: f64 = first.strip_prefix("a1=").and_then(|r| r.split(' ').next()).and_then(|n| n.parse().ok()).unwrap_or(-1.0);
+        assert!((a1 - knob / 5.0 * 1023.0).abs() < 3.0, "{:?} with A1 at {knob} V", chip.serial);
     }
 }

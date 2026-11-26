@@ -88,6 +88,10 @@ impl BreadboardView {
                     add_sensors(&mut lv, &sch.sch, &nets);
                     // the microcontroller boards with their sketches (B6 ⑤)
                     for refdes in sketch_ui::boards(&sch.sch) {
+                        // a chip without USB (the ATtiny85) runs on its VCC and GND pins
+                        if let Some((vcc, gnd)) = sketch_ui::supply_nets(&sch.sch, &refdes, &nets) {
+                            lv.set_supply(&refdes, vcc, gnd);
+                        }
                         let pins = sketch_ui::pin_nets(&sch.sch, &refdes, &nets);
                         let board = sketch_ui::board_of(&sch.sch, &refdes);
                         if sch.sketch_real.contains(&refdes) {

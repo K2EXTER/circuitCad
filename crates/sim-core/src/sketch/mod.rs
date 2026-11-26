@@ -23,16 +23,19 @@ pub enum Board {
     Nano,
     /// Arduino Mega 2560 (ATmega2560): D0..D53, A0..A15.
     Mega,
+    /// ATtiny85 as ATTinyCore numbers it: 0..5 are PB0..PB5; A0..A3 are other names of 5, 2, 4, 3 (W5 ③).
+    Tiny85,
 }
 
 impl Board {
-    pub const ALL: [Board; 2] = [Board::Nano, Board::Mega];
+    pub const ALL: [Board; 3] = [Board::Nano, Board::Mega, Board::Tiny85];
 
     /// The part's model in the library (`ARDUINO_NANO`).
     pub fn model(self) -> &'static str {
         match self {
             Board::Nano => "ARDUINO_NANO",
             Board::Mega => "ARDUINO_MEGA",
+            Board::Tiny85 => "ATTINY85",
         }
     }
 
@@ -45,14 +48,17 @@ impl Board {
         match self {
             Board::Nano => "arduino:avr:nano",
             Board::Mega => "arduino:avr:mega",
+            // ATTinyCore (its board package is added to arduino-cli), 8 MHz from the chip's own oscillator
+            Board::Tiny85 => "ATTinyCore:avr:attinyx5:chip=85,clock=8internal",
         }
     }
 
-    /// The number of the first analog pin.
+    /// The number of the first analog pin (the ATtiny85 has none of its own: past its 6 pins).
     pub fn a0(self) -> u8 {
         match self {
             Board::Nano => 14,
             Board::Mega => 54,
+            Board::Tiny85 => 6,
         }
     }
 
@@ -61,17 +67,50 @@ impl Board {
         match self {
             Board::Nano => 8,
             Board::Mega => 16,
+            Board::Tiny85 => 4,
+        }
+    }
+
+    /// The pin `Ak` is: A0.. after the digital pins, or on the ATtiny85 another name of a pin (A1 is PB2).
+    pub fn analog_pin(self, k: u8) -> u8 {
+        match self {
+            Board::Tiny85 => [5, 2, 4, 3][k.min(3) as usize],
+            _ => self.a0() + k,
         }
     }
 
     /// The number of pins: D0.., then A0...
     pub fn pins(self) -> usize {
-        (self.a0() + self.analog_pins()) as usize
+        match self {
+            Board::Tiny85 => 6,
+            _ => (self.a0() + self.analog_pins()) as usize,
+        }
     }
 
-    /// The name of a pin: D13, A0.
+    /// The name of a pin: D13, A0 (PB2 on the ATtiny85).
     pub fn pin_name(self, pin: u8) -> String {
-        if pin < self.a0() { format!("D{pin}") } else { format!("A{}", pin - self.a0()) }
+        match self {
+            Board::Tiny85 => format!("PB{pin}"),
+            _ if pin < self.a0() => format!("D{pin}"),
+            _ => format!("A{}", pin - self.a0()),
+        }
+    }
+
+    /// The pin of the board's LED (`LED_BUILTIN`).
+    pub fn led(self) -> u8 {
+        match self {
+            Board::Tiny85 => 1,
+            _ => 13,
+        }
+    }
+
+    /// The pins of its supply when it has no USB of its own (the ATtiny85's VCC and GND): it runs only while they are given 1.8 V
+    /// or more.
+    pub fn supply_pins(self) -> Option<(&'static str, &'static str)> {
+        match self {
+            Board::Tiny85 => Some(("VCC", "GND")),
+            _ => None,
+        }
     }
 
     /// The pins of the I2C bus (Wire): SDA and SCL (A4 and A5 on the Nano, D20 and D21 on the Mega).
@@ -79,6 +118,8 @@ impl Board {
         match self {
             Board::Nano => (18, 19),
             Board::Mega => (20, 21),
+            // the USI (no TWI: avr-sim's I2C parts do not answer it)
+            Board::Tiny85 => (0, 2),
         }
     }
 
@@ -87,6 +128,7 @@ impl Board {
         match self {
             Board::Nano => &[3, 5, 6, 9, 10, 11],
             Board::Mega => &[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 44, 45, 46],
+            Board::Tiny85 => &[0, 1, 4],
         }
     }
 
@@ -95,6 +137,7 @@ impl Board {
         let fast = match self {
             Board::Nano => pin == 5 || pin == 6,
             Board::Mega => pin == 4 || pin == 13,
+            Board::Tiny85 => false,
         };
         if fast { 980.0 } else { 490.0 }
     }
@@ -197,6 +240,11 @@ impl Machine {
         self.wake
     }
 
+    /// The board stood without its supply for `dt`: the `delay` it waits in ends that much later.
+    pub fn delay_by(&mut self, dt: f64) {
+        self.wake += dt.max(0.0);
+    }
+
     /// Runs the sketch at the simulated time `now` until it waits in `delay` (or its instructions for this turn are spent, or it
     /// fails: `error`).
     pub fn run(&mut self, now: f64, io: &mut dyn Io) {
@@ -226,7 +274,10 @@ impl Machine {
         if (0..b.pins() as i64).contains(&p) {
             Ok(p as u8)
         } else {
-            Err(format!("ピン {p} はありません (0〜{} と A0〜A{})", b.a0() - 1, b.analog_pins() - 1))
+            Err(match b {
+                Board::Tiny85 => format!("ピン {p} はありません (ATtiny85 は 0〜5。A0〜A3 は 5・2・4・3 の別名)"),
+                _ => format!("ピン {p} はありません (0〜{} と A0〜A{})", b.a0() - 1, b.analog_pins() - 1),
+            })
         }
     }
 
@@ -364,7 +415,7 @@ impl Machine {
                         let mut pin = self.pin(&a(0))?;
                         // analogRead(0) means A0
                         let b = self.sketch.board;
-                        if pin < b.analog_pins() && (vm::val_i(&a(0)) as u8) < b.analog_pins() {
+                        if b != Board::Tiny85 && pin < b.analog_pins() && (vm::val_i(&a(0)) as u8) < b.analog_pins() {
                             pin += b.a0();
                         }
                         Val::I(((io.volts(pin) / VCC * 1023.0).round() as i64).clamp(0, 1023))
@@ -549,6 +600,28 @@ mod tests {
         let mut e = e;
         e.run(0.0, &mut io);
         assert!(e.error.as_ref().is_some_and(|x| x.message.contains("0〜53")), "{:?}", e.error);
+    }
+
+    /// The ATtiny85 as ATTinyCore numbers it: 0..5 are PB0..PB5, A1 is pin 2 (PB2), LED_BUILTIN is 1, analogWrite pulses on 4.
+    #[test]
+    fn the_attiny85_has_its_own_pins() {
+        let b = Board::Tiny85;
+        assert_eq!((b.pins(), b.pin_name(5), b.analog_pin(1), b.supply_pins()), (6, "PB5".to_string(), 2, Some(("VCC", "GND"))));
+        let mut m = Machine::new(compile("void setup() { pinMode(LED_BUILTIN, OUTPUT); digitalWrite(LED_BUILTIN, HIGH); analogWrite(4, 64); Serial.println(A1); Serial.println(analogRead(A1)); }
+void loop() { delay(10); }", b).unwrap());
+        let mut io = Pins::default();
+        io.out.insert(2, Drive::Out(0.5));
+        m.run(0.0, &mut io);
+        assert!(m.error.is_none(), "{:?}", m.error);
+        assert_eq!(m.serial, "2
+512
+");
+        assert_eq!(m.drives[1], Drive::Out(1.0));
+        assert!(matches!(m.drives[4], Drive::Pwm { .. }), "{:?}", m.drives[4]);
+        let mut e = Machine::new(compile("void setup() { pinMode(6, OUTPUT); }
+void loop() {}", b).unwrap());
+        e.run(0.0, &mut io);
+        assert!(e.error.as_ref().is_some_and(|x| x.message.contains("ATtiny85 は 0〜5")), "{:?}", e.error);
     }
 
     #[test]

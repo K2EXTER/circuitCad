@@ -120,13 +120,13 @@ fn constant(name: &str, board: super::Board) -> Option<i64> {
     if let Some(k) = name.strip_prefix('A').and_then(|k| k.parse::<u8>().ok())
         && k < board.analog_pins()
     {
-        return Some((board.a0() + k) as i64);
+        return Some(board.analog_pin(k) as i64);
     }
     Some(match name {
         "HIGH" | "true" | "OUTPUT" => 1,
         "LOW" | "false" | "INPUT" => 0,
         "INPUT_PULLUP" => 2,
-        "LED_BUILTIN" => 13,
+        "LED_BUILTIN" => board.led() as i64,
         "DEC" => 10,
         "HEX" => 16,
         "BIN" => 2,
