@@ -1521,6 +1521,8 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
     }
 
     const DIRS: [(i32, i32); 4] = [(0, 1), (1, 0), (0, -1), (-1, 0)];
+    // the steps at 45 degrees (each the opposite of the one two along)
+    const SLANTS: [(i32, i32); 4] = [(1, 1), (1, -1), (-1, -1), (-1, 1)];
     let beside = |a: At| -> Vec<At> {
         DIRS.iter().map(|(dr, dc)| (a.0 as i32 + dr, a.1 as i32 + dc)).filter(|(r, cc)| *r >= 0 && *cc >= 0 && (*r as usize) < rows && (*cc as usize) < cols).map(|(r, cc)| (r as u16, cc as u16)).collect()
     };
@@ -1588,8 +1590,19 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
         (ahead, !short(v), rail(*i) != rails_first, v.len(), (r1 - r0) + (c1 - c0))
     });
     let mut link_ends: BTreeSet<At> = BTreeSet::new();
-    // a state is a hole and how the way came in: 0..4 a step that way, 4 the start, 5 landed from a jump
-    const WAYS: usize = 6;
+    // a state is a hole and how the way came in: 0..4 a step that way along a row or a column, 4..8 a step at 45 degrees (`SLANTS`),
+    // 8 the start, 9 landed from a jump
+    const WAYS: usize = 10;
+    const START: usize = 8;
+    const JUMPED: usize = 9;
+    // the middles of the squares of four holes a bare wire at 45 degrees crosses (doubled coordinates), its net and its slant: a
+    // wire of another net slanting the other way there would touch it between the holes (those already on the board: no net)
+    let mut middles: BTreeMap<(i32, i32), (u32, bool)> = BTreeMap::new();
+    for (a, b) in &l.bare {
+        for (m, sl) in crate::stripboard::bare_crossings(*a, *b) {
+            middles.insert(m, (u32::MAX, sl));
+        }
+    }
     let all_nets: Vec<(u32, Vec<At>, Option<usize>)> = nets.clone();
     let mut ground_trees: BTreeMap<usize, Vec<At>> = BTreeMap::new();
     for (n_at, (net, terms, bx)) in nets.into_iter().enumerate() {
@@ -1661,7 +1674,7 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                 _ => tree.clone(),
             };
             for t in &starts {
-                let s = idx(*t) * WAYS + 4;
+                let s = idx(*t) * WAYS + START;
                 dist[s] = 0;
                 heap.push(Reverse((0u32, s as u32)));
             }
@@ -1705,7 +1718,7 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                     break;
                 }
                 // a lead is an end, not a hole to pass through on the way to another (its wire would run under the part)
-                if way != 4 && is_lead[h] {
+                if way != START && is_lead[h] {
                     continue;
                 }
                 let mut push = |to: At, w: usize, nd: u32, heap: &mut BinaryHeap<Reverse<(u32, u32)>>| {
@@ -1717,14 +1730,32 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                     }
                 };
                 // the jumps: from a free hole (not a lead, not a wire's end), along the row or the column, to a free hole
-                let can_jump = way != 5 && !is_lead[h] && !is_end[h];
+                let can_jump = way != JUMPED && !is_lead[h] && !is_end[h];
+                // the steps at 45 degrees (B12): 3 a step (about 1.4 times a step along a row), a turn 3 more as along a row; not
+                // across a wire of another net slanting the other way between the same four holes (they would touch)
+                for (k, (dr, dc)) in SLANTS.iter().enumerate() {
+                    let w = 4 + k;
+                    let (r, cc) = (at.0 as i32 + dr, at.1 as i32 + dc);
+                    if r < 0 || cc < 0 || r >= rows as i32 || cc >= cols as i32 {
+                        continue;
+                    }
+                    let to = (r as u16, cc as u16);
+                    let mid = (at.0 as i32 + r, at.1 as i32 + cc);
+                    let slant = dr.signum() == dc.signum();
+                    let touches = middles.get(&mid).is_some_and(|(n, sl)| *n != net && *sl != slant);
+                    let back = (4..START).contains(&way) && 4 + (way - 4 + 2) % 4 == w;
+                    if open[idx(to)] && !touches && !back {
+                        let turn = way < START && way != w;
+                        push(to, w, d + 3 + if turn { 3 } else { 0 }, &mut heap);
+                    }
+                }
                 for (w, (dr, dc)) in DIRS.iter().enumerate() {
                     let (r, cc) = (at.0 as i32 + dr, at.1 as i32 + dc);
                     if r >= 0 && cc >= 0 && r < rows as i32 && cc < cols as i32 {
                         let to = (r as u16, cc as u16);
                         // no going straight back (a way back to where it jumped from could jump again from the same hole)
                         if open[idx(to)] && !(way < 4 && (way + 2) % 4 == w) {
-                            let turn = way < 4 && way != w;
+                            let turn = way < START && way != w;
                             push(to, w, d + 2 + if turn { 3 } else { 0 }, &mut heap);
                         }
                     }
@@ -1744,7 +1775,7 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                         let to = idx((r as u16, cc as u16));
                         let free = open[to] && !is_lead[to];
                         if k >= 2 && over && free {
-                            push((r as u16, cc as u16), 5, d + JUMP_COST + 2 * k as u32 + if along { along_extra } else { 0 }, &mut heap);
+                            push((r as u16, cc as u16), JUMPED, d + JUMP_COST + 2 * k as u32 + if along { along_extra } else { 0 }, &mut heap);
                             break;
                         }
                         along |= chip_of[to] != u32::MAX && chip_of[to] == last_chip;
@@ -1774,7 +1805,9 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
             }
             path.reverse();
             // two wires on top ending in one hole (a way that comes back to where it jumped): that hole kept off, and the way found again
-            let mut ends: Vec<At> = path.windows(2).filter(|w| w[0].0.abs_diff(w[1].0) + w[0].1.abs_diff(w[1].1) > 1).flat_map(|w| [w[0], w[1]]).collect();
+            // (a step is one hole along a row, a column or at 45 degrees; anything longer is a jump)
+            let jump = |a: At, b: At| a.0.abs_diff(b.0).max(a.1.abs_diff(b.1)) > 1;
+            let mut ends: Vec<At> = path.windows(2).filter(|w| jump(w[0], w[1])).flat_map(|w| [w[0], w[1]]).collect();
             ends.sort();
             if let Some(w) = ends.windows(2).find(|w| w[0] == w[1]) {
                 tries += 1;
@@ -1786,7 +1819,7 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
             }
             // the jumps of one way made one wire on top, from where the first starts to where the last lands (a wire on top goes
             // straight, slanting if need be; the holes between are left free)
-            let jumps: Vec<usize> = (1..path.len()).filter(|i| path[i - 1].0.abs_diff(path[*i].0) + path[i - 1].1.abs_diff(path[*i].1) > 1).collect();
+            let jumps: Vec<usize> = (1..path.len()).filter(|i| jump(path[i - 1], path[*i])).collect();
             if jumps.len() > 1 {
                 let (i0, i1) = (jumps[0], *jumps.last().unwrap());
                 path.drain(i0..i1);
@@ -1794,11 +1827,12 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
             for a in &path {
                 owner[idx(*a)] = Some(net);
             }
-            // the straight runs of steps, each a bare wire; each jump an insulated wire on top
+            // the straight runs of steps (along a row, a column or at 45 degrees), each a bare wire; each jump an insulated wire on top
+            let step = |a: At, b: At| (b.0 as i32 - a.0 as i32, b.1 as i32 - a.1 as i32);
             let mut start = 0;
             for i in 1..path.len() {
                 let (a, b) = (path[i - 1], path[i]);
-                if a.0.abs_diff(b.0) + a.1.abs_diff(b.1) > 1 {
+                if jump(a, b) {
                     if start < i - 1 {
                         l.bare.push((path[start], a));
                     }
@@ -1810,11 +1844,13 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                 }
                 let next_turns = i + 1 < path.len() && {
                     let n = path[i + 1];
-                    let jump = b.0.abs_diff(n.0) + b.1.abs_diff(n.1) > 1;
-                    jump || (n.0 != path[start].0 && n.1 != path[start].1)
+                    jump(b, n) || step(b, n) != step(a, b)
                 };
                 if next_turns || i + 1 == path.len() {
                     l.bare.push((path[start], b));
+                    for (m, sl) in crate::stripboard::bare_crossings(path[start], b) {
+                        middles.insert(m, (net, sl));
+                    }
                     start = i;
                 }
             }
@@ -2186,13 +2222,13 @@ mod tests {
     }
 
     /// A sample laid out on a perfboard (`opt`): it joins what its schematic joins and nothing more; every bare wire runs straight
-    /// along a row or a column; no lead or wire's end shares a hole; all on the board. With the layout, the stripboard's holes.
+    /// along a row, a column or at 45 degrees; no lead or wire's end shares a hole; all on the board. With the layout, the stripboard's holes.
     fn laid_out(name: &str, opt: StripOptions) -> (StripLayout, u32) {
         let s = load(name);
         let l = perf_layout_with(&s, opt);
         assert!(l.perf);
         assert!(strip_check(&s, &l).is_empty(), "{name}: {:?}", strip_check(&s, &l));
-        assert!(l.bare.iter().all(|(a, b)| a.0 == b.0 || a.1 == b.1), "{name}: straight wires");
+        assert!(l.bare.iter().all(|(a, b)| crate::stripboard::bare_way(*a, *b)), "{name}: straight wires (along a row, a column or at 45 degrees)");
         assert!(l.used().iter().all(|(a, _)| a.0 < l.rows && a.1 < l.cols), "{name}: on the board");
         let st = strip_layout(&s);
         (l, st.rows as u32 * st.cols as u32)

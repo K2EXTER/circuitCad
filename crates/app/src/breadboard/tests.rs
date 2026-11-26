@@ -68,23 +68,25 @@ fn bare_wires_are_drawn_and_taken_away_from_the_copper_side() {
             run(app, vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }]);
         }
     };
-    // the last row is free (the board keeps one past its parts): a wire from its column 1 to column 4
-    let row = l.rows - 1;
-    click(&mut app, &mut run, below((row, 1)));
+    // six holes in a row with nothing on them (no lead, wire's end or bare wire: a wire at 45 degrees near the point clicked
+    // below would pass through one of them): a wire from the second to the fifth
+    let taken: std::collections::BTreeSet<(u16, u16)> = l.used().into_iter().map(|x| x.0).chain(l.bare.iter().flat_map(|(a, b)| sch_core::stripboard::bare_holes(*a, *b))).collect();
+    let (row, c0) = (0..l.rows).rev().flat_map(|r| (0..l.cols.saturating_sub(5)).map(move |c| (r, c))).find(|(r, c)| (0..6).all(|i| !taken.contains(&(*r, c + i)))).expect("six free holes in a row");
+    click(&mut app, &mut run, below((row, c0 + 1)));
     let started = std::time::Instant::now();
-    click(&mut app, &mut run, below((row, 4)));
+    click(&mut app, &mut run, below((row, c0 + 4)));
     run(&mut app, vec![]);
     let took = started.elapsed();
     let m = app.sch.stripboard.clone().expect("the wire is kept with the sheet");
-    assert!(m.bare.contains(&((row, 1), (row, 4))), "{:?}", m.bare);
+    assert!(m.bare.contains(&((row, c0 + 1), (row, c0 + 4))), "{:?}", m.bare);
     assert!(took < std::time::Duration::from_millis(900), "the layout was made again after the wire: {took:?}");
     // picked with the move tool (a click on its middle), and Delete
     app.breadboard.strip.tool = strip_view::StripTool::Move;
-    let mid = below((row, 2)) + Vec2::new(-pitch * 0.5, 0.0);
+    let mid = below((row, c0 + 2)) + Vec2::new(-pitch * 0.5, 0.0);
     click(&mut app, &mut run, mid);
     assert!(app.breadboard.strip.picked_bare.is_some(), "the wire is picked");
     run(&mut app, vec![egui::Event::Key { key: egui::Key::Delete, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
-    assert!(!app.sch.stripboard.clone().unwrap().bare.contains(&((row, 1), (row, 4))), "Delete took it away");
+    assert!(!app.sch.stripboard.clone().unwrap().bare.contains(&((row, c0 + 1), (row, c0 + 4))), "Delete took it away");
 }
 
 #[test]

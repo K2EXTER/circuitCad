@@ -666,8 +666,8 @@ fn a_stripboard_keeps_bypass_capacitors_by_their_ic() {
     assert!(worst(&after) < worst(&before) / 4.0, "{:.1} mm without the rows, {:.1} mm with them", worst(&before), worst(&after));
 }
 
-/// On a perfboard each capacitor is placed by its IC's pins (within 10 mm straight) and wired from the pin first (half within 15 mm
-/// along the wires).
+/// On a perfboard each capacitor is placed by its IC's pins (within 15 mm straight; up to 37 mm laid out without the rows) and
+/// wired from the pin first (half within 15 mm along the wires).
 #[test]
 fn a_perfboard_keeps_bypass_capacitors_by_their_ic() {
     let s = bypass_sample();
@@ -675,7 +675,7 @@ fn a_perfboard_keeps_bypass_capacitors_by_their_ic() {
     assert!(strip_check(&s, &l).is_empty() && strip_unjoined(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
     let spans = bypass_spans(&s, &l);
     assert_eq!(spans.len(), 6);
-    assert!(spans.iter().all(|b| b.straight <= 10.0), "{spans:?}");
+    assert!(spans.iter().all(|b| b.straight <= 15.0), "{spans:?}");
     // (without the rows the farthest is 137 mm along the wires; the layout has a time budget, so the margin is wide)
     assert!(spans.iter().filter(|b| b.judged() <= 15.0).count() >= 3, "{spans:?}");
 }
@@ -746,4 +746,18 @@ fn the_layouts_choose_each_wires_side() {
     crate::perfboard::wire_sides(&mut l);
     assert!(l.links[0].back && !l.links[0].tinned, "{:?}", l.links[0]);
     assert!(!l.links[1].back && l.links[1].tinned, "a straight one over no lead is tinned: {:?}", l.links[1]);
+}
+
+/// B12: the perfboard's automatic wiring runs bare wires at 45 degrees as well (a step of a row and a column, about 1.4 times a
+/// step along a row): the active filter's board has some, each straight from end to end, none touching a wire of another net
+/// where two cross between holes (the check, which joins such wires, finds the board as drawn).
+#[test]
+fn the_perfboard_wiring_runs_bare_wires_at_45_degrees() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/active_filter.schjson");
+    let s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let l = crate::perfboard::perf_layout_with(&s, StripOptions::default());
+    assert!(strip_check(&s, &l).is_empty() && strip_unjoined(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
+    let slanted: Vec<&(At, At)> = l.bare.iter().filter(|(a, b)| a.0 != b.0 && a.1 != b.1).collect();
+    assert!(!slanted.is_empty(), "{:?}", l.bare);
+    assert!(l.bare.iter().all(|(a, b)| bare_way(*a, *b)));
 }

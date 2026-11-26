@@ -20,9 +20,12 @@ fn shift(at: At, dr: i32, dc: i32) -> Option<At> {
 fn grown(mut l: StripLayout) -> StripLayout {
     let mut far = l.used().into_iter().map(|(a, _)| a).chain(l.cuts.iter().copied()).chain(l.bare.iter().flat_map(|(a, b)| [*a, *b])).fold((0u16, 0u16), |m, a| (m.0.max(a.0), m.1.max(a.1)));
     if l.perf {
-        // (a section's box already has its hole of room past its parts: the board ends right after it)
+        // (a section's box already has its hole of room past its parts: the board ends right after it; a bare wire may run in the
+        // free row or column past the leads, as the automatic wiring's do, so the board need only reach it)
         let boxes = l.sections.iter().fold((0u16, 0u16), |m, (_, _, b)| (m.0.max(b.0 + 1), m.1.max(b.1 + 1)));
-        (l.rows, l.cols) = ((far.0 + 2).max(boxes.0), (far.1 + 2).max(boxes.1));
+        let ends = l.used().into_iter().map(|(a, _)| a).fold((0u16, 0u16), |m, a| (m.0.max(a.0 + 2), m.1.max(a.1 + 2)));
+        let wires = l.bare.iter().flat_map(|(a, b)| [*a, *b]).fold((0u16, 0u16), |m, a| (m.0.max(a.0 + 1), m.1.max(a.1 + 1)));
+        (l.rows, l.cols) = (ends.0.max(wires.0).max(boxes.0).max(far.0 + 1), ends.1.max(wires.1).max(boxes.1).max(far.1 + 1));
         return l;
     }
     far = (far.0 + 1, far.1 + 1);
