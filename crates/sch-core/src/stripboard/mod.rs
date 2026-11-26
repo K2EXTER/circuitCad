@@ -69,12 +69,40 @@ pub struct StripPart {
     pub mount: Mount,
 }
 
-/// A wire link between two holes (on the parts' side), carrying `net`.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// A wire link between two holes, carrying `net`: an insulated wire on the parts' side (the usual), an insulated wire on the copper
+/// side (`back`: it may cross the bare wires there), or a tinned (bare) wire on the parts' side (`tinned`: along a row, a column or at
+/// 45 degrees; it touches every lead it passes over and the tinned wires it crosses, as a bare wire on the copper side does). A tinned
+/// wire on the copper side is one of `StripLayout::bare`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Link {
     pub a: At,
     pub b: At,
     pub net: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub back: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub tinned: bool,
+}
+
+impl Link {
+    /// An insulated wire on the parts' side.
+    pub fn new(a: At, b: At, net: impl Into<String>) -> Link {
+        Link { a, b, net: net.into(), ..Default::default() }
+    }
+
+    /// Whether it lies on the parts' side.
+    pub fn on_top(&self) -> bool {
+        !self.back
+    }
+
+    /// Its name for the person: "表の線" (insulated, parts' side), "表のすずめっき線", "裏の線" (insulated, copper side).
+    pub fn kind_name(&self) -> &'static str {
+        match (self.back, self.tinned) {
+            (false, false) => "表の線",
+            (false, true) => "表のすずめっき線",
+            (true, _) => "裏の線",
+        }
+    }
 }
 
 /// An off-board part's pin: its pin, net and the hole its wire goes to.
@@ -191,9 +219,45 @@ impl StripLayout {
         out
     }
 
-    /// Everything that joins two holes besides the strips: the links, and the bare wires drawn by hand.
+    /// What the tinned wires on the parts' side (`Link::tinned`) join besides their ends: each wire's first hole to every hole along
+    /// it with something coming up through it (a lead of a part on top, the end of a wire on top, an off-board wire), and to the
+    /// tinned wires on top it crosses (at a hole, or between holes at 45 degrees). A lead on the copper side, a bare wire there and a
+    /// wire there are below the board and do not touch it.
+    pub fn tinned_joins(&self) -> Vec<(At, At)> {
+        let tinned: Vec<&Link> = self.links.iter().filter(|k| k.tinned && !k.back).collect();
+        if tinned.is_empty() {
+            return vec![];
+        }
+        let mut up: BTreeSet<At> = self.parts.iter().filter(|p| !matches!(p.mount, crate::mount::Mount::Back { .. })).flat_map(|p| p.leads.iter().map(|x| x.1)).collect();
+        up.extend(self.links.iter().filter(|k| !k.back).flat_map(|k| [k.a, k.b]));
+        up.extend(self.off.iter().flat_map(|(_, v)| v.iter().map(|w| w.2)));
+        let mut over: BTreeMap<At, Vec<usize>> = BTreeMap::new();
+        for (i, k) in tinned.iter().enumerate() {
+            for h in bare_holes(k.a, k.b) {
+                over.entry(h).or_default().push(i);
+            }
+        }
+        let mut out = vec![];
+        for (i, k) in tinned.iter().enumerate() {
+            for h in bare_holes(k.a, k.b).into_iter().filter(|h| *h != k.a && *h != k.b) {
+                if up.contains(&h) || over[&h].len() > 1 {
+                    out.push((k.a, h));
+                }
+            }
+            let mine = bare_crossings(k.a, k.b);
+            for o in tinned.iter().skip(i + 1) {
+                if bare_crossings(o.a, o.b).iter().any(|(m, sl)| mine.iter().any(|(n, t)| n == m && t != sl)) {
+                    out.push((k.a, o.a));
+                }
+            }
+        }
+        out
+    }
+
+    /// Everything that joins two holes besides the strips: the links (whichever side), the bare wires drawn by hand, and what the
+    /// tinned wires on top touch.
     pub fn joins(&self) -> Vec<(At, At)> {
-        self.links.iter().map(|k| (k.a, k.b)).chain(self.bare_joins()).collect()
+        self.links.iter().map(|k| (k.a, k.b)).chain(self.bare_joins()).chain(self.tinned_joins()).collect()
     }
 
     /// The pieces of strip: (row, first column, last column), each between two cuts (or the board's ends).

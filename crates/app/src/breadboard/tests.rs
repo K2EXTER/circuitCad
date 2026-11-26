@@ -161,7 +161,7 @@ fn a_stripboard_runs_as_its_copper_joins_it() {
         // a wire across the LED's two leads (a solder bridge): it goes out
         let mut l = app.breadboard.strip_shown(&app.sch);
         let d1 = l.parts.iter().find(|p| p.refdes == "D1").unwrap().leads.clone();
-        l.links.push(sch_core::stripboard::Link { a: d1[0].1, b: d1[1].1, net: String::new() });
+        l.links.push(sch_core::stripboard::Link::new(d1[0].1, d1[1].1, String::new()));
         app.sch.stripboard = Some(l);
         run(&mut app);
         run(&mut app);
@@ -667,8 +667,9 @@ fn a_section_box_dragged_by_its_name_stays_where_it_is_put() {
     assert!(sch_core::stripboard::strip_check(&app.sch.sch, &put).is_empty(), "{:?}", sch_core::stripboard::strip_check(&app.sch.sch, &put));
 }
 
-/// On the perfboard, the bare wire tool: a click on a hole and another on its row draws a wire on the copper side, one off its row
-/// and column draws nothing, and a right click on the wire takes it away.
+/// On the perfboard, the bare wire tool seen from above: a click on a hole and another on its row draws a tinned wire on the parts'
+/// side (B11: the side looked at), one off its row and column draws nothing, a right click lets a wire begun go, and the eraser
+/// takes the wire away.
 #[test]
 fn a_bare_wire_is_drawn_and_taken_away_on_the_perfboard() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
@@ -707,7 +708,8 @@ fn a_bare_wire_is_drawn_and_taken_away_on_the_perfboard() {
     assert!(app.sch.stripboard.is_none(), "not on the start's row or column nor at 45 degrees: nothing drawn");
     click(&mut app, &mut run, b, egui::PointerButton::Primary);
     let drawn = app.sch.stripboard.clone().expect("kept with the sheet");
-    assert!(drawn.perf && drawn.bare.len() == auto.bare.len() + 1 && drawn.bare.last() == Some(&(a, b)), "{:?}", drawn.bare.last());
+    let last = drawn.links.last().map(|k| (k.a, k.b, k.back, k.tinned));
+    assert!(drawn.perf && drawn.bare.len() == auto.bare.len() && drawn.links.len() == auto.links.len() + 1 && last == Some((a, b, false, true)), "{last:?}");
     // the right click as on the schematic and the board: a wire begun is let go, then the tool goes back to Select (the wire stays)
     click(&mut app, &mut run, a, egui::PointerButton::Primary);
     assert!(app.breadboard.strip.link_start.is_some());
@@ -715,11 +717,32 @@ fn a_bare_wire_is_drawn_and_taken_away_on_the_perfboard() {
     assert!(app.breadboard.strip.link_start.is_none() && app.breadboard.strip.tool == strip_view::StripTool::Bare, "the wire begun is let go");
     click(&mut app, &mut run, (r, c0 + 1), egui::PointerButton::Secondary);
     assert_eq!(app.breadboard.strip.tool, strip_view::StripTool::Move, "then back to Select");
-    assert_eq!(app.sch.stripboard.as_ref().map(|l| l.bare.len()), Some(auto.bare.len() + 1), "a right click takes no wire away");
+    assert_eq!(app.sch.stripboard.as_ref().map(|l| l.links.len()), Some(auto.links.len() + 1), "a right click takes no wire away");
     // the eraser takes it away: a click on it
     app.breadboard.strip.tool = strip_view::StripTool::Erase;
     click(&mut app, &mut run, (r, c0 + 1), egui::PointerButton::Primary);
-    assert_eq!(app.sch.stripboard.as_ref().map(|l| l.bare.len()), Some(auto.bare.len()), "the eraser's click takes it away");
+    assert_eq!(app.sch.stripboard.as_ref().map(|l| l.links.len()), Some(auto.links.len()), "the eraser's click takes it away");
+    // seen from below, "線を引く" draws an insulated wire on the copper side (the holes mirrored left and right), and the eraser
+    // from below takes it away
+    app.breadboard.strip.back = true;
+    app.breadboard.strip.tool = strip_view::StripTool::Link;
+    run(&mut app, vec![]);
+    let cols = app.breadboard.strip_shown(&app.sch).cols;
+    let (o2, p2) = app.breadboard.strip.drawn.expect("drawn from below");
+    let tap = |app: &mut App, run: &mut dyn FnMut(&mut App, Vec<egui::Event>), at: sch_core::stripboard::At| {
+        let p = o2 + Vec2::new((cols - 1 - at.1) as f32, at.0 as f32) * p2;
+        run(app, vec![egui::Event::PointerMoved(p)]);
+        run(app, vec![egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() }]);
+        run(app, vec![egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() }]);
+    };
+    tap(&mut app, &mut run, a);
+    tap(&mut app, &mut run, b);
+    let l = app.sch.stripboard.clone().unwrap();
+    assert_eq!(l.links.last().map(|k| (k.a, k.b, k.back, k.tinned)), Some((a, b, true, false)));
+    app.breadboard.strip.tool = strip_view::StripTool::Erase;
+    tap(&mut app, &mut run, (r, c0 + 1));
+    assert_eq!(app.sch.stripboard.as_ref().map(|l| l.links.len()), Some(auto.links.len()), "the eraser from below takes it away");
+    app.breadboard.strip.back = false;
     // the stripboard does not show a layout kept for the perfboard
     app.breadboard.kind = BoardKind::Stripboard;
     assert!(!app.breadboard.strip_shown(&app.sch).perf);

@@ -64,7 +64,7 @@ impl Session {
             .iter()
             .map(|p| json!({"part": p.refdes, "mount": choice(&p.refdes), "how": p.mount.describe(), "leads": p.leads.iter().map(|(pin, a)| json!({"pin": pin, "hole": hole_name(*a)})).collect::<Vec<_>>()}))
             .collect();
-        let links: Vec<Value> = l.links.iter().map(|k| json!({"from": hole_name(k.a), "to": hole_name(k.b), "net": k.net})).collect();
+        let links: Vec<Value> = l.links.iter().map(|k| json!({"from": hole_name(k.a), "to": hole_name(k.b), "net": k.net, "side": if k.back { "copper" } else { "parts" }, "tinned": k.tinned})).collect();
         let wires = |v: &[(sch_core::stripboard::At, sch_core::stripboard::At)]| -> Vec<Value> { v.iter().map(|(a, b)| json!({"from": hole_name(*a), "to": hole_name(*b)})).collect() };
         let bare = if perf { wires(&l.perf_spans()).into_iter().chain(wires(&l.bare)).collect::<Vec<_>>() } else { wires(&l.bare) };
         let off: Vec<Value> = l.off.iter().map(|(r, v)| json!({"part": r, "pins": v.iter().map(|(pin, net, a)| json!({"pin": pin, "net": net, "hole": hole_name(*a)})).collect::<Vec<_>>()})).collect();

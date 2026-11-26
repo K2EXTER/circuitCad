@@ -669,7 +669,7 @@ impl Board {
                         }
                         _ => {
                             let e = strip_end(rows.strip_row[band][net], taken);
-                            l.links.push(Link { a: (row, wire_col), b: e, net: net.clone() });
+                            l.links.push(Link::new((row, wire_col), e, net.clone()));
                             taken.insert((row, wire_col));
                             taken.insert(e);
                             if e.1 == wire_col {
@@ -722,7 +722,7 @@ impl Board {
                 if let (Some(a), Some(b)) = (free_in(pieces[from], taken, over, &l.cuts), free_in(pieces[to], taken, over, &l.cuts)) {
                     taken.insert(a);
                     taken.insert(b);
-                    l.links.push(Link { a, b, net: n.clone() });
+                    l.links.push(Link::new(a, b, n.clone()));
                 }
             }
         }
@@ -752,7 +752,7 @@ impl Board {
                 })
             };
             let cc = (first_col..).find(|cc| free(*cc) && !in_chips(*cc)).unwrap();
-            l.links.push(Link { a: (*a, cc), b: (*b, cc), net: n.clone() });
+            l.links.push(Link::new((*a, cc), (*b, cc), n.clone()));
             taken.insert((*a, cc));
             taken.insert((*b, cc));
             span(*a, *b, cc, over);

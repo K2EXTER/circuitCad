@@ -69,7 +69,7 @@ pub(super) fn lay_sections(c: &crate::breadboard::Circuit, opt: StripOptions, se
             out.parts.push(p);
         }
         for k in &l.links {
-            out.links.push(Link { a: at(k.a), b: at(k.b), net: k.net.clone() });
+            out.links.push(Link { a: at(k.a), b: at(k.b), ..k.clone() });
         }
         out.cuts.extend(l.cuts.iter().map(|c| at(*c)));
         for (r, pins) in &l.off {
@@ -112,7 +112,7 @@ pub(super) fn lay_sections(c: &crate::breadboard::Circuit, opt: StripOptions, se
             let (si, sj) = (strip_row(i, n).unwrap(), strip_row(j, n).unwrap());
             let (ci, cj) = (origin[i].1, origin[j].1);
             if let (Some(a), Some(b)) = (free_on(si, cj, &mut taken, &out.cuts), free_on(sj, ci, &mut taken, &out.cuts)) {
-                out.links.push(Link { a, b, net: n.clone() });
+                out.links.push(Link::new(a, b, n.clone()));
             }
         }
     }

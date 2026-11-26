@@ -23,7 +23,9 @@ pub fn strip_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
         l
     };
     if !opt.chips_back {
-        return on_top_where_not_side_by_side(strip_lay(s, &full, opt));
+        let mut l = on_top_where_not_side_by_side(strip_lay(s, &full, opt));
+        crate::perfboard::wire_sides(&mut l);
+        return l;
     }
     // the chips on the copper side (`StripOptions::chips_back`), two ways, against the board with every part on top: (a) laid out with
     // the rest, each chip's two nets on strips side by side in its band (`pair_up`) and the chip across them on the copper side (no
@@ -70,6 +72,7 @@ pub fn strip_layout_with(s: &Schematic, opt: StripOptions) -> StripLayout {
             best = l;
         }
     }
+    crate::perfboard::wire_sides(&mut best);
     best
 }
 

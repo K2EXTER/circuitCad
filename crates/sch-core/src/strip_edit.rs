@@ -471,12 +471,32 @@ pub fn net_at(s: &Schematic, l: &StripLayout, at: At) -> String {
     l.off.iter().flat_map(|(_, v)| v.iter()).find(|(_, n, h)| on(*h) && !n.is_empty()).map(|(_, n, _)| n.clone()).unwrap_or_default()
 }
 
-/// The layout with a link from `a` to `b` (coloured by the net at either end).
+/// The layout with a link from `a` to `b` on the parts' side (coloured by the net at either end).
 pub fn with_link(s: &Schematic, l: &StripLayout, a: At, b: At) -> StripLayout {
+    with_wire(s, l, a, b, false, false).unwrap_or_else(|_| l.clone())
+}
+
+/// The layout with a wire from `a` to `b` (coloured by the net at either end): an insulated one on the parts' side, on the copper
+/// side (`back`), or a tinned one on the parts' side (`tinned`: along a row, a column or at 45 degrees, not crossing another tinned
+/// wire on top between two holes). A tinned wire on the copper side is `with_bare`.
+pub fn with_wire(s: &Schematic, l: &StripLayout, a: At, b: At, back: bool, tinned: bool) -> Result<StripLayout, &'static str> {
+    if a == b {
+        return Err("同じ穴です。別の穴をクリックします");
+    }
+    if tinned && !back {
+        if !crate::stripboard::bare_way(a, b) {
+            return Err("すずめっき線は、同じ行・同じ列か、ななめ 45° の穴へ引きます (途中の穴の真ん中を通る向き)");
+        }
+        let mine = crate::stripboard::bare_crossings(a, b);
+        let crosses = l.links.iter().filter(|k| k.tinned && !k.back).flat_map(|k| crate::stripboard::bare_crossings(k.a, k.b)).any(|(m, sl)| mine.iter().any(|(n, t)| *n == m && *t != sl));
+        if crosses {
+            return Err("表のほかのななめのすずめっき線と、穴と穴の間で交わります (裸の線どうしが触れてショートします)。別の道を通すか、被覆線にします");
+        }
+    }
     let mut out = l.clone();
     let net = Some(net_at(s, l, a)).filter(|n| !n.is_empty()).unwrap_or_else(|| net_at(s, l, b));
-    out.links.push(Link { a, b, net });
-    grown(out)
+    out.links.push(Link { a, b, net, back, tinned: tinned && !back });
+    Ok(grown(out))
 }
 
 /// Whether a bare wire moved from `was` to `now` is still the kind it was: straight along a row or a column, or at 45 degrees.
@@ -533,6 +553,10 @@ pub fn link_end_moved(s: &Schematic, l: &StripLayout, k: usize, end: usize, to: 
         link.b = to;
     }
     let (a, b) = (link.a, link.b);
+    // a tinned wire on top stays along a row, a column or at 45 degrees
+    if link.tinned && !crate::stripboard::bare_way(a, b) {
+        return l.clone();
+    }
     out.links[k].net = Some(net_at(s, l, a)).filter(|n| !n.is_empty()).unwrap_or_else(|| net_at(s, l, b));
     grown(out)
 }
@@ -585,6 +609,34 @@ fn same_parts(s: &Schematic, saved: &StripLayout) -> Option<StripLayout> {
 /// new parts need are drawn: each line of the ratsnest that ends at a new part, between the free holes nearest its ends on their
 /// pieces of strip; a piece with no free hole leaves its net apart, which the check names.
 pub fn synced(s: &Schematic, saved: &StripLayout, opt: StripOptions) -> StripLayout {
+    let mut out = synced_parts(s, saved, opt);
+    untinned_over_new(saved, &mut out);
+    out
+}
+
+/// The holes with something coming up through them on the parts' side: a lead of a part on top, the end of a wire on top, an
+/// off-board wire.
+fn holes_up(l: &StripLayout) -> std::collections::BTreeSet<At> {
+    let mut up: std::collections::BTreeSet<At> = l.parts.iter().filter(|p| !matches!(p.mount, crate::mount::Mount::Back { .. })).flat_map(|p| p.leads.iter().map(|x| x.1)).collect();
+    up.extend(l.links.iter().filter(|k| !k.back).flat_map(|k| [k.a, k.b]));
+    up.extend(l.off.iter().flat_map(|(_, v)| v.iter().map(|w| w.2)));
+    up
+}
+
+/// A tinned wire on top that a lead or a wire's end put in by `synced` now comes up under is made an insulated one (it would touch
+/// it); one the person laid over a lead already there keeps touching it.
+fn untinned_over_new(before: &StripLayout, out: &mut StripLayout) {
+    let was = holes_up(before);
+    let new: Vec<At> = holes_up(out).into_iter().filter(|h| !was.contains(h)).collect();
+    for k in out.links.iter_mut().filter(|k| k.tinned && !k.back) {
+        let holes = crate::stripboard::bare_holes(k.a, k.b);
+        if holes[1..holes.len() - 1].iter().any(|h| new.contains(h)) {
+            k.tinned = false;
+        }
+    }
+}
+
+fn synced_parts(s: &Schematic, saved: &StripLayout, opt: StripOptions) -> StripLayout {
     // the same parts with the same pins and the same parts off the board (a hand edit of the layout, nothing new in the schematic):
     // the saved layout as it is, the ways on from the schematic, without making the automatic layout (a perfboard's takes up to
     // 1.5 s, and it was made after every wire drawn by hand)
@@ -732,7 +784,7 @@ pub(crate) fn join_lines(s: &Schematic, out: &mut StripLayout, lines: Vec<(Strin
             continue;
         };
         taken.insert(hb);
-        out.links.push(Link { a: ha, b: hb, net });
+        out.links.push(Link::new(ha, hb, net));
     }
 }
 

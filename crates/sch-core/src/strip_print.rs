@@ -144,6 +144,13 @@ pub fn strip_svg(l: &StripLayout, face: Face, perf: bool, title: &str) -> String
                 let _ = writeln!(s, r##"<rect x="{x0:.2}" y="{y0:.2}" width="{w:.2}" height="{h:.2}" rx="0.2" fill="#555" stroke="#111" stroke-width="0.2"/>"##);
                 let _ = writeln!(s, r#"<text x="{:.2}" y="{:.2}" font-size="1.3">{}</text>"#, x0 + w + 0.3, y0 + 1.0, esc(&p.refdes));
             }
+            // the wires on this side (insulated: drawn in the net's colour, with a white middle to tell them from the copper)
+            for k in l.links.iter().filter(|k| k.back) {
+                let ((ax, ay), (bx, by)) = (xy(k.a), xy(k.b));
+                let c = net_colour(&k.net);
+                let _ = writeln!(s, r#"<line x1="{ax:.2}" y1="{ay:.2}" x2="{bx:.2}" y2="{by:.2}" stroke="{c}" stroke-width="0.6" stroke-linecap="round"/>"#);
+                let _ = writeln!(s, r##"<line x1="{ax:.2}" y1="{ay:.2}" x2="{bx:.2}" y2="{by:.2}" stroke="#ffffff" stroke-width="0.15"/>"##);
+            }
             // every hole with a lead or a wire's end in it: a ring to solder
             let mut used: Vec<At> = l.used().into_iter().map(|(a, _)| a).collect();
             used.sort();
@@ -191,10 +198,11 @@ pub fn strip_svg(l: &StripLayout, face: Face, perf: bool, title: &str) -> String
                     let _ = writeln!(s, r##"<circle cx="{x:.2}" cy="{y:.2}" r="0.6" fill="#333"/>"##);
                 }
             }
-            for k in &l.links {
+            // the wires on this side: insulated ones in the net's colour, tinned ones bare (grey, thinner)
+            for k in l.links.iter().filter(|k| !k.back) {
                 let ((ax, ay), (bx, by)) = (xy(k.a), xy(k.b));
-                let c = net_colour(&k.net);
-                let _ = writeln!(s, r#"<line x1="{ax:.2}" y1="{ay:.2}" x2="{bx:.2}" y2="{by:.2}" stroke="{c}" stroke-width="0.55" stroke-linecap="round"/>"#);
+                let (c, w) = if k.tinned { ("#9aa0a8".to_string(), 0.4) } else { (net_colour(&k.net).to_string(), 0.55) };
+                let _ = writeln!(s, r#"<line x1="{ax:.2}" y1="{ay:.2}" x2="{bx:.2}" y2="{by:.2}" stroke="{c}" stroke-width="{w}" stroke-linecap="round"/>"#);
                 for (x, y) in [(ax, ay), (bx, by)] {
                     let _ = writeln!(s, r#"<circle cx="{x:.2}" cy="{y:.2}" r="0.55" fill="{c}"/>"#);
                 }

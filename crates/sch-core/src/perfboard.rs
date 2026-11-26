@@ -233,7 +233,9 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
             }
         }
     }
-    best.map(|b| b.1).unwrap_or_default()
+    let mut l = best.map(|b| b.1).unwrap_or_default();
+    wire_sides(&mut l);
+    l
 }
 
 /// How good a wired layout is, the smaller the better: what is left on the mounting holes' corners, the nets left apart (`apart`),
@@ -1113,12 +1115,14 @@ fn outline(p: &StripPart) -> Vec<At> {
 
 /// The wires on top that run along a chip's (or a row of leads') pins: over two of its pins one after the other, lying on the chip's
 /// or the socket's row of pins (the automatic layout may lay one so where nothing else gets through; the person may move its ends).
-/// Each wire's index and the part. A wire across a row of pins, under a chip (between its rows) or over a two-lead part is not one.
+/// Each wire's index and the part. A wire across a row of pins, under a chip (between its rows) or over a two-lead part is not one,
+/// nor a wire on the copper side (`Link::back`).
 pub fn links_along_pins(l: &StripLayout) -> Vec<(usize, String)> {
     let pin_at: BTreeMap<At, &str> = l.parts.iter().filter(|p| p.look != Look::TwoLead).flat_map(|p| p.leads.iter().map(move |x| (x.1, p.refdes.as_str()))).collect();
     l.links
         .iter()
         .enumerate()
+        .filter(|(_, w)| !w.back)
         .filter_map(|(k, w)| {
             let n = w.a.0.abs_diff(w.b.0).max(w.a.1.abs_diff(w.b.1)) as usize;
             let at = |i: usize| {
@@ -1131,6 +1135,42 @@ pub fn links_along_pins(l: &StripLayout) -> Vec<(usize, String)> {
             })
         })
         .collect()
+}
+
+/// Chooses each automatic wire's side and kind once a layout is done (`Link::back`, `Link::tinned`): a wire on top that would lie
+/// along a chip's row of pins (`links_along_pins`: on the socket) goes on the copper side, insulated (it may cross the bare wires
+/// there); a wire on top along a row or a column that passes over no hole with something coming up through it (a lead, a wire's
+/// end), and meets no tinned wire of another net, is a tinned wire (no insulation to strip). Changes no join: the holes a tinned
+/// wire touches are its own two.
+pub fn wire_sides(l: &mut StripLayout) {
+    for (k, _) in links_along_pins(l) {
+        l.links[k].back = true;
+        l.links[k].tinned = false;
+    }
+    let mut up: BTreeSet<At> = l.parts.iter().filter(|p| !matches!(p.mount, crate::mount::Mount::Back { .. })).flat_map(|p| p.leads.iter().map(|x| x.1)).collect();
+    up.extend(l.links.iter().filter(|k| !k.back).flat_map(|k| [k.a, k.b]));
+    up.extend(l.off.iter().flat_map(|(_, v)| v.iter().map(|w| w.2)));
+    // the holes each tinned wire on top runs over, by net (those drawn by hand first)
+    let mut tinned_over: BTreeMap<At, BTreeSet<String>> = BTreeMap::new();
+    for k in l.links.iter().filter(|k| k.tinned && !k.back) {
+        for h in crate::stripboard::bare_holes(k.a, k.b) {
+            tinned_over.entry(h).or_default().insert(k.net.clone());
+        }
+    }
+    for k in l.links.iter_mut().filter(|k| !k.back && !k.tinned) {
+        if k.a.0 != k.b.0 && k.a.1 != k.b.1 {
+            continue;
+        }
+        let holes = crate::stripboard::bare_holes(k.a, k.b);
+        let inner = &holes[1..holes.len() - 1];
+        let clear = inner.iter().all(|h| !up.contains(h)) && holes.iter().all(|h| tinned_over.get(h).is_none_or(|n| n.iter().all(|x| *x == k.net)));
+        if clear {
+            k.tinned = true;
+            for h in holes {
+                tinned_over.entry(h).or_default().insert(k.net.clone());
+            }
+        }
+    }
 }
 
 /// The holes beside `h` (up, down, left, right) on a board `width` holes wide.
@@ -1762,7 +1802,7 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
                     if start < i - 1 {
                         l.bare.push((path[start], a));
                     }
-                    l.links.push(Link { a, b, net: names[net as usize].clone() });
+                    l.links.push(Link::new(a, b, names[net as usize].clone()));
                     link_ends.insert(a);
                     link_ends.insert(b);
                     start = i;
@@ -1823,7 +1863,7 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
         let Some(b) = end_on(&hub_tree, hub, &mut owner, &link_ends, l, a) else { continue };
         link_ends.insert(a);
         link_ends.insert(b);
-        l.links.push(Link { a, b, net: gnd.map(|g| names[g as usize].clone()).unwrap_or_default() });
+        l.links.push(Link::new(a, b, gnd.map(|g| names[g as usize].clone()).unwrap_or_default()));
     }
 }
 
@@ -2030,7 +2070,7 @@ fn wire_try(l: &mut StripLayout, hole_nets: &BTreeMap<At, String>, pairs: &[(Str
                 if let Some(r) = run.take() {
                     l.bare.push(r);
                 }
-                l.links.push(Link { a: from, b: to, net: net.clone() });
+                l.links.push(Link::new(from, to, net.clone()));
                 link_end[idx(from)] = true;
                 link_end[idx(to)] = true;
                 continue;
@@ -2328,9 +2368,9 @@ mod tests {
         let before = links_along_pins(&l).len();
         let k = l.links.len();
         let (along, across) = if upright {
-            (Link { a: (r0.saturating_sub(1), c0), b: (r1 + 1, c0), net: "X".into() }, Link { a: (r0, c0.saturating_sub(1)), b: (r0, c1 + 1), net: "Y".into() })
+            (Link::new((r0.saturating_sub(1), c0), (r1 + 1, c0), "X"), Link::new((r0, c0.saturating_sub(1)), (r0, c1 + 1), "Y"))
         } else {
-            (Link { a: (r0, c0.saturating_sub(1)), b: (r0, c1 + 1), net: "X".into() }, Link { a: (r0.saturating_sub(1), c0), b: (r1 + 1, c0), net: "Y".into() })
+            (Link::new((r0, c0.saturating_sub(1)), (r0, c1 + 1), "X"), Link::new((r0.saturating_sub(1), c0), (r1 + 1, c0), "Y"))
         };
         l.links.push(along);
         l.links.push(across);
