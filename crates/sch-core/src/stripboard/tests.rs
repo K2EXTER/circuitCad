@@ -787,3 +787,16 @@ fn the_perfboard_wiring_wires_only_what_is_left_apart() {
     let all = crate::perfboard::perf_route_left(&s, &none);
     assert!(strip_check(&s, &all).is_empty() && strip_unjoined(&s, &all).is_empty(), "{:?}", strip_check(&s, &all));
 }
+
+/// The perfboard's layout stops after a count of work, not a time: a board whose tries run past it (the 7-segment counter's) comes
+/// out the same however busy the computer is (three laid out at once, beside the other tests).
+#[test]
+fn a_perfboard_layout_is_the_same_however_busy_the_computer_is() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/seg7_counter.schjson");
+    let s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let busy: Vec<StripLayout> = std::thread::scope(|sc| {
+        let runs: Vec<_> = (0..3).map(|_| sc.spawn(|| crate::perfboard::perf_layout_with(&s, StripOptions::default()))).collect();
+        runs.into_iter().map(|r| r.join().unwrap()).collect()
+    });
+    assert!(busy.iter().all(|l| *l == busy[0]));
+}

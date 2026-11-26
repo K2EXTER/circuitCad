@@ -128,13 +128,13 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
     let net_of_lead = |refdes: &str, pin: &str| lead_net(&full, refdes, pin);
     // each placement (the gaps between chips, the chips upright and turned a quarter turn, without and with annealing) wired the rails first and the small nets
     // first, without and then with a way out kept by each lead, every placement with one order before the next order (so each has its
-    // turn within `BUDGET`); each again with the nets left apart wired first (a few rounds), and once all are joined with the nets
+    // turn within `STEPS`); each again with the nets left apart wired first (a few rounds), and once all are joined with the nets
     // that needed wires on top first: the one with the fewest nets left apart, then the fewest wires on top, then the smallest board
     // (what is left on the mounting holes' corners, the nets left apart, the groups past their distance, the wires on top, the board's
     // holes) and the layout
     let mut best: Option<((usize, usize, usize, usize, usize), StripLayout)> = None;
-    let start = std::time::Instant::now();
-    let done = |_: &Option<((usize, usize, usize, usize, usize), StripLayout)>| start.elapsed() > BUDGET;
+    let work = std::cell::Cell::new(0u64);
+    let done = |_: &Option<((usize, usize, usize, usize, usize), StripLayout)>| work.get() > STEPS;
     // the shelves as placed, then the same made better by annealing (it helps small boards; on a crowded one the estimate it goes by
     // packs the parts too tight for the wires, and the shelves as placed win)
     // and each again with the chips where the springs and the spreading put them (`simpl`)
@@ -165,6 +165,7 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
             if done(&best) {
                 break;
             }
+            let new = placed[pi].is_none();
             let l = placed[pi]
                 .get_or_insert_with(|| {
                     if !springs {
@@ -177,6 +178,10 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
                     simpl::targets(&c, opt, gap, turned, &wants).map(|t| place(&c, opt, gap, turned, sa, &wants, Some(&t)))
                 })
                 .clone();
+            // a placing made counts as work too, by its board's holes (`PLACE_STEPS`)
+            if new {
+                work.set(work.get() + PLACE_STEPS * l.as_ref().map_or(0, |l| l.rows as u64 * l.cols as u64));
+            }
             let Some(l) = l else { continue };
             let mut l = if backs.is_empty() { l } else { with_back(&full, l, &backs) };
             l.keepout = wants.keepout.clone();
@@ -192,11 +197,11 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
             let mut first: Vec<String> = vec![];
             let mut extra = 0;
             for round in 0..ROUNDS + MORE_ROUNDS {
-                if best.is_some() && start.elapsed() > BUDGET {
+                if best.is_some() && work.get() > STEPS {
                     break;
                 }
                 let mut m = l.clone();
-                route(&full, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first, forks: &fork_at, along: ALONG_COST, bypass: &bypass_at, keep: false });
+                route(&full, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first, forks: &fork_at, along: ALONG_COST, bypass: &bypass_at, keep: false, work: &work });
                 let apart = crate::stripboard::strip_unjoined(s, &m);
                 let key = rank(s, &m, apart.len());
                 // a placing far behind the best on its first wiring is not wired again (the rounds after gain less than that)
@@ -237,6 +242,7 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
     wire_sides(&mut l);
     l
 }
+
 
 /// How good a wired layout is, the smaller the better: what is left on the mounting holes' corners, the nets left apart (`apart`),
 /// the groups past their farthest distance and the bypass capacitors past theirs (after the nets left apart: a group kept close is no use on a board that does not work),
@@ -1146,9 +1152,10 @@ pub fn perf_route_left(s: &Schematic, l: &StripLayout) -> StripLayout {
     let c = read(s);
     let net_of_lead = |r: &str, p: &str| lead_net(&c, r, p);
     let mut best: Option<((usize, usize), StripLayout)> = None;
+    let work = std::cell::Cell::new(0u64);
     for (rails_first, escapes) in [(true, false), (false, false), (true, true), (false, true)] {
         let mut m = l.clone();
-        route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &[], forks: &[], along: ALONG_COST, bypass: &[], keep: true });
+        route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &[], forks: &[], along: ALONG_COST, bypass: &[], keep: true, work: &work });
         let key = (crate::stripboard::strip_unjoined(s, &m).len(), m.links.len());
         if best.as_ref().is_none_or(|b| key < b.0) {
             best = Some((key, m));
@@ -1452,8 +1459,14 @@ fn place(c: &Circuit, opt: StripOptions, gap: u16, turned: Turn, sa: bool, wants
     l
 }
 
-/// How long the tries go on (the best so far is kept): a big board does not hold the screen up long.
-const BUDGET: std::time::Duration = std::time::Duration::from_millis(1500);
+/// How much work the tries do before they stop, the best so far kept: the steps of the wiring's search (`Order::work`) and each
+/// placing made (`PLACE_STEPS` a hole of its board). A big board does not hold the screen up long (about 1.5 s on a 2026 PC, where
+/// about 2.5 million steps a second are taken; 147 of the 152 samples finish every try before it). Counted in work, not in time, so a
+/// schematic is laid out the same on every computer and however busy it is.
+const STEPS: u64 = 3_700_000;
+/// What a placing made counts for, a hole of its board (the shelves, the springs and the annealing take about as long as 200 steps
+/// of the wiring's search a hole, the median of the samples).
+const PLACE_STEPS: u64 = 200;
 /// Once every net is joined, how many times more the nets are wired with the ones that needed wires on top first (fewer of them).
 const MORE_ROUNDS: usize = 3;
 
@@ -1494,10 +1507,12 @@ struct Order<'a> {
     /// The wires already on the board kept (`perf_route_left`): their holes are their nets', and only the nets still in two or more
     /// pieces are wired, each from one piece to the next.
     keep: bool,
+    /// The steps of the search counted here (each hole taken from the queue): the work done, the same on every computer.
+    work: &'a std::cell::Cell<u64>,
 }
 
 fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> String, order: Order) {
-    let Order { rails_first, escapes, first, forks, along: along_extra, bypass, keep } = order;
+    let Order { rails_first, escapes, first, forks, along: along_extra, bypass, keep, work } = order;
     let (rows, cols) = (l.rows as usize, l.cols as usize);
     let idx = |a: At| a.0 as usize * cols + a.1 as usize;
     let hole = |h: usize| ((h / cols) as u16, (h % cols) as u16);
@@ -1793,6 +1808,7 @@ fn route(c: &Circuit, l: &mut StripLayout, net_of_lead: &dyn Fn(&str, &str) -> S
             }
             let mut found = None;
             while let Some(Reverse((d, s))) = heap.pop() {
+                work.set(work.get() + 1);
                 let s = s as usize;
                 if d > dist[s] {
                     continue;
@@ -2419,12 +2435,13 @@ mod tests {
         let c = read(&s);
         let wants = Wants::read(&s, &c);
         let net_of_lead = |r: &str, pin: &str| lead_net(&c, r, pin);
+        let work = std::cell::Cell::new(0u64);
         let mut tried: Vec<StripLayout> = vec![];
         for turned in [Turn::Up, Turn::All] {
             let placed = place(&c, StripOptions::default(), GAPS[0], turned, false, &wants, None);
             for (rails_first, escapes) in [(true, false), (false, false), (true, true), (false, true)] {
                 let mut m = placed.clone();
-                route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &[], forks: &[], along: ALONG_COST, bypass: &[], keep: false });
+                route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &[], forks: &[], along: ALONG_COST, bypass: &[], keep: false, work: &work });
                 tried.push(m);
             }
         }
