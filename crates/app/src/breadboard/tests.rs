@@ -40,12 +40,14 @@ fn the_copper_side_is_the_board_mirrored_and_a_lead_clicked_there_picks_its_part
 
 /// From the copper side of a perfboard: the bare wire tool draws a bare wire between two holes of a row (without the layout being made
 /// again: the frame after the edit takes far less than the automatic layout's 1.5 s), a click with the move tool picks it, Delete takes
-/// it away; on the parts' side the hole under the pointer names its net.
+/// it away; on the parts' side the hole under the pointer names its net. (On a board put by a fixed rule, `plain_perfboard`: its top
+/// row is free, whatever the automatic layout does.)
 #[test]
 fn bare_wires_are_drawn_and_taken_away_from_the_copper_side() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut app = App::default();
     app.sch.load_path(root.join("ne555_blinker.schjson"));
+    app.sch.stripboard = Some(sch_core::strip_edit::plain_perfboard(&app.sch.sch));
     app.mode = Mode::Proto;
     app.breadboard.kind = BoardKind::Perfboard;
     let ctx = egui::Context::default();
@@ -68,10 +70,8 @@ fn bare_wires_are_drawn_and_taken_away_from_the_copper_side() {
             run(app, vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }]);
         }
     };
-    // six holes in a row with nothing on them (no lead, wire's end or bare wire: a wire at 45 degrees near the point clicked
-    // below would pass through one of them): a wire from the second to the fifth
-    let taken: std::collections::BTreeSet<(u16, u16)> = l.used().into_iter().map(|x| x.0).chain(l.bare.iter().flat_map(|(a, b)| sch_core::stripboard::bare_holes(*a, *b))).collect();
-    let (row, c0) = (0..l.rows).rev().flat_map(|r| (0..l.cols.saturating_sub(5)).map(move |c| (r, c))).find(|(r, c)| (0..6).all(|i| !taken.contains(&(*r, c + i)))).expect("six free holes in a row");
+    // the top row is free: a wire from its second hole to its fifth
+    let (row, c0) = (0, 0);
     click(&mut app, &mut run, below((row, c0 + 1)));
     let started = std::time::Instant::now();
     click(&mut app, &mut run, below((row, c0 + 4)));
@@ -688,12 +688,13 @@ fn a_section_box_dragged_by_its_name_stays_where_it_is_put() {
 
 /// On the perfboard, the bare wire tool seen from above: a click on a hole and another on its row draws a tinned wire on the parts'
 /// side (B11: the side looked at), one off its row and column draws nothing, a right click lets a wire begun go, and the eraser
-/// takes the wire away.
+/// takes the wire away. (On a board put by a fixed rule, `plain_perfboard`: its top row is free, whatever the automatic layout does.)
 #[test]
 fn a_bare_wire_is_drawn_and_taken_away_on_the_perfboard() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut app = App::default();
     app.sch.load_path(root.join("seg7_counter.schjson"));
+    app.sch.stripboard = Some(sch_core::strip_edit::plain_perfboard(&app.sch.sch));
     app.mode = Mode::Proto;
     app.breadboard.kind = BoardKind::Perfboard;
     app.breadboard.strip.tool = strip_view::StripTool::Bare;
@@ -713,18 +714,15 @@ fn a_bare_wire_is_drawn_and_taken_away_on_the_perfboard() {
         run(app, vec![egui::Event::PointerButton { pos: p, button, pressed: true, modifiers: Default::default() }]);
         run(app, vec![egui::Event::PointerButton { pos: p, button, pressed: false, modifiers: Default::default() }]);
     };
-    // the perfboard's own layout (no strips, its wires already drawn); three free holes in a row that no wire runs over
+    // the board as put (no strips, no wires); its top row free
     let auto = app.breadboard.strip_shown(&app.sch);
-    assert!(auto.perf, "the perfboard has a layout of its own");
-    let used: Vec<sch_core::stripboard::At> = auto.used().into_iter().map(|(a, _)| a).collect();
-    let on_wire = |h: sch_core::stripboard::At| auto.bare.iter().any(|(p, q)| (p.0 == q.0 && h.0 == p.0 && h.1 >= p.1.min(q.1) && h.1 <= p.1.max(q.1)) || (p.1 == q.1 && h.1 == p.1 && h.0 >= p.0.min(q.0) && h.0 <= p.0.max(q.0)));
-    let free = |h: sch_core::stripboard::At| !used.contains(&h) && !on_wire(h);
-    let (r, c0) = (1..auto.rows).flat_map(|r| (0..auto.cols.saturating_sub(2)).map(move |c| (r, c))).find(|(r, c)| (0..3).all(|i| free((*r, c + i)))).expect("a free run");
-    // (a hole a row up and two along: not on the start's row or column, nor at 45 degrees)
-    let (a, b, off) = ((r, c0), (r, c0 + 2), (r - 1, c0 + 2));
+    assert!(auto.perf && auto.links.is_empty() && auto.bare.is_empty());
+    let (r, c0) = (0, 1);
+    // (a hole a row down and two along: not on the start's row or column, nor at 45 degrees)
+    let (a, b, off) = ((r, c0), (r, c0 + 2), (r + 1, c0 + 2));
     click(&mut app, &mut run, a, egui::PointerButton::Primary);
     click(&mut app, &mut run, off, egui::PointerButton::Primary);
-    assert!(app.sch.stripboard.is_none(), "not on the start's row or column nor at 45 degrees: nothing drawn");
+    assert_eq!(app.sch.stripboard.as_ref(), Some(&auto), "not on the start's row or column nor at 45 degrees: nothing drawn");
     click(&mut app, &mut run, b, egui::PointerButton::Primary);
     let drawn = app.sch.stripboard.clone().expect("kept with the sheet");
     let last = drawn.links.last().map(|k| (k.a, k.b, k.back, k.tinned));

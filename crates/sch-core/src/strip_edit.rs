@@ -90,6 +90,42 @@ pub fn bare_near(l: &StripLayout, p: (f32, f32), reach: f32) -> Option<usize> {
     l.bare.iter().enumerate().map(|(k, w)| (k, dist(w))).filter(|(_, d)| *d <= reach).min_by(|x, y| x.1.total_cmp(&y.1)).map(|(k, _)| k)
 }
 
+/// A perfboard with the schematic's parts put by a fixed rule and no wires: the same whatever the automatic layout does, for the
+/// tests of hand edits (drawing a wire, moving a part) and as a start to lay a board out by hand. Each part on rows of its own with a
+/// free row between, from column 2: a two-lead part lying three holes long, a DIP in two rows three apart (pin 1 at the top left,
+/// counted round), any other part's leads in a row one hole apart; the off-board parts' wires at column 0, one a row.
+pub fn plain_perfboard(s: &Schematic) -> StripLayout {
+    use crate::breadboard::Look;
+    let c = crate::breadboard::read(s);
+    let mut l = StripLayout { perf: true, ..Default::default() };
+    let mut row = 1u16;
+    for (refdes, look, pins) in &c.on {
+        let mut pins: Vec<&String> = pins.iter().map(|x| &x.0).collect();
+        pins.sort_by_key(|p| (p.parse::<u32>().unwrap_or(u32::MAX), p.to_string()));
+        let leads: Vec<(String, At)> = match (look, pins.len()) {
+            (_, 2) => vec![(pins[0].clone(), (row, 2)), (pins[1].clone(), (row, 5))],
+            (Look::Dip, n) if n % 2 == 0 => {
+                let half = n / 2;
+                pins.iter().enumerate().map(|(i, p)| ((*p).clone(), if i < half { (row, 2 + i as u16) } else { (row + 3, 2 + (n - 1 - i) as u16) })).collect()
+            }
+            _ => pins.iter().enumerate().map(|(i, p)| ((*p).clone(), (row, 2 + i as u16))).collect(),
+        };
+        row = leads.iter().map(|x| x.1 .0).max().unwrap_or(row) + 2;
+        l.parts.push(StripPart { refdes: refdes.clone(), look: *look, leads, mount: c.mounts.get(refdes).cloned().unwrap_or_default() });
+    }
+    let mut k = 1u16;
+    for (refdes, pins) in &c.off {
+        let wires = pins.iter().map(|(pin, net)| {
+            k += 1;
+            (pin.clone(), net.clone(), (k - 1, 0))
+        });
+        l.off.push((refdes.clone(), wires.collect()));
+    }
+    let far = l.used().into_iter().map(|(a, _)| a).fold((0u16, 0u16), |m, a| (m.0.max(a.0), m.1.max(a.1)));
+    (l.rows, l.cols) = (far.0 + 2, far.1 + 2);
+    l
+}
+
 /// The layout without bare wire `k` drawn by hand.
 pub fn without_bare(l: &StripLayout, k: usize) -> StripLayout {
     let mut out = l.clone();
@@ -1138,7 +1174,17 @@ mod tests {
         let mut s: Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
         let group = |name: &str, parts: &[&str]| design_spec::PlaceGroup { name: name.into(), parts: parts.iter().map(|p| p.to_string()).collect(), section: true, ..Default::default() };
         s.requirements.groups = vec![group("前段", &["U1", "R1", "R2", "C1", "C2"]), group("後段", &["U2", "R3", "R4", "C3", "C4"])];
-        let l = crate::perfboard::perf_layout_with(&s, StripOptions::default());
+        // (a board put by a fixed rule, each section's box round its parts, a bare wire and a wire on top drawn by hand: the same
+        // whatever the automatic layout does)
+        let mut l = plain_perfboard(&s);
+        for g in &s.requirements.groups {
+            let at: Vec<At> = l.parts.iter().filter(|p| g.parts.contains(&p.refdes)).flat_map(|p| p.leads.iter().map(|x| x.1)).collect();
+            let (r0, r1) = (at.iter().map(|a| a.0).min().unwrap(), at.iter().map(|a| a.0).max().unwrap());
+            let (c0, c1) = (at.iter().map(|a| a.1).min().unwrap(), at.iter().map(|a| a.1).max().unwrap());
+            l.sections.push((g.name.clone(), (r0 - 1, c0 - 1), (r1 + 1, c1 + 1)));
+        }
+        let l = with_bare(&l, (0, 2), (0, 5)).unwrap();
+        let l = with_link(&s, &l, (0, 7), (2, 7));
         let bx = |l: &StripLayout, n: &str| l.sections.iter().find(|x| x.0 == n).map(|x| (x.1, x.2)).unwrap();
         // the whole first section moved 2 down and 3 right: its box with it, the other's left alone
         let first: Vec<String> = ["U1", "R1", "R2", "C1", "C2"].map(String::from).to_vec();
@@ -1159,12 +1205,9 @@ mod tests {
         let bare = wires_in_boxes_removed(&l, &all).unwrap();
         assert!(bare.links.is_empty() && bare.bare.is_empty());
         assert!(wires_in_boxes_removed(&bare, &all).is_none());
-        // a bare wire under the pointer (its middle)
-        if let Some((a, b)) = l.bare.first() {
-            let mid = ((a.0 + b.0) as f32 / 2.0, (a.1 + b.1) as f32 / 2.0);
-            assert!(bare_near(&l, mid, 0.3).is_some_and(|k| { let w = l.bare[k]; (w.0 .0 + w.1 .0) as f32 / 2.0 == mid.0 || (w.0 .1 + w.1 .1) as f32 / 2.0 == mid.1 }));
-            assert_eq!(without_bare(&l, 0).bare.len(), l.bare.len() - 1);
-        }
+        // the bare wire under the pointer (its middle)
+        assert_eq!(bare_near(&l, (0.0, 3.5), 0.3), Some(0));
+        assert!(without_bare(&l, 0).bare.is_empty());
     }
 
     /// A bare wire at 45 degrees runs through the middle of each hole on its way: it joins what is on them (a lead, another wire),
