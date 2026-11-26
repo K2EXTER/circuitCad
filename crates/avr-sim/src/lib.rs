@@ -292,14 +292,24 @@ pub struct Nano {
     /// What the program sent on Serial (the oldest cut off past `SERIAL_MAX`).
     pub serial: String,
     edges: [Edges; nano::PINS],
+    /// What the serial monitor sent and the chip has not been given yet (`BYTES_PER_STEP` a step).
+    input: std::collections::VecDeque<u8>,
 }
 
 /// The most text the serial window keeps.
 const SERIAL_MAX: usize = 20_000;
 
+/// The bytes of the serial monitor's text given to the chip each step.
+const BYTES_PER_STEP: usize = 8;
+
 impl Nano {
+    /// Text from the serial monitor to the program (`Serial.read`): given to the chip over the next steps.
+    pub fn send_text(&mut self, text: &str) {
+        self.input.extend(text.bytes());
+    }
+
     pub fn new(image: &Image) -> Result<Nano, String> {
-        Ok(Nano { avr: Avr::new(nano::MCU, nano::FREQ, nano::VCC, image)?, serial: String::new(), edges: [Edges::default(); nano::PINS] })
+        Ok(Nano { avr: Avr::new(nano::MCU, nano::FREQ, nano::VCC, image)?, serial: String::new(), edges: [Edges::default(); nano::PINS], input: Default::default() })
     }
 
     /// Runs the chip to the time `t` with the circuit's voltages on its pins now (`volts(pin)`: an input is High above half the
@@ -307,6 +317,11 @@ impl Nano {
     /// steadily at `PWM_MIN_HZ` or faster (PWM, `tone`) is `PinOut::Pwm` with its last whole period's duty and frequency (the
     /// circuit is given the pulses: the step is too long to follow them), any other output its level at the end of the step.
     pub fn advance(&mut self, t: f64, volts: impl Fn(u8) -> f64) -> [PinOut; nano::PINS] {
+        // what the serial monitor sent, a few bytes a step (the chip's UART keeps 64; a byte takes 87 µs at 115200 baud)
+        for _ in 0..BYTES_PER_STEP {
+            let Some(b) = self.input.pop_front() else { break };
+            self.avr.send(b);
+        }
         let before = self.avr.ports();
         for pin in 0..nano::PINS as u8 {
             let v = volts(pin);

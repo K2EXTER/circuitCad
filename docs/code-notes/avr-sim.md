@@ -7,6 +7,9 @@
 - **`simavr/`**: simavr の `sim/` (gdb・ELF・DWARF・コマンドの本体・USB を除く) と、ATmega328 のコア (`cores/sim_mega328.c`・`sim_megax8.*`・`sim_core_declare.h`・`cores/avr/iom328p.h`)。
   - `COPYING` と、写した版の `VERSION` も入れてある。
   - 写すのは `python tools/vendor_simavr.py <simavr を clone したフォルダ>`。MSVC 向けの書き換え (下の表) もこれが当てる。手で直さない。
+  - simavr の不具合の直しも、このスクリプトの `FIXES` が当てる (上流で直ったら消す。合わなくなったら止まる)。
+    - ADC の変換時間 (2026-11-26): `current_prescale` が `uint8_t` だった。Arduino の分周 128 × 2 = 256 が 0 にあふれ、変換の終わりが標本と同時 (16 µs) になっていた。しかも終わりは標本の遅れの 11 倍あと、という数え方だった。
+    - 直しでは、`current_prescale` に ADC の 1 クロック (CPU のクロック数) を持たせる。標本は 2 クロック (1 回目は 14) あと、終わりは 11 クロックあと。合わせて 13 クロック・1 回目 25 クロックで、データシートどおり (104 µs・200 µs)。
 - **`shim/`**: MSVC のときだけ使う代わりのヘッダ。
   - `msvc_first.h`: `/FI` で全部の前に読ませる。`__attribute__`・`__sync_synchronize`・`strsep` の宣言。
   - `unistd.h`・`sys/time.h`・`strings.h`。
@@ -26,6 +29,7 @@
 - **`src/lib.rs`**:
   - `read_elf`: ELF32 の読み込み用のセグメントを、置く番地へ。0x810000 からは EEPROM、0x800000 からの RAM は捨てる。
   - `Avr`: `run_to`・`ports`・`set_pin`・`set_adc`・`send`・`take_events`・`take_serial`・`stopped`。
+  - `Nano::send_text`: シリアルモニタの文を待ち行列に入れ、1 ms ごとに 8 バイト (`BYTES_PER_STEP`) ずつチップに渡す (simavr の UART は 64 バイトしか持たない)。
   - `nano` (ピン D0〜D13・A0〜A7 → ポートとビット、ADC の番号)。
   - `Nano::advance(t, volts)`:
     1. 入力のピンに、回路の電圧 (電源の半分より上で High) を入れる。A0〜A7 は ADC にも入れる。
@@ -36,7 +40,8 @@
 - **試験** (`tests/nano.rs`): `tests/firmware/check.c` を avr-gcc でビルドした `check.elf` を入れてある。試験に avr-gcc は要らない。作り直すのは `build.sh`。
   - ELF とその EEPROM の読み。
   - D13 の反転、D2 → D11 の追従、A0 → D12、D9 のタイマーの PWM (25 %)、D4 のプルアップ。
-  - シリアルの `ee=42` と `a0=409`、受けた文字を送り返す。
+  - シリアルの `ee=42` と `a0=409`、受けた文字を送り返す。60 文字の行 (`Nano::send_text`) もそのまま返る。
+  - `adc_time.elf` (`adc_time.c`): ADC の変換時間が 200 µs (1 回目)・104 µs (2 回目から)。
 
 ## はじめの試し (simavr を MSVC で通せるか)
 
@@ -94,14 +99,12 @@ exe の大きさは、試しのバイナリ全体で 283 KB (release)。simavr �
 
 ### 残っている気になる所
 
-- 1 の D13 の周期は 1.019 ms × 100 だった。ADC の変換に 13 × 128 クロック = 104 µs かかるはずなので、1.1 ms 前後を予想していた。simavr の ADC の変換時間の扱いを、使う前に確かめる。
+- 1 の D13 の周期は 1.019 ms × 100 だった。予想は 1.1 ms 前後 (ADC の 104 µs 込み)。原因は simavr の ADC の不具合で、上の `FIXES` で直した。
 - コアは ATmega328 だけ試した。Mega (2560)・ATtiny も同じ作りなので通るはず。
 - ライブラリ (Servo・Wire など) は試していない。この PC の arduino-cli に入っていないため (入れるにはダウンロードが要る)。`tone` と `EEPROM` のようにコアの中身を使うものは動いた。ライブラリも、ビルドは arduino-cli の仕事なので、simavr の側では同じ。
 - CI: Linux・macOS は gcc / clang なので、書き換えなしで通るはず。Windows の CI は MSVC で、上の書き換えが要る。
 
 ## 残り (候補表 W5)
 
-- ADC の変換時間: 1 周の時間が予想より短く出る。simavr の変換の時間の扱いを確かめる。
 - ほかのチップ: Mega (ATmega2560)・ATtiny。コアのファイルを `vendor_simavr.py` の `CORES` に足し、`sim_core_decl.h` に並べる。
-- シリアルモニタから送る欄: `Avr::send` はある。画面の欄はまだ。
 - ライブラリ (Servo・Wire) のスケッチ: arduino-cli でビルドできれば同じに動くはず。試していない。

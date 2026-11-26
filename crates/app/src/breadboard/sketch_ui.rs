@@ -187,6 +187,27 @@ impl BreadboardView {
                     ui.label(egui::RichText::new(if shown.is_empty() { "—".to_string() } else { shown }).monospace().small());
                 });
             }
+            // the real chip reads what is typed here (Serial.read); the built-in reader has no Serial.read
+            let real_running = self.live.as_ref().and_then(|lv| lv.mcus.iter().find(|m| m.refdes == refdes)).is_some_and(|m| m.real.is_some());
+            if real_running {
+                let mut sent = None;
+                ui.horizontal(|ui| {
+                    let text = self.serial_input.entry(refdes.clone()).or_default();
+                    let w = (ui.available_width() - 50.0).max(60.0);
+                    let r = ui.add(egui::TextEdit::singleline(text).desired_width(w).hint_text(i18n::tr("送る文字")).font(egui::TextStyle::Monospace));
+                    let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                    let send = ui.small_button(i18n::tr("送る")).on_hover_text(i18n::tr("打った文字に改行を付けて、マイコンのシリアル (Serial.read で読めます) に送ります。Enter でも送れます"));
+                    if (send.clicked() || enter) && !text.is_empty() {
+                        sent = Some(std::mem::take(text));
+                        r.request_focus();
+                    }
+                });
+                if let Some(t) = sent
+                    && let Some(n) = self.live.as_mut().and_then(|lv| lv.mcus.iter_mut().find(|m| m.refdes == refdes)).and_then(|m| m.real.as_mut())
+                {
+                    n.send_text(&format!("{t}\n"));
+                }
+            }
         }
     }
 }

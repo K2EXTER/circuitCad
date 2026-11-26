@@ -79,4 +79,23 @@ fn the_serial_port_and_the_eeprom_are_heard() {
     n.avr.send(b'x');
     run(&mut n, 0.13, |_, _| 0.0);
     assert!(n.serial.contains('x'), "{:?}", n.serial);
+    // a line of the serial monitor is given a few bytes a step: all of it comes back (this firmware echoes a byte a millisecond,
+    // its UART keeps 64)
+    let line: String = (0..60).map(|k| char::from(b'A' + (k % 26) as u8)).collect();
+    n.send_text(&format!("{line}\n"));
+    run(&mut n, 0.3, |_, _| 0.0);
+    let echoed: String = n.serial.chars().filter(|c| c.is_ascii_uppercase()).collect();
+    assert_eq!(echoed, line, "{:?}", n.serial);
+}
+
+/// A conversion of the ADC takes 13 of its clocks (25 the first time): 104 µs and 200 µs with Arduino's prescaler of 128 at
+/// 16 MHz (simavr's own wrapped to 0 and took 16 µs: fixed in tools/vendor_simavr.py).
+#[test]
+fn the_adc_takes_as_long_as_the_datasheet_says() {
+    let mut n = Nano::new(&read_elf(include_bytes!("firmware/adc_time.elf")).unwrap()).unwrap();
+    n.avr.run_to(0.005);
+    let ev: Vec<_> = n.avr.take_events().into_iter().filter(|e| e.port == 'B' && e.bit == 5).collect();
+    let widths: Vec<f64> = ev.windows(2).filter(|p| p[0].high && !p[1].high).map(|p| (p[1].cycle - p[0].cycle) as f64 / 16.0).collect();
+    assert!((widths[0] - 200.0).abs() < 2.0, "first {widths:?}");
+    assert!(widths[1..4].iter().all(|w| (w - 104.0).abs() < 2.0), "after {widths:?}");
 }

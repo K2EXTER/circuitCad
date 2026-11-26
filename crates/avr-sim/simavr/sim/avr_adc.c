@@ -307,9 +307,9 @@ avr_adc_write_adcsra(
 			AVR_LOG(avr, LOG_TRACE, "ADC: starting at %uKHz\n",
                                 (avr->frequency >> div) / 13 / 100);
 		div = (1 << div);
-		div *= (p->first ? 14 : 2);	// first conversion is longer
+		// circuitCad: sampled after 2 ADC clocks (14 for the first conversion), done 11 later: 13 and 25 as the datasheet says
                 p->current_prescale = div;
-                avr_cycle_timer_register(avr, div, avr_adc_convert, p);
+                avr_cycle_timer_register(avr, div * (p->first ? 14 : 2), avr_adc_convert, p);
                 p->current_extras.bipolar =
                         p->bin.reg && avr_regbit_get(avr, p->bin);
                 p->current_extras.negate =

@@ -146,7 +146,7 @@ typedef struct avr_adc_t {
 
         uint8_t                 current_muxi;
         uint8_t                 current_refi;
-        uint8_t                 current_prescale;
+        uint32_t                current_prescale;	// circuitCad: the ADC clock in CPU cycles (was uint8_t: 256 wrapped to 0)
         struct {
                 unsigned int bipolar : 1;      // BIN bit.
                 unsigned int negate : 1;       // IPR bit.
