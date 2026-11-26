@@ -85,7 +85,12 @@ impl BreadboardView {
                     // the microcontroller boards with their sketches (B6 ⑤)
                     for refdes in sketch_ui::boards(&sch.sch) {
                         let pins = sketch_ui::pin_nets(&sch.sch, &refdes, &nets);
-                        lv.add_mcu(refdes.clone(), sim_core::sketch::compile(&sketch_ui::sketch_of(sch, &refdes)), pins);
+                        if sch.sketch_real.contains(&refdes) {
+                            // the real chip (W5 (b)): it starts when arduino-cli has built its program (`give_real_programs`)
+                            lv.add_real_mcu(refdes.clone(), pins);
+                        } else {
+                            lv.add_mcu(refdes.clone(), sim_core::sketch::compile(&sketch_ui::sketch_of(sch, &refdes)), pins);
+                        }
                     }
                     for (r, v) in &self.knob_values {
                         if let Some(k) = lv.knob_index(r) {
@@ -116,6 +121,8 @@ impl BreadboardView {
             ui.colored_label(crate::theme::warn(), i18n::trf!("回路を動かせませんでした: {}", i18n::tr_dyn(e)));
             return;
         }
+        // a real chip whose program has just been built starts now
+        self.give_real_programs(ui.ctx(), sch);
         let Some(lv) = self.live.as_mut() else { return };
         if let Some(e) = &lv.error {
             ui.colored_label(crate::theme::warn(), i18n::tr_dyn(e));

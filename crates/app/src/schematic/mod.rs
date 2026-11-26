@@ -306,6 +306,9 @@ pub struct SchEditor {
     pub(crate) ground_from: Option<String>,
     /// The Arduino sketches of the microcontroller boards (refdes → text), saved with the sheet (`tolerance.rs`; B6 ⑤).
     pub(crate) sketches: std::collections::BTreeMap<String, String>,
+    /// The boards whose sketch is built by arduino-cli and run as the chip's real instructions (`avr_sim`, W5 (b)); the others run
+    /// in the built-in reader (`sim_core::sketch`).
+    pub(crate) sketch_real: std::collections::BTreeSet<String>,
     /// The roles of the part picked, as the bubble shows them, and the part whose bubble was closed (`roles_ui.rs`, B11).
     roles_cache: roles_ui::RolesCache,
     roles_hidden: Option<String>,
@@ -821,6 +824,7 @@ impl Default for SchEditor {
             strip_chips_back: false,
             ground_from: None,
             sketches: Default::default(),
+            sketch_real: Default::default(),
             roles_cache: Default::default(),
             roles_hidden: None,
             tran_tab_request: None,

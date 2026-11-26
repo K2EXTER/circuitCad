@@ -11,6 +11,7 @@ CLAUDE.md の表の元の文。各クレートの機能の幅が分かる。
 | `pcb-core` | 基板モデル `model.rs`、DRC、ラッツネスト、自動配線、Gerber/Excellon/BOM出力 |
 | `part-lib` | 部品JSON (`*.part.json`: 記号+パッケージ+SPICEモデル)。`examples/` が同梱部品。`kicad.rs` はKiCadの `.kicad_sym`/`.kicad_mod` を `PartDef` に変換、`kicad_sch.rs` はKiCadの回路図 `.kicad_sch` から部品とネット(どのピンがつながるか)を取り出し、`kicad_import.rs` がそれを回路図に組み立てる(画面「KiCad の回路図を開く」・CLI `import_kicad`。詳細 `docs/code-notes/part-lib.md`)、`passive.rs` はチップ部品のテンプレート、`vendorzip.rs` はメーカーのSPICEモデルzip(村田など。自分でダウンロードしたもの)の索引、`diode.rs` はダイオードの IS/N/RS をグラフの点から決める計算、`thru_hole.rs` はリード付き部品の穴・パッド・ピッチの目安、`passive.rs` にはコイル・抵抗のインピーダンス当てはめと温度係数の当てはめも |
 | `datasheet` | データシート(PDF)を開いてページを絵にし、語の位置と検索・見出し(日英)・型番と分類の候補を出す(純Rustの hayro。GUI非依存。`text.rs`=語・検索 / `headings.rs` / `suggest.rs` / `value.rs`=数字と単位の換算 / `pin_table.rs`=囲んだ表からピンと突き合わせ / `dimensions.rs`=図面ページの数字)。部品作成フォームの「データシート」窓が使う。設計と段階は `docs/datasheet-viewer-design.md` |
+| `avr-sim` | 本物の AVR マイコンの命令 (W5 (b))。simavr (GPL-3.0-or-later、`simavr/`、`tools/vendor_simavr.py` で写して MSVC 向けに書き換え) を `cc` でビルドし、ELF を Rust で読んで ATmega328P で動かす。`Nano::advance` が回路の電圧を入力に、ピンの出力をその間の High の割合で返す。詳細 `docs/code-notes/avr-sim.md` |
 | `app` | egui のGUI。回路図エディタ・基板エディタ・波形表示 |
 | `web` | ブラウザ版 (B9 の骨組み)。sch-core・sim-core・i18n だけを使う別の egui の画面。記号は app と同じ `sch-core/symbol_shapes.rs`・`glyphs.rs`。詳細 `docs/code-notes/web.md` |
 | `cli` | `ccad`: 画面なしの操作窓口。1行1コマンドのスクリプトで、名前ベースの回路作成・ERC・解析・基板・製造データを実行し、答えを1行1個のJSONで返す (AIエージェント・自動化向け。`ccad mcp` で MCP サーバーにもなる。使い方 `docs/cli.md`、詳細 `docs/code-notes/cli.md`) |

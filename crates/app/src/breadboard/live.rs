@@ -74,11 +74,19 @@ pub struct Live {
 }
 
 /// A microcontroller board on the breadboard and its sketch: the machine running it (None when the sketch does not compile: the
-/// sketch box says why), and the net of each of its pins D0..D13, A0..A7 on the board.
+/// sketch box says why), and the net of each of its pins D0..D13, A0..A7 on the board. A board whose sketch is built by
+/// arduino-cli runs the chip's real instructions instead (`real`, W5 (b)): `waiting` until the build is done.
 pub struct Mcu {
     pub refdes: String,
     pub machine: Option<sim_core::sketch::Machine>,
     nets: Vec<Option<String>>,
+    pub real: Option<avr_sim::Nano>,
+    /// The real chip is waiting for its program (being built); the pins are inputs meanwhile.
+    pub waiting: bool,
+    /// The run's time when the real chip started (its own time counts from 0).
+    real_from: f64,
+    /// What the real chip's pins do now (set on the circuit when they change).
+    drives: [sim_core::sketch::Drive; sim_core::sketch::PINS],
 }
 
 /// The circuit as a running sketch sees it: a pin's voltage is its net's now, a pin's drive sets the source and the resistance
@@ -170,9 +178,27 @@ impl Live {
     /// at once.
     pub fn add_mcu(&mut self, refdes: String, sketch: Result<sim_core::sketch::Sketch, sim_core::sketch::SketchError>, nets: Vec<Option<String>>) {
         let machine = sketch.ok().map(sim_core::sketch::Machine::new);
-        self.mcus.push(Mcu { refdes, machine, nets });
+        self.mcus.push(Mcu { refdes, machine, nets, real: None, waiting: false, real_from: 0.0, drives: [sim_core::sketch::Drive::Input; sim_core::sketch::PINS] });
         self.run_mcus();
         self.read_now();
+    }
+
+    /// A board that runs its program as the chip's real instructions (W5 (b)); it waits (pins as inputs) until `give_program`.
+    pub fn add_real_mcu(&mut self, refdes: String, nets: Vec<Option<String>>) {
+        self.mcus.push(Mcu { refdes, machine: None, nets, real: None, waiting: true, real_from: 0.0, drives: [sim_core::sketch::Drive::Input; sim_core::sketch::PINS] });
+    }
+
+    /// The program of a waiting board has been built: the chip starts now (from its reset). An image the chip cannot take leaves it
+    /// waiting no more, with the reason.
+    pub fn give_program(&mut self, refdes: &str, image: &avr_sim::Image) -> Result<(), String> {
+        let now = self.time();
+        let Some(m) = self.mcus.iter_mut().find(|m| m.refdes == refdes && m.waiting) else { return Ok(()) };
+        m.waiting = false;
+        m.real = Some(avr_sim::Nano::new(image)?);
+        m.real_from = now;
+        self.run_mcus();
+        self.read_now();
+        Ok(())
     }
 
     /// The sketches whose time has come run on (at the run's time now).
@@ -183,12 +209,32 @@ impl Live {
             if let Some(machine) = m.machine.as_mut() {
                 machine.run(now, &mut RunIo { run, refdes: &m.refdes, nets: &m.nets });
             }
+            if let Some(nano) = m.real.as_mut() {
+                use sim_core::sketch::{Drive, Io};
+                let mut io = RunIo { run, refdes: &m.refdes, nets: &m.nets };
+                // the chip runs to now with the circuit's voltages as they are; what its pins did on the way drives the next step
+                let volts: Vec<f64> = (0..sim_core::sketch::PINS as u8).map(|p| io.volts(p)).collect();
+                let outs = nano.advance(now - m.real_from, |p| volts[p as usize]);
+                for (pin, o) in outs.iter().enumerate() {
+                    let d = match *o {
+                        avr_sim::PinOut::Input => Drive::Input,
+                        avr_sim::PinOut::Pullup => Drive::Pullup,
+                        avr_sim::PinOut::Out(x) => Drive::Out(x),
+                    };
+                    if m.drives[pin] != d {
+                        m.drives[pin] = d;
+                        io.drive(pin as u8, d);
+                    }
+                }
+            }
         }
     }
 
     /// When the next sketch wakes from its `delay` (None with no sketch running).
     fn next_wake(&self) -> Option<f64> {
-        self.mcus.iter().filter_map(|m| m.machine.as_ref().filter(|x| x.error.is_none()).map(|x| x.waiting_until())).reduce(f64::min)
+        // a real chip runs all the time: it wants the circuit's turn every step (now: the step of a millisecond)
+        let real = self.mcus.iter().any(|m| m.real.as_ref().is_some_and(|n| n.avr.stopped().is_none())).then(|| self.time());
+        self.mcus.iter().filter_map(|m| m.machine.as_ref().filter(|x| x.error.is_none()).map(|x| x.waiting_until())).chain(real).reduce(f64::min)
     }
 
     pub fn time(&self) -> f64 {
@@ -532,5 +578,50 @@ mod tests {
         let serial = &live.mcus[0].machine.as_ref().unwrap().serial;
         assert!(serial.lines().count() >= 4, "{serial}");
     }
-}
 
+    /// The board running the real chip with a program (W5 (b)): avr-sim's test firmware (tests/firmware/check.c: D13 turns over
+    /// every 10 ms, D9 is a 25 % PWM of 1 kHz).
+    fn with_real(e: &crate::schematic::SchEditor) -> Live {
+        let l = sch_core::breadboard::auto_layout(&e.sch);
+        let nets = sch_core::breadboard::board_nets(&e.sch, &l);
+        let leds: Vec<String> = e.sch.components.iter().filter(|c| c.kind == sch_core::Kind::Led).map(|c| c.refdes.clone()).collect();
+        let mut live = Live::start(e.board_circuit(&nets, None).unwrap(), &leds, vec![], &[]);
+        let image = avr_sim::read_elf(include_bytes!("../../../avr-sim/tests/firmware/check.elf")).unwrap();
+        for refdes in crate::breadboard::sketch_ui::boards(&e.sch) {
+            let pins = crate::breadboard::sketch_ui::pin_nets(&e.sch, &refdes, &nets);
+            live.add_real_mcu(refdes.clone(), pins);
+            assert!(live.mcus.last().unwrap().waiting);
+            live.give_program(&refdes, &image).unwrap();
+        }
+        live
+    }
+
+    /// The real chip's D13 lights the blink sample's LED on and off as its program says (every 10 ms here).
+    #[test]
+    fn the_real_chip_blinks_the_led() {
+        let e = sample("arduino_blink.schjson");
+        let mut live = with_real(&e);
+        assert!(live.error.is_none(), "{:?}", live.error);
+        let mut lit = vec![];
+        for _ in 0..40 {
+            live.advance(0.005);
+            lit.push(live.current("D1").unwrap_or(0.0) > 2e-3);
+        }
+        let changes = lit.windows(2).filter(|w| w[0] != w[1]).count();
+        // 0.2 s: turned over 20 times by the program; read every 5 ms, so each change is seen
+        assert!((17..=21).contains(&changes), "{changes} changes: {lit:?}");
+        assert!(live.mcus[0].real.as_ref().unwrap().serial.starts_with("ee=42"));
+    }
+
+    /// The real chip's timer PWM on D9 (25 %) reaches the circuit as its average (like `analogWrite` in the built-in reader): a
+    /// quarter of the supply on the pin's net.
+    #[test]
+    fn the_real_chips_pwm_reaches_the_circuit_as_its_average() {
+        let e = sample("arduino_pot.schjson");
+        let mut live = with_real(&e);
+        live.advance(0.05);
+        let net = live.mcus[0].nets[9].clone().expect("D9 is wired");
+        let v = live.voltage(&net).unwrap();
+        assert!((v - 1.25).abs() < 0.15, "D9 {v} V");
+    }
+}

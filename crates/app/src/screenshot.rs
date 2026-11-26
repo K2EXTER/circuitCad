@@ -5,8 +5,8 @@ impl App {
     pub(super) fn tick_auto_screenshot(&mut self, ui: &egui::Ui) {
         let Some((path, left)) = self.auto_shot.as_mut() else { return };
         ui.ctx().request_repaint();
-        // a stripboard / perfboard layout still being made on another thread: wait for it
-        if self.breadboard.strip_busy().0 || self.breadboard.build_busy() {
+        // a stripboard / perfboard layout still being made on another thread, or a sketch built for the real chip: wait for it
+        if self.breadboard.strip_busy().0 || self.breadboard.build_busy() || self.breadboard.real_busy() {
             return;
         }
         if *left > 0 {

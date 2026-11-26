@@ -119,7 +119,81 @@ pub fn find_tool(program: &str) -> Option<PathBuf> {
         return p.is_file().then(|| p.to_path_buf());
     }
     let exts: &[&str] = if cfg!(windows) { &["", ".exe", ".cmd", ".bat"] } else { &[""] };
-    std::env::split_paths(&std::env::var_os("PATH")?).find_map(|d| exts.iter().map(|e| d.join(format!("{program}{e}"))).find(|f| f.is_file()))
+    let on_path = std::env::var_os("PATH")
+        .and_then(|path| std::env::split_paths(&path).find_map(|d| exts.iter().map(|e| d.join(format!("{program}{e}"))).find(|f| f.is_file())));
+    on_path.or_else(|| bundled(program))
+}
+
+/// A tool that comes inside another program when it is not on the PATH: arduino-cli inside the Arduino IDE 2 (which most people
+/// who use an Arduino have).
+fn bundled(program: &str) -> Option<PathBuf> {
+    if program != "arduino-cli" {
+        return None;
+    }
+    let inner = ["resources", "app", "lib", "backend", "resources"];
+    let mut places: Vec<PathBuf> = vec![];
+    if cfg!(windows) {
+        for var in ["ProgramFiles", "LOCALAPPDATA"] {
+            if let Some(d) = std::env::var_os(var) {
+                let d = PathBuf::from(d);
+                places.push(d.join("Arduino IDE"));
+                places.push(d.join("Programs").join("Arduino IDE"));
+            }
+        }
+    } else if cfg!(target_os = "macos") {
+        places.push(PathBuf::from("/Applications/Arduino IDE.app/Contents"));
+    }
+    let name = if cfg!(windows) { "arduino-cli.exe" } else { "arduino-cli" };
+    places.into_iter().map(|p| inner.iter().fold(p, |p, x| p.join(x)).join(name)).find(|f| f.is_file())
+}
+
+/// The ELF of a sketch built by arduino-cli for a board (`fqbn`: "arduino:avr:nano"), to run as the chip's real instructions
+/// (W5 (b)). The sketch is written to a folder of its own under the temporary folder (named after its text, so the same text is
+/// built once). Waits for arduino-cli (the first build of a board takes tens of seconds; later ones a few). The error says what
+/// arduino-cli said (the lines with `error`, in the sketch's line numbers) and what to do.
+pub fn compile_sketch(text: &str, fqbn: &str) -> Result<Vec<u8>, String> {
+    use std::hash::{Hash, Hasher};
+    let tool = find_tool("arduino-cli").ok_or_else(|| format!("arduino-cli が見つかりません。{}", install_hint("arduino-cli")))?;
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (text, fqbn).hash(&mut h);
+    let root = std::env::temp_dir().join("circuitCad-sketch").join(format!("{:016x}", h.finish()));
+    let (dir, out) = (root.join("sketch"), root.join("out"));
+    let elf = out.join("sketch.ino.elf");
+    if let Ok(b) = std::fs::read(&elf) {
+        return Ok(b);
+    }
+    std::fs::create_dir_all(&dir).map_err(|e| format!("一時フォルダが作れません: {e}"))?;
+    std::fs::write(dir.join("sketch.ino"), text).map_err(|e| format!("スケッチが書けません: {e}"))?;
+    let mut cmd = Command::new(&tool);
+    cmd.args(["compile", "--fqbn", fqbn, "--output-dir"]).arg(&out).arg(&dir);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // no console window flashing up while it builds
+        cmd.creation_flags(0x0800_0000);
+    }
+    let done = cmd.output().map_err(|e| format!("arduino-cli が動きません: {e}"))?;
+    if done.status.success()
+        && let Ok(b) = std::fs::read(&elf)
+    {
+        return Ok(b);
+    }
+    let said = format!("{}\n{}", String::from_utf8_lossy(&done.stdout), String::from_utf8_lossy(&done.stderr));
+    let ino = dir.join("sketch.ino").to_string_lossy().to_string();
+    let mut lines: Vec<String> = said
+        .lines()
+        .filter(|l| l.contains("error") || l.contains("Error"))
+        .map(|l| l.replace(&ino, "スケッチ").trim().to_string())
+        .filter(|l| !l.is_empty())
+        .take(6)
+        .collect();
+    if let Some(hint) = said.lines().find_map(explain) {
+        lines.push(hint.to_string());
+    }
+    if lines.is_empty() {
+        lines.push("arduino-cli のコンパイルが失敗しました".into());
+    }
+    Err(lines.join("\n"))
 }
 
 /// The folder of the firmware: `folder` as typed, against the schematic's folder `base` when relative.

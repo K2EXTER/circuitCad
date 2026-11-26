@@ -1,0 +1,13 @@
+[package]
+name = "avr-sim"
+version = "0.1.0"
+edition = "2024"
+description = "circuitCad: 本物の AVR マイコンの命令を動かす (simavr を包んだもの。W5 (b))"
+# our Rust and C glue is AGPL-3.0-or-later; the bundled simavr (simavr/) is GPL-3.0-or-later (simavr/COPYING)
+license = "AGPL-3.0-or-later AND GPL-3.0-or-later"
+repository = "https://github.com/K2EXTER/circuitCad"
+
+[dependencies]
+
+[build-dependencies]
+cc = "1"

@@ -1,6 +1,7 @@
 //! The sketch of each microcontroller board on the breadboard (B6 ⑤): written in the proto tab's left panel, saved with the sheet
 //! (`SchEditor::sketches`), compiled as it is typed (`sim_core::sketch`), and run beside the circuit while the power is on
-//! (`live.rs`): the serial monitor shows what it prints.
+//! (`live.rs`): the serial monitor shows what it prints. A board may instead have its sketch built by arduino-cli and run as the
+//! chip's real instructions (`avr_sim`, W5 (b)): libraries, `tone`, interrupts and the rest of Arduino's C work there.
 
 use super::*;
 use sch_core::Schematic;
@@ -30,15 +31,78 @@ pub fn pin_nets(sch: &Schematic, refdes: &str, nets: &BoardNets) -> Vec<Option<S
         .collect()
 }
 
-/// A number for the sketches as they are now: a change of one starts the run again.
+/// A number for the sketches as they are now (and which boards run the real chip): a change of one starts the run again.
 pub fn sketches_key(sch: &SchEditor) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
     sch.sketches.hash(&mut h);
+    sch.sketch_real.hash(&mut h);
+    h.finish()
+}
+
+/// A sketch being built by arduino-cli for the real chip on another thread: the chip's program when it is done (or why not).
+pub type RealBuild = std::sync::Arc<std::sync::Mutex<Option<Result<avr_sim::Image, String>>>>;
+
+/// The board arduino-cli builds for: the Nano (ATmega328P at 16 MHz).
+pub const NANO_FQBN: &str = "arduino:avr:nano";
+
+/// A number for a sketch's text (the builds are kept by it).
+pub fn text_key(text: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut h);
     h.finish()
 }
 
 impl BreadboardView {
+    /// The build of a sketch for the real chip: started on another thread the first time it is asked for (None while it goes on).
+    pub(super) fn real_build(&mut self, text: &str) -> Option<Result<avr_sim::Image, String>> {
+        let slot = self.real_builds.entry(text_key(text)).or_insert_with(|| {
+            let slot = RealBuild::default();
+            let (to, text) = (slot.clone(), text.to_string());
+            std::thread::spawn(move || {
+                let r = sch_core::firmware::compile_sketch(&text, NANO_FQBN).and_then(|elf| avr_sim::read_elf(&elf));
+                *to.lock().unwrap() = Some(r);
+            });
+            slot
+        });
+        slot.lock().unwrap().clone()
+    }
+
+    /// A sketch is being built for the real chip, or a board waits for its program (a screenshot waits for them).
+    pub fn real_busy(&self) -> bool {
+        self.real_builds.values().any(|b| b.lock().unwrap().is_none()) || self.live.as_ref().is_some_and(|lv| lv.mcus.iter().any(|m| m.waiting))
+    }
+
+    /// The build of a sketch if one was started (Some(None) while it goes on).
+    fn real_build_seen(&self, text: &str) -> Option<Option<Result<avr_sim::Image, String>>> {
+        self.real_builds.get(&text_key(text)).map(|b| b.lock().unwrap().clone())
+    }
+
+    /// The boards waiting for their real chip's program get it when its build is done (each frame while the power is on).
+    pub(super) fn give_real_programs(&mut self, ctx: &egui::Context, sch: &SchEditor) {
+        let waiting: Vec<String> = self.live.as_ref().map(|lv| lv.mcus.iter().filter(|m| m.waiting).map(|m| m.refdes.clone()).collect()).unwrap_or_default();
+        for refdes in waiting {
+            let text = sketch_of(sch, &refdes);
+            match self.real_build(&text) {
+                None => ctx.request_repaint_after(std::time::Duration::from_millis(250)),
+                Some(Ok(img)) => {
+                    if let Some(lv) = self.live.as_mut()
+                        && let Err(e) = lv.give_program(&refdes, &img)
+                    {
+                        self.real_builds.insert(text_key(&text), std::sync::Arc::new(std::sync::Mutex::new(Some(Err(e)))));
+                    }
+                }
+                // the build failed: the board stays still (the sketch box says why)
+                Some(Err(_)) => {
+                    if let Some(m) = self.live.as_mut().and_then(|lv| lv.mcus.iter_mut().find(|m| m.refdes == refdes)) {
+                        m.waiting = false;
+                    }
+                }
+            }
+        }
+    }
+
     /// The sketch boxes, one per board: the text, whether it compiles (the line and why when not), and while it runs the serial
     /// monitor and a run-time mistake.
     pub(super) fn sketch_ui(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor) {
@@ -53,14 +117,51 @@ impl BreadboardView {
             if edit.changed() {
                 sch.sketches.insert(refdes.clone(), text.clone());
             }
+            let mut real = sch.sketch_real.contains(&refdes);
+            if ui
+                .checkbox(&mut real, i18n::tr("本物のマイコンの命令で動かす (arduino-cli)"))
+                .on_hover_text(i18n::tr("スケッチを arduino-cli でコンパイルし、Nano のマイコン (ATmega328P) の本物の命令を 1 クロックずつ動かします (simavr)。ライブラリ・tone・割り込み・EEPROM など Arduino の C がそのまま動き、命令にかかる時間も本物どおりです。arduino-cli (Arduino IDE 2 に入っています) と、ボードの種類 arduino:avr が要ります。初めてのコンパイルは数十秒かかります。切ると、circuitCad の読み方 (Arduino の C の小さな部分) で動かします"))
+                .changed()
+            {
+                if real {
+                    sch.sketch_real.insert(refdes.clone());
+                } else {
+                    sch.sketch_real.remove(&refdes);
+                }
+            }
             // whether it compiles, and the way back to the sample on the same row
             ui.horizontal_wrapped(|ui| {
-                match sim_core::sketch::compile(&text) {
-                    Ok(_) => {
-                        ui.colored_label(crate::theme::ok(), i18n::tr("✔ 読めました。電源を入れると動きます"));
+                if real {
+                    match self.real_build_seen(&text) {
+                        _ if sch_core::firmware::find_tool("arduino-cli").is_none() => {
+                            ui.colored_label(crate::theme::error(), i18n::trf!("arduino-cli が見つかりません。{}", i18n::tr(sch_core::firmware::install_hint("arduino-cli"))));
+                        }
+                        None => {
+                            ui.label(egui::RichText::new(i18n::tr("電源を入れるか「コンパイル」を押すと、arduino-cli がコンパイルします")).small().color(NOTE));
+                            if ui.small_button(i18n::tr("コンパイル")).on_hover_text(i18n::tr("いまのスケッチを arduino-cli でコンパイルします (電源を入れる前に、誤りが無いか確かめられます)")).clicked() {
+                                self.real_build(&text);
+                            }
+                        }
+                        Some(None) => {
+                            ui.spinner();
+                            ui.label(i18n::tr("コンパイルしています… (初めては数十秒かかります)"));
+                            ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
+                        }
+                        Some(Some(Ok(img))) => {
+                            ui.colored_label(crate::theme::ok(), i18n::trf!("✔ コンパイルできました (プログラム {} バイト)。電源を入れると動きます", img.flash.len()));
+                        }
+                        Some(Some(Err(e))) => {
+                            ui.colored_label(crate::theme::error(), i18n::tr_dyn(&e));
+                        }
                     }
-                    Err(e) => {
-                        ui.colored_label(crate::theme::error(), i18n::trf!("{} 行目: {}", e.line, i18n::tr_dyn(&e.message)));
+                } else {
+                    match sim_core::sketch::compile(&text) {
+                        Ok(_) => {
+                            ui.colored_label(crate::theme::ok(), i18n::tr("✔ 読めました。電源を入れると動きます"));
+                        }
+                        Err(e) => {
+                            ui.colored_label(crate::theme::error(), i18n::trf!("{} 行目: {}", e.line, i18n::tr_dyn(&e.message)));
+                        }
                     }
                 }
                 if sch.sketches.contains_key(&refdes) && ui.small_button(i18n::tr("点滅の見本に戻す")).on_hover_text(i18n::tr("スケッチを、LED (D13) を点滅させる見本に戻します")).clicked() {
@@ -71,9 +172,16 @@ impl BreadboardView {
             if let Some(e) = m.machine.as_ref().and_then(|x| x.error.as_ref()) {
                 ui.colored_label(crate::theme::error(), i18n::trf!("止まりました: {} 行目: {}", e.line, i18n::tr_dyn(&e.message)));
             }
-            if let Some(x) = &m.machine {
+            if m.waiting {
+                ui.label(egui::RichText::new(i18n::tr("コンパイルが終わると動き出します (それまでピンは入力のまま)")).small().color(NOTE));
+            }
+            if let Some(why) = m.real.as_ref().and_then(|n| n.avr.stopped()) {
+                ui.colored_label(crate::theme::error(), i18n::trf!("止まりました: {}", i18n::tr_dyn(why)));
+            }
+            let serial = m.machine.as_ref().map(|x| &x.serial).or(m.real.as_ref().map(|n| &n.serial));
+            if let Some(serial) = serial {
                 ui.label(egui::RichText::new(i18n::tr("シリアルモニタ (Serial.print の出力)")).small().color(NOTE));
-                let tail: Vec<&str> = x.serial.lines().rev().take(12).collect();
+                let tail: Vec<&str> = serial.lines().rev().take(12).collect();
                 let shown: String = tail.into_iter().rev().collect::<Vec<_>>().join("\n");
                 egui::Frame::NONE.fill(ui.visuals().extreme_bg_color).inner_margin(4.0).show(ui, |ui| {
                     ui.label(egui::RichText::new(if shown.is_empty() { "—".to_string() } else { shown }).monospace().small());

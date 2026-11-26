@@ -139,6 +139,8 @@ pub struct BreadboardView {
     restart: bool,
     /// The sketches the run was started with (`sketch_ui::sketches_key`): a change of one starts it again.
     sketch_key: u64,
+    /// The sketches built by arduino-cli for the real chip (W5 (b)), by their text (`sketch_ui::text_key`): None while it builds.
+    real_builds: std::collections::HashMap<u64, sketch_ui::RealBuild>,
     /// The knobs turned (part → volts) and the temperature of the room (℃, None = the schematic's): kept when the run starts again.
     knob_values: std::collections::BTreeMap<String, f64>,
     /// A potentiometer being turned on the board: its knob, where the pointer went down and the knob's position then.

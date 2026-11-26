@@ -221,7 +221,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
 /// The keys of a `.schjson` that belong to the app, not to the circuit (`specs`: the spec table, `bench`: measured curves,
 /// `tolerances`: the variation analysis's part tolerances, `analysis`: the transient / AC settings, and the prototype tab's: the battery
 /// settings, the layouts moved by hand, the board's size and mounting holes (`proto` reads these two), the sketches).
-const EXTRA_KEYS: [&str; 10] = ["specs", "bench", "tolerances", "analysis", "battery", "breadboard", "stripboard", "strip_size", "strip_mount_holes", "sketches"];
+const EXTRA_KEYS: [&str; 11] = ["specs", "bench", "tolerances", "analysis", "battery", "breadboard", "stripboard", "strip_size", "strip_mount_holes", "sketches", "sketch_real"];
 
 pub struct Session {
     pub sch: Schematic,
