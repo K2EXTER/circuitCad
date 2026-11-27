@@ -613,6 +613,8 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("AMS1117-3.3_SOT-223", include_str!("../examples/AMS1117-3.3_SOT-223.part.json")),
     ("ATmega328P-AU_TQFP-32", include_str!("../examples/ATmega328P-AU_TQFP-32.part.json")),
     ("ATmega2560-16AU_TQFP-100", include_str!("../examples/ATmega2560-16AU_TQFP-100.part.json")),
+    ("R5F104LHAFB_LFQFP-64", include_str!("../examples/R5F104LHAFB_LFQFP-64.part.json")),
+    ("R5F104LHAFA_LQFP-64", include_str!("../examples/R5F104LHAFA_LQFP-64.part.json")),
     ("CH340G_SOIC-16", include_str!("../examples/CH340G_SOIC-16.part.json")),
     ("XTAL_16MHz_3225", include_str!("../examples/XTAL_16MHz_3225.part.json")),
     ("XTAL_12MHz_3225", include_str!("../examples/XTAL_12MHz_3225.part.json")),

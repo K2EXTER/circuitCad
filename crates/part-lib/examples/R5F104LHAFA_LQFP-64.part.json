@@ -1,0 +1,469 @@
+{
+  "name": "R5F104LHAFA",
+  "category": "マイコン",
+  "description": "ルネサス RL78/G14 の 16 ビットマイコン (64 ピン、コードフラッシュ 192 KB、データフラッシュ 8 KB、RAM 20 KB、最大 32 MHz、1.6〜5.5 V)。LQFP-64 (12×12 mm、0.65 mm ピッチ)。ピン配置はデータシート R01DS0053EJ0370 Rev.3.70 の p.18、パッケージは p.211〜212 の寸法表からIPC-7351 の式でランドを計算しました (パッドの幅はピッチに合わせて狭めています)。かっこ付きの機能 (PIOR で移す機能) と 384 KB 以上の品種だけの機能は、ピン名から省いています。VDD と EVDD0、VSS と EVSS0 はそれぞれ同じ電位に。P121〜P124・P137 は入力専用、P60〜P63 は N-ch オープンドレイン。必ずデータシートで確認してください。シミュレーションモデルなし",
+  "datasheet": "https://www.renesas.com/en/document/dst/rl78g14-data-sheet",
+  "prefix": "U",
+  "value": "R5F104LHAFA",
+  "pins": [
+    {
+      "number": "6",
+      "name": "RESET",
+      "side": "left",
+      "kind": "input"
+    },
+    {
+      "number": "5",
+      "name": "P40/TOOL0",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "11",
+      "name": "P121/X1",
+      "side": "left",
+      "kind": "input"
+    },
+    {
+      "number": "10",
+      "name": "P122/X2/EXCLK",
+      "side": "left",
+      "kind": "input"
+    },
+    {
+      "number": "8",
+      "name": "P123/XT1",
+      "side": "left",
+      "kind": "input"
+    },
+    {
+      "number": "7",
+      "name": "P124/XT2/EXCLKS",
+      "side": "left",
+      "kind": "input"
+    },
+    {
+      "number": "9",
+      "name": "P137/INTP0",
+      "side": "left",
+      "kind": "input"
+    },
+    {
+      "number": "62",
+      "name": "P00/TI00/TRGCLKA",
+      "side": "left",
+      "kind": "bidir",
+      "gap": 1
+    },
+    {
+      "number": "61",
+      "name": "P01/TO00/TRGCLKB/TRJIO0",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "60",
+      "name": "P02/ANI17/SO10/TxD1",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "59",
+      "name": "P03/ANI16/SI10/RxD1/SDA10",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "58",
+      "name": "P04/SCK10/SCL10",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "31",
+      "name": "P05",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "30",
+      "name": "P06",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "46",
+      "name": "P10/SCK11/SCL11/TRDIOD1",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "45",
+      "name": "P11/SI11/SDA11/TRDIOC1",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "44",
+      "name": "P12/SO11/TRDIOB1/IVREF1",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "43",
+      "name": "P13/TxD2/SO20/TRDIOA1/IVCMP1",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "42",
+      "name": "P14/RxD2/SI20/SDA20/TRDIOD0",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "41",
+      "name": "P15/SCK20/SCL20/TRDIOB0",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "40",
+      "name": "P16/TI01/TO01/INTP5/TRDIOC0/IVREF0",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "39",
+      "name": "P17/TI02/TO02/TRDIOA0/TRDCLK/IVCMP0",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "56",
+      "name": "P20/ANI0/AVREFP",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "55",
+      "name": "P21/ANI1/AVREFM",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "54",
+      "name": "P22/ANI2/ANO0",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "53",
+      "name": "P23/ANI3/ANO1",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "52",
+      "name": "P24/ANI4",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "51",
+      "name": "P25/ANI5",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "50",
+      "name": "P26/ANI6",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "49",
+      "name": "P27/ANI7",
+      "side": "left",
+      "kind": "bidir"
+    },
+    {
+      "number": "32",
+      "name": "P30/INTP3/RTC1HZ/SCK00/SCL00/TRJO0",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "21",
+      "name": "P31/TI03/TO03/INTP4",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "4",
+      "name": "P41",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "3",
+      "name": "P42",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "2",
+      "name": "P43",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "33",
+      "name": "P50/INTP1/SI00/RxD0/TOOLRxD/SDA00/TRGIOA",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "34",
+      "name": "P51/INTP2/SO00/TxD0/TOOLTxD/TRGIOB",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "35",
+      "name": "P52",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "36",
+      "name": "P53",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "37",
+      "name": "P54",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "38",
+      "name": "P55",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "17",
+      "name": "P60/SCLA0",
+      "side": "right",
+      "kind": "open_drain"
+    },
+    {
+      "number": "18",
+      "name": "P61/SDAA0",
+      "side": "right",
+      "kind": "open_drain"
+    },
+    {
+      "number": "19",
+      "name": "P62/SSI00",
+      "side": "right",
+      "kind": "open_drain"
+    },
+    {
+      "number": "20",
+      "name": "P63",
+      "side": "right",
+      "kind": "open_drain"
+    },
+    {
+      "number": "29",
+      "name": "P70/KR0/SCK21/SCL21",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "28",
+      "name": "P71/KR1/SI21/SDA21",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "27",
+      "name": "P72/KR2/SO21",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "26",
+      "name": "P73/KR3/SO01",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "25",
+      "name": "P74/KR4/INTP8/SI01/SDA01",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "24",
+      "name": "P75/KR5/INTP9/SCK01/SCL01",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "23",
+      "name": "P76/KR6/INTP10",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "22",
+      "name": "P77/KR7/INTP11",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "1",
+      "name": "P120/ANI19/VCOUT0",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "57",
+      "name": "P130",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "64",
+      "name": "P140/PCLBUZ0/INTP6",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "63",
+      "name": "P141/PCLBUZ1/INTP7",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "47",
+      "name": "P146",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "48",
+      "name": "P147/ANI18/VCOUT1",
+      "side": "right",
+      "kind": "bidir"
+    },
+    {
+      "number": "15",
+      "name": "VDD",
+      "side": "top",
+      "kind": "power_in"
+    },
+    {
+      "number": "16",
+      "name": "EVDD0",
+      "side": "top",
+      "kind": "power_in"
+    },
+    {
+      "number": "13",
+      "name": "VSS",
+      "side": "bottom",
+      "kind": "power_in"
+    },
+    {
+      "number": "14",
+      "name": "EVSS0",
+      "side": "bottom",
+      "kind": "power_in"
+    },
+    {
+      "number": "12",
+      "name": "REGC",
+      "side": "bottom",
+      "kind": "passive"
+    }
+  ],
+  "package": {
+    "type": "quad",
+    "pins": 64,
+    "pitch": 0.65,
+    "span": 13.25,
+    "pad_len": 1.65,
+    "pad_width": 0.4
+  },
+  "footprint_name": "LQFP-64_12x12_P0.65",
+  "height": 1.6,
+  "sim": null,
+  "body": {
+    "shape": "rect",
+    "w": 12.0,
+    "h": 12.0,
+    "x": 0.0,
+    "y": 0.0,
+    "mark": "dot",
+    "mark_pin": "1"
+  },
+  "programming": [
+    {
+      "name": "TOOL0 (E2 Lite などの 1 線のデバッグと書き込み)",
+      "pins": [
+        "RESET",
+        "P40/TOOL0",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "name": "UART (TOOLTxD/TOOLRxD)",
+      "pins": [
+        "P51/INTP2/SO00/TxD0/TOOLTxD/TRGIOB",
+        "P50/INTP1/SI00/RxD0/TOOLRxD/SDA00/TRGIOA",
+        "VDD",
+        "VSS"
+      ]
+    }
+  ],
+  "companions": [
+    {
+      "name": "CREGC",
+      "kind": "C",
+      "value": "470n",
+      "pin": "12",
+      "to": "GND",
+      "note": "REGC と VSS の間に 0.47〜1 µF (データシート p.18 の Caution 3)"
+    },
+    {
+      "name": "CVDD",
+      "kind": "C",
+      "value": "100n",
+      "pin": "15",
+      "to": "GND",
+      "note": "VDD のバイパス"
+    },
+    {
+      "name": "CEVDD",
+      "kind": "C",
+      "value": "100n",
+      "pin": "16",
+      "to": "GND",
+      "note": "EVDD0 のバイパス"
+    },
+    {
+      "name": "RRST",
+      "kind": "R",
+      "value": "10k",
+      "pin": "6",
+      "to": "15",
+      "note": "RESET のプルアップ"
+    }
+  ]
+}
