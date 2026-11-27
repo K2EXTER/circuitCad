@@ -9,7 +9,7 @@ description: シミュレータ(sim-core)の変更の前後で、答え・波形
 
 ## 手順
 
-1. **変更前**を取る。作業ツリーが変更前ならそのまま、もう変えてしまったならコミットを指定する(別の worktree で組み立てるので作業ツリーは触らない。初回は数分かかる):
+1. **変更前**を取る。作業ツリーが変更前ならそのまま、もう変えてしまったならコミットを指定する(別の worktree で組み立てるので作業ツリーは触らない。組み立てる先は本体の `target/` で、依存は使い回し、そのコミットのクレートだけを組み立てる。ほかのビルドが `target/` を使っている間は待つ。終わったら `python tools/sim_compare.py clean` で worktree を消す):
    ```
    python tools/sim_compare.py snapshot before
    python tools/sim_compare.py snapshot before --rev HEAD

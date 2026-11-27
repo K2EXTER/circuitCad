@@ -17,8 +17,11 @@ Usage:
     python tools/sim_compare.py clean                      # remove the worktrees made by --rev (snapshots stay)
 
 Snapshot options:
-    --rev REV        build and measure a commit instead of the working tree (git worktree under target/sim-compare/,
-                     with its own target directory: the first build takes a few minutes, later ones are incremental)
+    --rev REV        build and measure a commit instead of the working tree (git worktree under target/sim-compare/wt/, built
+                     into this tree's own target/: the dependencies built there are used again, and only the workspace's crates
+                     of that commit are built, beside this tree's under their own hashes. It waits while another build holds
+                     target/, and it puts that commit's exe in target/release/ until the next build of this tree copies its own
+                     back)
     --ngspice [EXE]  also time ngspice on the same examples (default $NGSPICE, else ngspice_con / ngspice on
                      the PATH, else C:\\Spice64\\bin\\ngspice_con.exe)
     --no-bench       skip tests_bench (about 30 s)
@@ -62,14 +65,15 @@ def run(cmd, cwd, env=None, out=None):
 
 
 def worktree(rev):
-    """A detached worktree of `rev` and its own target directory."""
+    """A detached worktree of `rev`, and the target directory it builds into: this tree's own. Its own one (wt-target, until
+    2026-11-27) built every dependency again, several GB that `clean` kept."""
     sha = run(["git", "rev-parse", "--short", rev], ROOT).strip()
     path = os.path.join(BASE, "wt", sha)
     if not os.path.isdir(path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         run(["git", "worktree", "add", "--detach", path, rev], ROOT)
         add_snapshot_test(path)
-    return path, os.path.join(BASE, "wt-target")
+    return path, os.path.join(ROOT, "target")
 
 
 def add_snapshot_test(path):
@@ -265,7 +269,10 @@ def clean(_a):
         for d in os.listdir(wt):
             run(["git", "worktree", "remove", "--force", os.path.join(wt, d)], ROOT)
     run(["git", "worktree", "prune"], ROOT)
-    print("worktrees removed (their target directory target/sim-compare/wt-target is kept for the next --rev)")
+    old = os.path.join(BASE, "wt-target")
+    if os.path.isdir(old):
+        shutil.rmtree(old, ignore_errors=True)
+    print("worktrees removed (what they built in target/ goes with the old builds: tools/clean_target.py)")
 
 
 def main():
