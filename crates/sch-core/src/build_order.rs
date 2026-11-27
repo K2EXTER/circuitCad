@@ -223,7 +223,7 @@ mod tests {
     #[test]
     fn the_steps_cover_every_part_once_lowest_first() {
         let mut s = load("ne555_blinker.schjson");
-        let l = crate::stripboard::strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         let one = build_steps(&s, &l);
         assert_eq!(one.len(), 1);
         assert_eq!(one[0].name, WHOLE);

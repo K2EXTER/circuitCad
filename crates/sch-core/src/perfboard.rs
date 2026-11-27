@@ -246,7 +246,7 @@ const ROUNDS: usize = 4;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stripboard::{strip_check, strip_layout, strip_layout_with};
+    use crate::stripboard::{strip_check, strip_layout_with};
 
     fn load(name: &str) -> Schematic {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples").join(name);
@@ -259,7 +259,7 @@ mod tests {
     fn chips_on_the_copper_side_sit_across_two_holes_and_the_board_shrinks() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/attiny_blinker.schjson");
         let s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-        let front = perf_layout_with(&s, StripOptions::default());
+        let front = crate::test_layouts::perf(&s);
         let l = perf_layout_with(&s, StripOptions { chips_back: true, ..Default::default() });
         assert!(crate::stripboard::strip_check(&s, &l).is_empty(), "{:?}", crate::stripboard::strip_check(&s, &l));
         assert!(crate::stripboard::strip_unjoined(&s, &l).is_empty());
@@ -330,12 +330,12 @@ mod tests {
     /// along a row, a column or at 45 degrees; no lead or wire's end shares a hole; all on the board. With the layout, the stripboard's holes.
     fn laid_out(name: &str, opt: StripOptions) -> (StripLayout, u32) {
         let s = load(name);
-        let l = perf_layout_with(&s, opt);
+        let l = crate::test_layouts::perf_with(&s, opt);
         assert!(l.perf);
         assert!(strip_check(&s, &l).is_empty(), "{name}: {:?}", strip_check(&s, &l));
         assert!(l.bare.iter().all(|(a, b)| crate::stripboard::bare_way(*a, *b)), "{name}: straight wires (along a row, a column or at 45 degrees)");
         assert!(l.used().iter().all(|(a, _)| a.0 < l.rows && a.1 < l.cols), "{name}: on the board");
-        let st = strip_layout(&s);
+        let st = crate::test_layouts::strip(&s);
         (l, st.rows as u32 * st.cols as u32)
     }
 
@@ -374,7 +374,7 @@ mod tests {
     #[test]
     fn a_groups_farthest_distance_is_judged_and_kept() {
         let mut s = load("ne555_blinker.schjson");
-        let free = perf_layout_with(&s, StripOptions::default());
+        let free = crate::test_layouts::perf(&s);
         let centre = |p: &StripPart| {
             let n = p.leads.len() as f64;
             (p.leads.iter().map(|x| x.1 .0 as f64).sum::<f64>() / n, p.leads.iter().map(|x| x.1 .1 as f64).sum::<f64>() / n)
@@ -395,7 +395,7 @@ mod tests {
         let before = crate::stripboard::strip_rules(&s, &free);
         assert!(before.iter().any(|r| !r.ok && r.message.starts_with("「近く」を") && r.message.contains("以内に集める") && r.parts.contains(&pair.0) && r.parts.contains(&pair.1)), "{before:?}");
         // kept by the layout made with it
-        let l = perf_layout_with(&s, StripOptions::default());
+        let l = crate::test_layouts::perf(&s);
         assert!(strip_check(&s, &l).is_empty() && crate::stripboard::strip_unjoined(&s, &l).is_empty());
         let after = crate::stripboard::group_spreads(&s, &l);
         assert!(after[0].1 <= max, "{pair:?}: {far:.1} mm alone, {:.1} mm with the rule (max {max:.1})", after[0].1);
@@ -479,7 +479,7 @@ mod tests {
     #[test]
     fn a_locked_part_stays_and_the_rest_goes_round_it() {
         let s = load("ne555_blinker.schjson");
-        let mut l = perf_layout_with(&s, StripOptions::default());
+        let mut l = crate::test_layouts::perf(&s);
         let u = l.parts.iter_mut().find(|p| p.refdes == "U1").unwrap();
         for (_, a) in u.leads.iter_mut() {
             *a = (a.0 + 6, a.1 + 8);
@@ -500,7 +500,7 @@ mod tests {
     #[test]
     fn a_wire_along_a_chips_pins_is_found() {
         let s = load("ne555_blinker.schjson");
-        let mut l = perf_layout_with(&s, StripOptions::default());
+        let mut l = crate::test_layouts::perf(&s);
         let u = l.parts.iter().find(|p| p.refdes == "U1").unwrap().clone();
         let (r0, r1) = (u.leads.iter().map(|x| x.1 .0).min().unwrap(), u.leads.iter().map(|x| x.1 .0).max().unwrap());
         let (c0, c1) = (u.leads.iter().map(|x| x.1 .1).min().unwrap(), u.leads.iter().map(|x| x.1 .1).max().unwrap());
@@ -527,7 +527,7 @@ mod tests {
     fn a_kelvin_fork_parts_at_the_lead_on_a_perfboard() {
         let mut s = load("active_filter.schjson");
         s.requirements.measures.push(design_spec::Measure { name: "検出".into(), what: "fork".into(), pads: ["R4.1", "R3.2", "C3.1"].map(String::from).to_vec(), op: "max".into(), limit: 0.5, ..Default::default() });
-        let l = perf_layout_with(&s, StripOptions::default());
+        let l = crate::test_layouts::perf(&s);
         assert!(strip_check(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
         let rules = crate::stripboard::strip_rules(&s, &l);
         assert!(rules.iter().any(|r| r.ok && r.message.starts_with("ケルビン「検出」")), "{rules:?}");
@@ -538,7 +538,7 @@ mod tests {
     #[test]
     fn an_arduino_nano_sits_in_female_headers() {
         let s = load("arduino_blink.schjson");
-        for l in [perf_layout_with(&s, StripOptions::default()), strip_layout(&s)] {
+        for l in [crate::test_layouts::perf(&s), crate::test_layouts::strip(&s)] {
             let u = l.parts.iter().find(|p| p.refdes == "U1").unwrap();
             assert!(matches!(u.mount, crate::mount::Mount::Module { width: 6, pins: 30, .. }), "{:?}", u.mount);
             let at = |pin: &str| u.leads.iter().find(|x| x.0 == pin).unwrap().1;
@@ -582,7 +582,7 @@ mod tests {
         let group = |name: &str, parts: &[&str]| design_spec::PlaceGroup { name: name.into(), parts: parts.iter().map(|p| p.to_string()).collect(), section: true, ..Default::default() };
         s.requirements.groups = vec![group("カウンタ", &["U1", "U3"]), group("表示", &["U2", "DS1", "R1", "R2", "R3", "R4", "R5", "R6", "R7"])];
         s.requirements.apart = vec![design_spec::KeepApart { name: "離す".into(), a: vec!["U1".into()], b: vec!["U2".into()], min_dist: 25.0, ..Default::default() }];
-        let l = perf_layout_with(&s, StripOptions::default());
+        let l = crate::test_layouts::perf(&s);
         assert!(strip_check(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
         assert_eq!(l.sections.iter().map(|x| x.0.as_str()).collect::<Vec<_>>(), ["カウンタ", "表示"]);
         for (k, (name, p, q)) in l.sections.iter().enumerate() {

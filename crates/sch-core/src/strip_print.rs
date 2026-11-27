@@ -223,13 +223,12 @@ pub fn strip_svg(l: &StripLayout, face: Face, perf: bool, title: &str) -> String
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stripboard::strip_layout;
 
     /// The copper side is the parts' side swapped left and right, a pitch is 2.54 mm, and every cut is drawn there.
     #[test]
     fn the_copper_side_is_the_mirror_and_to_scale() {
         let s: crate::Schematic = serde_json::from_str(include_str!("../../../docs/examples/ne555_blinker.schjson")).unwrap();
-        let l = strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         let (fx, fy) = hole_xy(&l, Face::Parts, (2, 0));
         let (bx, by) = hole_xy(&l, Face::Copper, (2, l.cols - 1));
         assert_eq!((fx, fy), (bx, by), "column 1 on the parts' side is where the last column is from below");

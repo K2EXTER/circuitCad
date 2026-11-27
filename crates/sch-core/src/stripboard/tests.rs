@@ -13,7 +13,7 @@ fn a_stripboard_chip_on_the_copper_side_sits_across_two_strips() {
     };
     for name in ["attiny_blinker.schjson", "active_filter.schjson"] {
         let s = load(name);
-        let front = strip_layout(&s);
+        let front = crate::test_layouts::strip(&s);
         let l = strip_layout_with(&s, StripOptions { chips_back: true, ..Default::default() });
         assert!(strip_check(&s, &l).is_empty(), "{name}: {:?}", strip_check(&s, &l));
         assert!(strip_unjoined(&s, &l).is_empty());
@@ -51,7 +51,7 @@ fn a_ground_wire_from_the_strip_past_a_sections_box_is_counted() {
     let mut s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     let group = |name: &str, parts: &[&str]| design_spec::PlaceGroup { name: name.into(), parts: parts.iter().map(|p| p.to_string()).collect(), section: true, ..Default::default() };
     s.requirements.groups = vec![group("タイマ", &["U1", "R1", "R2", "C1", "C2"]), group("表示", &["R3", "D1"])];
-    for l in [strip_layout(&s), crate::perfboard::perf_layout_with(&s, Default::default())] {
+    for l in [crate::test_layouts::strip(&s), crate::test_layouts::perf(&s)] {
         assert!(strip_check(&s, &l).is_empty());
         let rule = strip_rules(&s, &l).into_iter().find(|r| r.message.starts_with("GND:")).expect("the ground rule");
         assert!(rule.ok, "perf {}: {}", l.perf, rule.message);
@@ -85,7 +85,7 @@ fn the_ground_point_is_the_section_chosen_in_the_table() {
 fn the_board_nets_are_the_schematics_until_a_cut_is_left_out() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/ne555_blinker.schjson");
     let s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-    let l = strip_layout(&s);
+    let l = crate::test_layouts::strip(&s);
     let b = strip_board_nets(&s, &l);
     let nets = extract(&s.flat());
     for p in &l.parts {
@@ -116,7 +116,7 @@ fn the_holes_joined_to_a_lead_are_its_net() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/ne555_blinker.schjson");
     let s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     for perf in [false, true] {
-        let l = if perf { crate::perfboard::perf_layout_with(&s, StripOptions::default()) } else { strip_layout(&s) };
+        let l = if perf { crate::test_layouts::perf(&s) } else { crate::test_layouts::strip(&s) };
         assert!(strip_check(&s, &l).is_empty());
         let leads: Vec<(At, String)> = l.parts.iter().flat_map(|p| p.leads.iter().map(|(_, a)| (*a, net_at(&s, &l, *a).unwrap()))).collect();
         for (a, net) in &leads {
@@ -164,7 +164,7 @@ fn every_sample_lays_out_on_a_stripboard_as_drawn() {
 #[test]
 fn a_chip_sits_on_cut_pieces_joined_to_its_nets() {
     let s: Schematic = serde_json::from_str(include_str!("../../../../docs/examples/ne555_blinker.schjson")).unwrap();
-    let l = strip_layout(&s);
+    let l = crate::test_layouts::strip(&s);
     let chip = l.parts.iter().find(|p| p.look == Look::Dip).expect("the 555");
     assert_eq!(chip.leads.len(), 8);
     // pin 1 top left, pin 8 top right, three columns apart
@@ -204,7 +204,7 @@ mod mount_tests {
         let at = |l: &StripLayout, r: &str, pin: &str| l.parts.iter().find(|p| p.refdes == r).unwrap().leads.iter().find(|(p, _)| p == pin).unwrap().1;
         // QFN-16 with 12 pins drawn (no 3, 4, 5, 16): a DIP-16 adapter, pin 15 across from pin 2, pin 13 a row below the last pin drawn on the left (2)
         let s = sample("tp5100_charger");
-        let l = strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         let u1 = l.parts.iter().find(|p| p.refdes == "U1").unwrap();
         assert_eq!(u1.mount, Mount::Adapter { package: "QFN-16".into(), pins: 16, width: 3 });
         assert_eq!(u1.look, Look::Dip);
@@ -257,7 +257,7 @@ mod size_tests {
     fn a_chip_turned_half_a_turn_makes_the_board_smaller() {
         let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/shift_register_leds.schjson");
         let s: crate::Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
-        let l = super::strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         assert!(l.cols <= 24 && l.rows <= 19, "{} x {}", l.cols, l.rows);
         assert!(super::strip_check(&s, &l).is_empty(), "{:?}", super::strip_check(&s, &l));
         // a turned chip: pin 1 at the bottom of its row, below the last pin of that row (pin 8 of 16)
@@ -275,7 +275,7 @@ mod size_tests {
     fn several_short_parts_stack_in_the_same_columns() {
         let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/arduino_mega_usb.schjson");
         let s: crate::Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
-        let l = super::strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         assert!(l.cols <= 65 && l.rows <= 61, "{} x {}", l.cols, l.rows);
         assert!(super::strip_check(&s, &l).is_empty(), "{:?}", super::strip_check(&s, &l));
         let span = |p: &super::StripPart, f: fn(&super::At) -> u16| {
@@ -301,10 +301,10 @@ mod size_tests {
             let (a, b) = (leads("U1"), leads("U2"));
             a.iter().flat_map(|x| b.iter().map(move |y| (x.0 as f64 - y.0 as f64).hypot(x.1 as f64 - y.1 as f64) * 2.54)).fold(f64::INFINITY, f64::min)
         };
-        let before = super::strip_layout(&s);
+        let before = crate::test_layouts::strip(&s);
         assert!(near(&before) < 33.0, "{}", near(&before));
         s.requirements.apart = vec![design_spec::KeepApart { name: "離す".into(), a: vec!["U1".into()], b: vec!["U2".into()], min_dist: 33.0, ..Default::default() }];
-        let l = super::strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         assert!(near(&l) >= 33.0, "{}", near(&l));
         assert!(l.cols as usize * l.rows as usize <= before.cols as usize * before.rows as usize, "{} x {}", l.cols, l.rows);
         assert!(super::strip_check(&s, &l).is_empty(), "{:?}", super::strip_check(&s, &l));
@@ -322,10 +322,10 @@ mod size_tests {
             let (a, b) = (leads("R1"), leads("U1"));
             a.iter().flat_map(|x| b.iter().map(move |y| (x.0 as f64 - y.0 as f64).hypot(x.1 as f64 - y.1 as f64) * 2.54)).fold(f64::INFINITY, f64::min)
         };
-        let l = super::strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         assert!(closest(&l) < 15.0, "{}", closest(&l));
         s.requirements.apart = vec![design_spec::KeepApart { name: "離す".into(), a: vec!["R1".into()], b: vec!["U1".into()], min_dist: 15.0, ..Default::default() }];
-        let l = super::strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         assert!(closest(&l) >= 15.0, "{}", closest(&l));
         assert!(super::strip_check(&s, &l).is_empty(), "{:?}", super::strip_check(&s, &l));
         assert!(super::strip_rules(&s, &l).iter().all(|r| r.ok), "{:?}", super::strip_rules(&s, &l));
@@ -337,7 +337,7 @@ mod size_tests {
     fn short_chips_stack_in_the_same_columns() {
         let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/half_adder.schjson");
         let s: crate::Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
-        let l = super::strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         assert!(l.cols <= 37 && l.rows <= 13, "{} x {}", l.cols, l.rows);
         assert!(super::strip_check(&s, &l).is_empty(), "{:?}", super::strip_check(&s, &l));
         let span = |p: &super::StripPart, f: fn(&super::At) -> u16| {
@@ -392,13 +392,13 @@ mod section_tests {
         }
         // the one ground point holds; a distance to keep between the two sections' chips is measured
         s.requirements.apart = vec![design_spec::KeepApart { name: "離す".into(), a: vec!["U1".into()], b: vec!["DS1".into()], min_dist: 500.0, ..Default::default() }];
-        let l = strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         let rules = strip_rules(&s, &l);
         assert!(rules.iter().any(|r| r.ok && r.message.starts_with("GND")), "{rules:?}");
         assert!(rules.iter().any(|r| !r.ok && r.message.contains("離す")), "500 mm is not kept: {rules:?}");
         // without sections marked the board is laid out as one
         s.requirements.groups.iter_mut().for_each(|g| g.section = false);
-        assert!(strip_layout(&s).sections.is_empty());
+        assert!(crate::test_layouts::strip(&s).sections.is_empty());
     }
 
     /// With sections and a narrow board, each section wraps its chips within the width and the sections stack down the board: the
@@ -427,7 +427,7 @@ mod share_tests {
     fn nets_apart_along_a_band_share_a_row() {
         let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/seg7_counter.schjson");
         let s: Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
-        let l = strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         assert!(strip_check(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
         let ((row, col), name) = l.names.first().cloned().expect("a shared row");
         assert!(l.cuts.contains(&(row, col - 1)), "cut where the second net starts");
@@ -467,11 +467,11 @@ mod fork_tests {
         let mut s = load("active_filter.schjson");
         let pads = ["R3.2", "R4.1", "C3.1"];
         let at = |l: &StripLayout| pads.map(|p| pad_at(l, p).unwrap());
-        let l = strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         let [a, b, c] = at(&l);
         assert!(strip_fork(&l, a, b, c).unwrap() > 10.0, "without the rule the ways share the strip");
         s.requirements.measures.push(design_spec::Measure { name: "検出".into(), what: "fork".into(), pads: pads.map(String::from).to_vec(), op: "max".into(), limit: 0.5, ..Default::default() });
-        let l = strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         let [a, b, c] = at(&l);
         assert_eq!(strip_fork(&l, a, b, c), Some(0.0));
         assert!(strip_check(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
@@ -481,7 +481,7 @@ mod fork_tests {
         s.requirements.measures[0].pads = ["R4.1", "R3.2", "C3.1"].map(String::from).to_vec();
         let rules = strip_rules(&s, &l);
         assert!(rules.iter().any(|r| !r.ok && r.message.contains("一緒に走り")), "{rules:?}");
-        let l = strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         assert!(strip_check(&s, &l).is_empty());
         let rules = strip_rules(&s, &l);
         assert!(rules.iter().any(|r| r.ok && r.message.starts_with("ケルビン「検出」")), "{rules:?}");
@@ -491,7 +491,7 @@ mod fork_tests {
     #[test]
     fn the_shunt_sample_keeps_its_kelvin_connections() {
         let s = load("current_sensors.schjson");
-        for l in [strip_layout(&s), strip_layout_with(&s, StripOptions { cols: Some(20), ..Default::default() })] {
+        for l in [crate::test_layouts::strip(&s), strip_layout_with(&s, StripOptions { cols: Some(20), ..Default::default() })] {
             let kelvin: Vec<RuleCheck> = strip_rules(&s, &l).into_iter().filter(|r| r.message.starts_with("ケルビン")).collect();
             assert_eq!(kelvin.len(), 2);
             assert!(kelvin.iter().all(|r| r.ok), "{kelvin:?}");
@@ -519,7 +519,7 @@ fn a_simulation_only_part_gets_no_wire_and_sits_on_the_terminals() {
     let r_sim = put(&mut s, Kind::Resistor, 40, ["RB", "GND"], true);
     let v = put(&mut s, Kind::VSource, 60, ["VCC", "GND"], true);
     let _ = (&j, &r_on);
-    for l in [strip_layout(&s), crate::perfboard::perf_layout_with(&s, StripOptions::default())] {
+    for l in [crate::test_layouts::strip(&s), crate::test_layouts::perf(&s)] {
         assert!(!l.parts.iter().any(|p| p.refdes == r_sim), "not placed");
         assert!(!l.off.iter().any(|(r, _)| *r == r_sim), "no wire");
         assert!(l.off.iter().any(|(r, w)| *r == v && !w.is_empty()), "the supply is wired in");
@@ -589,7 +589,7 @@ fn each_parts_way_on_is_chosen_by_hand() {
     for (r, m) in [("R1", MountChoice::Lands), ("C1", MountChoice::Wired), ("U1", MountChoice::Wired)] {
         s.components.iter_mut().find(|c| c.refdes == r).unwrap().mount = Some(m);
     }
-    for l in [crate::perfboard::perf_layout_with(&s, StripOptions::default()), strip_layout(&s)] {
+    for l in [crate::test_layouts::perf(&s), crate::test_layouts::strip(&s)] {
         assert!(strip_check(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
         let mount = |r: &str| l.parts.iter().find(|p| p.refdes == r).unwrap().mount.clone();
         if l.perf {
@@ -619,7 +619,7 @@ fn a_bypass_capacitor_far_from_its_ic_is_told() {
     for f in &found {
         f.apply(&mut s.requirements);
     }
-    for l in [strip_layout(&s), crate::perfboard::perf_layout_with(&s, StripOptions::default())] {
+    for l in [crate::test_layouts::strip(&s), crate::test_layouts::perf(&s)] {
         let spans = bypass_spans(&s, &l);
         assert!(!spans.is_empty());
         for sp in &spans {
@@ -660,7 +660,7 @@ fn a_stripboard_keeps_bypass_capacitors_by_their_ic() {
     let mut plain = s.clone();
     plain.requirements.bypass.clear();
     let worst = |l: &StripLayout| bypass_spans(&s, l).iter().map(|b| b.judged()).fold(0.0, f64::max);
-    let (before, after) = (strip_layout(&plain), strip_layout(&s));
+    let (before, after) = (crate::test_layouts::strip(&plain), crate::test_layouts::strip(&s));
     assert!(strip_check(&s, &after).is_empty() && strip_unjoined(&s, &after).is_empty(), "{:?}", strip_check(&s, &after));
     assert_eq!(bypass_spans(&s, &after).len(), 6);
     assert!(worst(&after) < worst(&before) / 4.0, "{:.1} mm without the rows, {:.1} mm with them", worst(&before), worst(&after));
@@ -671,7 +671,7 @@ fn a_stripboard_keeps_bypass_capacitors_by_their_ic() {
 #[test]
 fn a_perfboard_keeps_bypass_capacitors_by_their_ic() {
     let s = bypass_sample();
-    let l = crate::perfboard::perf_layout_with(&s, StripOptions::default());
+    let l = crate::test_layouts::perf(&s);
     assert!(strip_check(&s, &l).is_empty() && strip_unjoined(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
     let spans = bypass_spans(&s, &l);
     assert_eq!(spans.len(), 6);
@@ -725,7 +725,7 @@ fn the_layouts_choose_each_wires_side() {
     for name in ["seg7_counter", "active_filter"] {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../docs/examples/{name}.schjson"));
         let s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-        for l in [strip_layout(&s), crate::perfboard::perf_layout_with(&s, StripOptions::default())] {
+        for l in [crate::test_layouts::strip(&s), crate::test_layouts::perf(&s)] {
             assert!(strip_check(&s, &l).is_empty() && strip_unjoined(&s, &l).is_empty(), "{name}: {:?}", strip_check(&s, &l));
             assert!(crate::perfboard::links_along_pins(&l).is_empty());
             let leads: BTreeSet<At> = l.parts.iter().flat_map(|p| p.leads.iter().map(|x| x.1)).collect();
@@ -755,7 +755,7 @@ fn the_layouts_choose_each_wires_side() {
 fn the_perfboard_wiring_runs_bare_wires_at_45_degrees() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/active_filter.schjson");
     let s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-    let l = crate::perfboard::perf_layout_with(&s, StripOptions::default());
+    let l = crate::test_layouts::perf(&s);
     assert!(strip_check(&s, &l).is_empty() && strip_unjoined(&s, &l).is_empty(), "{:?}", strip_check(&s, &l));
     let slanted: Vec<&(At, At)> = l.bare.iter().filter(|(a, b)| a.0 != b.0 && a.1 != b.1).collect();
     assert!(!slanted.is_empty(), "{:?}", l.bare);
@@ -769,7 +769,7 @@ fn the_perfboard_wiring_runs_bare_wires_at_45_degrees() {
 fn the_perfboard_wiring_wires_only_what_is_left_apart() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/active_filter.schjson");
     let s: Schematic = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-    let l = crate::perfboard::perf_layout_with(&s, StripOptions::default());
+    let l = crate::test_layouts::perf(&s);
     let net = l.bare.first().map(|(a, _)| strip_hole_nets(&s, &l)[a].clone()).expect("a bare wire");
     let mut m = l.clone();
     let nets = strip_hole_nets(&s, &l);

@@ -868,7 +868,7 @@ fn free_hole(out: &mut StripLayout, at: At, taken: &std::collections::BTreeSet<A
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stripboard::{strip_check, strip_layout};
+    use crate::stripboard::strip_check;
 
     /// Picked parts lined up: the shift register's eight resistors in the order of the outputs they are wired to (on the
     /// perfboard: locked where they go); three in one row; fewer than two parts,
@@ -877,7 +877,7 @@ mod tests {
     fn picked_parts_line_up() {
         let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/shift_register_leds.schjson");
         let s: Schematic = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
-        let l = crate::perfboard::perf_layout_with(&s, StripOptions::default());
+        let l = crate::test_layouts::perf(&s);
         let rs: Vec<String> = (1..=8).map(|i| format!("R{i}")).collect();
         let nets = pin_nets(&s);
         let at = |l: &StripLayout, r: &str| l.parts.iter().find(|p| p.refdes == r).map(part_box).unwrap();
@@ -914,7 +914,7 @@ mod tests {
     #[test]
     fn picked_parts_move_and_turn_as_one() {
         let s = blinker();
-        let l = crate::stripboard::strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         let all: Vec<String> = l.parts.iter().map(|p| p.refdes.clone()).collect();
         // all of them, picked with a box round the whole board: as moving the board's box
         let whole = [((0, 0), (l.rows - 1, l.cols - 1))];
@@ -949,7 +949,7 @@ mod tests {
     #[test]
     fn moves_keep_or_break_the_joins_and_the_check_follows() {
         let s = blinker();
-        let l = strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         let whole = area_moved(&l, (0, 0), (l.rows - 1, l.cols - 1), 2, 3).unwrap();
         assert!(strip_check(&s, &whole).is_empty(), "{:?}", strip_check(&s, &whole));
         assert!(whole.used().iter().all(|(a, _)| a.0 < whole.rows && a.1 < whole.cols), "the board grows with what is on it");
@@ -970,7 +970,7 @@ mod tests {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
         for name in ["ne555_blinker", "seg7_counter", "traffic_light", "current_sensors"] {
             let s: Schematic = serde_json::from_str(&std::fs::read_to_string(dir.join(format!("{name}.schjson"))).unwrap()).unwrap();
-            let l = strip_layout(&s);
+            let l = crate::test_layouts::strip(&s);
             let (a, b) = ((0, 0), (l.rows - 1, l.cols - 1));
             let once = area_turned(&l, a, b);
             assert!(strip_check(&s, &once).is_empty(), "{name}: {:?}", strip_check(&s, &once));
@@ -978,7 +978,7 @@ mod tests {
             assert_eq!(area_turned(&once, a, b), l, "{name}: twice is as it was");
         }
         let s = blinker();
-        let l = strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         assert_eq!(area_turned(&l, (l.rows + 5, 0), (l.rows + 6, 3)), l, "nothing in the box");
         let chip = l.parts.iter().find(|p| p.leads.len() == 8).unwrap();
         let top = chip.leads.iter().map(|x| x.1 .0).min().unwrap();
@@ -991,7 +991,7 @@ mod tests {
     #[test]
     fn a_perfboard_turns_a_quarter_turn() {
         let s = blinker();
-        let l = crate::perfboard::perf_layout_with(&s, StripOptions::default());
+        let l = crate::test_layouts::perf(&s);
         let chip = l.parts.iter().find(|p| p.leads.len() == 8).unwrap().refdes.clone();
         let cols = |l: &StripLayout| l.parts.iter().find(|p| p.refdes == chip).unwrap().leads.iter().map(|x| x.1 .1).collect::<std::collections::BTreeSet<u16>>().len();
         // upright two columns of pins, turned four (the layout may have it either way)
@@ -1020,7 +1020,7 @@ mod tests {
     #[test]
     fn links_and_cuts_by_hand() {
         let s = blinker();
-        let l = strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         // a link taken away leaves a net apart; drawn again between the same holes, it is whole again with its net's colour
         let k = l.links[0].clone();
         let open = without_link(&l, 0);
@@ -1044,7 +1044,7 @@ mod tests {
     #[test]
     fn bare_wires_by_hand() {
         let s = blinker();
-        let l = strip_layout(&s);
+        let l = crate::test_layouts::strip(&s);
         let straight: Vec<usize> = (0..l.links.len()).filter(|k| l.links[*k].a.1 == l.links[*k].b.1).collect();
         let bare_for = |k: usize| with_bare(&without_link(&l, k), l.links[k].a, l.links[k].b).unwrap();
         let clean = straight.iter().copied().find(|k| strip_check(&s, &bare_for(*k)).is_empty()).expect("a link a bare wire can take the place of");
@@ -1077,7 +1077,7 @@ mod tests {
     #[test]
     fn a_saved_layout_follows_the_schematic() {
         let s = blinker();
-        let auto = strip_layout(&s);
+        let auto = crate::test_layouts::strip(&s);
         let first = auto.parts.iter().find(|p| p.leads.len() == 2).unwrap().refdes.clone();
         let saved = part_moved(&auto, &first, 0, 1).unwrap();
         assert_eq!(synced(&s, &saved, StripOptions::default()), saved, "nothing changed: nothing to do");
@@ -1100,8 +1100,8 @@ mod tests {
             for c in &s.components {
                 let mut without = s.clone();
                 without.components.retain(|x| x.refdes != c.refdes);
-                let before = strip_layout(&without);
-                if before.parts.len() == strip_layout(&s).parts.len() {
+                let before = crate::test_layouts::strip(&without);
+                if before.parts.len() == crate::test_layouts::strip(&s).parts.len() {
                     continue;
                 }
                 let l = synced(&s, &before, StripOptions::default());
@@ -1220,7 +1220,7 @@ mod tests {
         assert_eq!(bare_holes((4, 1), (1, 4)), vec![(4, 1), (3, 2), (2, 3), (1, 4)]);
         assert!(bare_way((0, 0), (3, 3)) && bare_way((0, 3), (0, 0)) && !bare_way((0, 0), (1, 3)));
         let s = blinker();
-        let mut l = strip_layout(&s);
+        let mut l = crate::test_layouts::strip(&s);
         l.perf = true;
         l.bare.clear();
         let l = with_bare(&l, (10, 10), (13, 13)).unwrap();

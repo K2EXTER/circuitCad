@@ -1338,4 +1338,6 @@ pub fn on_segment(p: Pt, a: Pt, b: Pt) -> bool {
 }
 
 #[cfg(test)]
+mod test_layouts;
+#[cfg(test)]
 mod tests;

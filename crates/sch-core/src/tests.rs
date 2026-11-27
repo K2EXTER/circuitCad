@@ -103,7 +103,7 @@ fn a_header_has_rows_and_a_socket_kept_in_its_footprint() {
     let off = l.off_board.iter().find(|o| o.refdes == jr).expect("beside the board");
     assert_eq!(off.pins.iter().map(|(p, ..)| p.as_str()).collect::<Vec<_>>(), vec!["1", "4"], "only the pins in use get a wire");
     // the stripboard and the perfboard lay it out too (beside the board)
-    let st = crate::stripboard::strip_layout(&s);
+    let st = crate::test_layouts::strip(&s);
     assert!(!st.parts.iter().any(|p| p.refdes == jr));
     let pf = crate::perfboard::perf_layout_with(&s, crate::stripboard::StripOptions::default());
     assert!(!pf.parts.iter().any(|p| p.refdes == jr));

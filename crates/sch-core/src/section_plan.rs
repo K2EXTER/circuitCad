@@ -328,7 +328,7 @@ mod tests {
             for g in propose_sections(&s) {
                 s.requirements.groups.push(design_spec::PlaceGroup { name: g.name.clone(), parts: g.parts.clone(), section: true, ..Default::default() });
             }
-            let l = crate::stripboard::strip_layout(&s);
+            let l = crate::test_layouts::strip(&s);
             assert!(l.sections.len() >= 2, "{name}");
             assert!(crate::stripboard::strip_check(&s, &l).is_empty(), "{name}: {:?}", crate::stripboard::strip_check(&s, &l));
         }
