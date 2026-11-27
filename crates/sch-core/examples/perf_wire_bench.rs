@@ -3,12 +3,13 @@
 //! (`--save DIR`) and read back after the change (`--load DIR`), so a change to the wiring is measured apart from the placing it would
 //! also change. Prints, per board and in all: the nets left apart, the wires on top, the bare wires (pieces and length in holes, 45
 //! degrees counting √2) and how much longer the copper is than the shortest tree of each net's leads (the same lengths, along the rows,
-//! the columns and at 45 degrees). Run it in release:
+//! the columns and at 45 degrees), and the ends of wires on top under a chip's body (`under`: they go in before the chip). Run it in
+//! release:
 //!
 //! `cargo run --release -p sch-core --example perf_wire_bench -- --save DIR [FILE.schjson ...]`, then after the change `-- --load DIR`
 //! (`--layout`: the automatic layout itself measured instead, placed and wired, nothing saved)
 
-use sch_core::perfboard::{perf_layout_with, perf_route_left, without_wires};
+use sch_core::perfboard::{perf_layout_with, perf_route_left, under_parts, without_wires};
 use sch_core::stripboard::{strip_unjoined, StripLayout, StripOptions};
 use sch_core::Schematic;
 use std::collections::BTreeMap;
@@ -34,7 +35,7 @@ fn main() {
         v.sort();
         files = v;
     }
-    let mut total = [0f64; 6];
+    let mut total = [0f64; 7];
     for f in &files {
         let Ok(s) = std::fs::read_to_string(f).map_err(|e| e.to_string()).and_then(|t| serde_json::from_str::<Schematic>(&t).map_err(|e| e.to_string())) else { continue };
         let name = f.rsplit(['/', '\\']).next().unwrap_or(f).trim_end_matches(".schjson").to_string();
@@ -64,24 +65,25 @@ fn main() {
         for (k, v) in m.iter().enumerate() {
             total[k] += v;
         }
-        total[5] += ms as f64;
-        println!("{name:<36} apart {:>2}  top {:>3}  bare {:>4} pieces {:>7.1} holes  shortest {:>7.1}  ({:+5.1} %)  {ms} ms", m[0], m[1], m[2], m[3], m[4], 100.0 * (m[3] / m[4].max(1.0) - 1.0));
+        total[6] += ms as f64;
+        println!("{name:<36} apart {:>2}  top {:>3}  bare {:>4} pieces {:>7.1} holes  shortest {:>7.1}  ({:+5.1} %)  under {:>2}  {ms} ms", m[0], m[1], m[2], m[3], m[4], 100.0 * (m[3] / m[4].max(1.0) - 1.0), m[5]);
     }
     println!(
-        "ALL apart {}  top {}  bare {} pieces {:.1} holes  shortest {:.1}  ({:+.1} %)  {:.1} s",
+        "ALL apart {}  top {}  bare {} pieces {:.1} holes  shortest {:.1}  ({:+.1} %)  under {}  {:.1} s",
         total[0],
         total[1],
         total[2],
         total[3],
         total[4],
         100.0 * (total[3] / total[4].max(1.0) - 1.0),
-        total[5] / 1000.0
+        total[5],
+        total[6] / 1000.0
     );
 }
 
-/// The nets left apart, the wires on top, the bare wires' pieces and length, and the shortest trees' length (of each net's leads
-/// joined, by its copper).
-fn measure(s: &Schematic, l: &StripLayout) -> [f64; 5] {
+/// The nets left apart, the wires on top, the bare wires' pieces and length, the shortest trees' length (of each net's leads
+/// joined, by its copper), and the ends of wires on top under a part's body (`under_parts`: can't be built).
+fn measure(s: &Schematic, l: &StripLayout) -> [f64; 6] {
     let apart = strip_unjoined(s, l).len() as f64;
     let len = |a: (u16, u16), b: (u16, u16)| {
         let (dr, dc) = (a.0.abs_diff(b.0) as f64, a.1.abs_diff(b.1) as f64);
@@ -112,5 +114,7 @@ fn measure(s: &Schematic, l: &StripLayout) -> [f64; 5] {
             }
         }
     }
-    [apart, l.links.len() as f64, l.bare.len() as f64, bare, shortest]
+    let under = under_parts(l);
+    let under_ends = l.links.iter().filter(|k| !k.back).flat_map(|k| [k.a, k.b]).filter(|a| under.contains(a)).count() as f64;
+    [apart, l.links.len() as f64, l.bare.len() as f64, bare, shortest, under_ends]
 }

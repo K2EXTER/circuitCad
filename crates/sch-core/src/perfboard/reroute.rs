@@ -56,9 +56,9 @@ pub(super) fn reroute(s: &Schematic, c: &Circuit, l: &mut StripLayout, net_of_le
     }
 }
 
-/// The wires on top, one along a chip's row of pins counting three (as `rank`).
+/// The wires on top, one along a chip's row of pins counting three and each end under a chip's body two more (as `rank`).
 fn on_top(l: &StripLayout) -> usize {
-    l.links.len() + 2 * links_along_pins(l).len()
+    l.links.len() + 2 * links_along_pins(l).len() + 2 * super::link_ends_under(l)
 }
 
 /// The copper's length in tenths of a hole (45 degrees √2, each piece of bare wire `PIECE` more).

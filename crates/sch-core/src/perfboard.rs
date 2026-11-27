@@ -35,11 +35,12 @@ use reroute::reroute;
 use river::*;
 use shape::*;
 use wants::*;
-use route::{route, Order, ALONG_COST, JUMP, JUMP_COST};
+use route::{route, Order, ALONG_COST, JUMP, JUMP_COST, UNDER_COST};
 pub use lock::{lock_first, LockWhy};
 pub use wires::{links_along_pins, perf_route_left, wire_sides, without_wires};
 pub(crate) use back::back_chips;
 pub(crate) use shape::facing_headers;
+pub use shape::under_parts;
 pub(crate) use wires::wire_added;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
 
@@ -178,8 +179,10 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
                 route(&full, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first, forks: &fork_at, along: ALONG_COST, bypass: &bypass_at, keep: false, work: &work });
                 let apart = crate::stripboard::strip_unjoined(s, &m);
                 let key = rank(s, &m, apart.len());
-                // a placing far behind the best on its first wiring is not wired again (the rounds after gain less than that)
-                if round == 0 && best.as_ref().is_some_and(|(b, _)| key.0 > b.0 || (key.0 == b.0 && (key.1 > b.1 + 1 || (key.1 >= b.1 && key.3 > b.3 + b.3 / 2 + 2)))) {
+                // a placing far behind the best on its first wiring is not wired again (the rounds after gain less than that); by its
+                // wires on top only when it leaves no fewer groups and bypass capacitors past their distance than the best (a placing
+                // that keeps more of them is worth wiring again)
+                if round == 0 && best.as_ref().is_some_and(|(b, _)| key.0 > b.0 || (key.0 == b.0 && (key.1 > b.1 + 1 || (key.1 >= b.1 && key.2 >= b.2 && key.3 > b.3 + b.3 / 2 + 2)))) {
                     break;
                 }
                 let on_top: Vec<String> = m.links.iter().map(|k| k.net.clone()).collect();
@@ -241,11 +244,18 @@ fn ruled_nets(s: &Schematic, c: &Circuit, wants: &Wants, l: &StripLayout) -> BTr
 
 /// How good a wired layout is, the smaller the better: what is left on the mounting holes' corners, the nets left apart (`apart`),
 /// the groups past their farthest distance and the bypass capacitors past theirs (after the nets left apart: a group kept close is no use on a board that does not work),
-/// the wires on top with each one along a chip's row of pins counting three (it lies on the socket, L9), the board's holes.
+/// the wires on top with each one along a chip's row of pins counting three (it lies on the socket, L9) and each end under a chip's
+/// body two more (it goes in before the chip), the board's holes.
 fn rank(s: &Schematic, m: &StripLayout, apart: usize) -> (usize, usize, usize, usize, usize) {
     let over = crate::stripboard::group_spreads(s, m).iter().filter(|g| g.1 > g.2 + 1e-9).count()
         + crate::stripboard::bypass_spans(s, m).iter().filter(|b| b.judged() > b.limit + 1e-9).count();
-    (m.in_keepout().len(), apart, over, m.links.len() + 2 * links_along_pins(m).len(), m.rows as usize * m.cols as usize)
+    (m.in_keepout().len(), apart, over, m.links.len() + 2 * links_along_pins(m).len() + 2 * link_ends_under(m), m.rows as usize * m.cols as usize)
+}
+
+/// How many ends of wires on top lie in a hole under a chip's body (`under_parts`): each one has to go in before the chip.
+pub fn link_ends_under(l: &StripLayout) -> usize {
+    let under = under_parts(l);
+    l.links.iter().filter(|k| !k.back).flat_map(|k| [k.a, k.b]).filter(|a| under.contains(a)).count()
 }
 
 /// The net of a part's lead ("" when none).
@@ -485,30 +495,35 @@ mod tests {
         assert!(kept <= 25.0 && free > 25.0, "{free:.1} mm without the distance, {kept:.1} mm with it");
     }
 
-    /// L9: the wires on top along a chip's row of pins (lying on its socket) are fewer: of the same wired layouts of the Arduino Mega
-    /// board, the one `rank` keeps has fewer (37) than the one kept by the wires on top alone (49). (The whole layout stops at a time budget, so
-    /// how many layouts it tries, and its count, depends on the machine: 40 here, 49 on CI's slower runners, 50 before.)
+    /// L9: `rank` counts a wire on top along a chip's row of pins (lying on its socket) as three wires, and one with an end under a
+    /// chip's body (between its rows: it goes in before the chip) as three, so a layout with fewer of them is kept when the nets
+    /// joined are the same. (The Mega board's tries used to show it; with ends under chips counted, its best try has the fewest wires
+    /// too.)
     #[test]
-    fn fewer_wires_on_top_run_along_a_row_of_pins() {
-        let s = load("arduino_mega_usb.schjson");
-        let c = read(&s);
-        let wants = Wants::read(&s, &c);
-        let net_of_lead = |r: &str, pin: &str| lead_net(&c, r, pin);
-        let work = std::cell::Cell::new(0u64);
-        let mut tried: Vec<StripLayout> = vec![];
-        for turned in [Turn::Up, Turn::All] {
-            let placed = place(&c, StripOptions::default(), GAPS[0], turned, false, &wants, None);
-            for (rails_first, escapes) in [(true, false), (false, false), (true, true), (false, true)] {
-                let mut m = placed.clone();
-                route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &[], forks: &[], along: ALONG_COST, bypass: &[], keep: false, work: &work });
-                tried.push(m);
-            }
-        }
-        let apart = |m: &StripLayout| crate::stripboard::strip_unjoined(&s, m).len();
-        let kept = tried.iter().min_by_key(|m| rank(&s, m, apart(m))).unwrap();
-        let by_wires = tried.iter().min_by_key(|m| (apart(m), m.links.len(), m.rows as usize * m.cols as usize)).unwrap();
-        let n = |l: &StripLayout| links_along_pins(l).len();
-        assert!(n(kept) < n(by_wires) && apart(kept) == apart(by_wires), "{} along a row of pins in the layout kept, {} in the one with the fewest wires", n(kept), n(by_wires));
+    fn a_wire_along_a_row_of_pins_or_under_a_chip_counts_more() {
+        let s = load("ne555_blinker.schjson");
+        let l = crate::test_layouts::perf(&s);
+        let u = l.parts.iter().find(|p| p.refdes == "U1").unwrap().clone();
+        let (r0, r1) = (u.leads.iter().map(|x| x.1 .0).min().unwrap(), u.leads.iter().map(|x| x.1 .0).max().unwrap());
+        let (c0, c1) = (u.leads.iter().map(|x| x.1 .1).min().unwrap(), u.leads.iter().map(|x| x.1 .1).max().unwrap());
+        let upright = u.leads.iter().map(|x| x.1 .1).collect::<BTreeSet<u16>>().len() == 2;
+        let (rm, cm) = ((r0 + r1) / 2, (c0 + c1) / 2);
+        let (along, across, under) = if upright {
+            (Link::new((r0.saturating_sub(1), c0), (r1 + 1, c0), "X"), Link::new((r0, c0.saturating_sub(1)), (r0, c1 + 1), "Y"), Link::new((rm, cm), (r1 + 1, cm), "Z"))
+        } else {
+            (Link::new((r0, c0.saturating_sub(1)), (r0, c1 + 1), "X"), Link::new((r0.saturating_sub(1), c0), (r1 + 1, c0), "Y"), Link::new((rm, cm), (rm, c1 + 1), "Z"))
+        };
+        let wires = |extra: Link| {
+            let mut m = l.clone();
+            m.links.push(extra);
+            rank(&s, &m, 0).3
+        };
+        let base = rank(&s, &l, 0).3;
+        assert_eq!(link_ends_under(&l), 0);
+        assert_eq!((wires(along) - base, wires(across) - base, wires(under.clone()) - base), (3, 1, 3));
+        let mut m = l.clone();
+        m.links.push(under);
+        assert_eq!(link_ends_under(&m), 1);
     }
 
     /// L11: with mounting holes in the corners of a board of a given size, the layout leaves the 3 × 3 holes of each corner free (no

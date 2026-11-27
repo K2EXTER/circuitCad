@@ -22,6 +22,9 @@ pub(super) const JUMP_COST: u32 = 30;
 /// side, or a jump across the row, is taken first when it is not much longer.
 /// (60 kept as many such wires on the DMM's board and made 12 more wires on top elsewhere; 30 takes off most of them for about 5.)
 pub(super) const ALONG_COST: u32 = 30;
+/// What a wire on top costs more for each end in a hole under a chip's body (`under_parts`: between a socket's, an adapter board's or
+/// a relay's pins): it has to go in before the part and lie under it. Taken only where no other way gets through (a crowded board).
+pub(super) const UNDER_COST: u32 = 60;
 
 /// The steps along a row or a column.
 const DIRS: [(i32, i32); 4] = [(0, 1), (1, 0), (0, -1), (-1, 0)];
@@ -106,6 +109,8 @@ struct Board {
     escape: BTreeMap<At, u32>,
     /// The holes where a wire on top ends (no other wire's end, no jump from there).
     link_ends: BTreeSet<At>,
+    /// The holes under a chip's body (`under_parts`): a wire on top ends there only at `UNDER_COST`.
+    under: BTreeSet<At>,
     /// The middles of the squares of four holes a bare wire at 45 degrees crosses (doubled coordinates), its net and its slant: a
     /// wire of another net slanting the other way there would touch it between the holes (those already on the board: no net).
     middles: BTreeMap<(i32, i32), (u32, bool)>,
@@ -163,6 +168,7 @@ impl Board {
             chip_of: vec![u32::MAX; rows * cols],
             escape: BTreeMap::new(),
             link_ends: BTreeSet::new(),
+            under: super::shape::under_parts(l),
             middles: BTreeMap::new(),
             sections: l.sections.clone(),
         };
@@ -218,7 +224,7 @@ impl Board {
         let mut by_room: Vec<(At, u32)> = self.leads.clone();
         by_room.sort_by_key(|(a, _)| self.beside(*a).iter().filter(|h| !self.lead_holes.contains(h)).count());
         for (a, net) in by_room {
-            let free = |b: &Board, h: &At| !b.lead_holes.contains(h) && !b.escape.contains_key(h);
+            let free = |b: &Board, h: &At| !b.lead_holes.contains(h) && !b.escape.contains_key(h) && !b.under.contains(h);
             let room = |h: At| self.beside(h).iter().filter(|x| free(self, x)).count();
             if let Some(h) = self.beside(a).into_iter().filter(|h| free(self, h)).max_by_key(|h| room(*h)) {
                 self.escape.insert(h, net);
@@ -428,8 +434,12 @@ impl Board {
         let mut is_lead = vec![false; n];
         let mut is_end = vec![false; n];
         let mut is_left = vec![false; n];
+        let mut is_under = vec![false; n];
         for a in &self.lead_holes {
             is_lead[self.idx(*a)] = true;
+        }
+        for a in self.under.iter().filter(|a| (a.0 as usize) < self.rows && (a.1 as usize) < self.cols) {
+            is_under[self.idx(*a)] = true;
         }
         for a in &self.link_ends {
             is_end[self.idx(*a)] = true;
@@ -462,8 +472,10 @@ impl Board {
                     heap.push(Reverse((nd, ns as u32)));
                 }
             };
-            // the jumps: from a free hole (not a lead, not a wire's end), along the row or the column, to a free hole
+            // the jumps: from a free hole (not a lead, not a wire's end), along the row or the column, to a free hole; an end under a
+            // chip's body costs `UNDER_COST`
             let can_jump = way != JUMPED && !is_lead[h] && !is_end[h];
+            let from_under = if is_under[h] { UNDER_COST } else { 0 };
             // the steps at 45 degrees (B12): 3 a step (about 1.4 times a step along a row), a turn 3 more as along a row; not
             // across a wire of another net slanting the other way between the same four holes (they would touch)
             for (k, (dr, dc)) in SLANTS.iter().enumerate() {
@@ -508,7 +520,15 @@ impl Board {
                     let to = self.idx((r as u16, cc as u16));
                     let free = open[to] && !is_lead[to];
                     if k >= 2 && over && free {
-                        push((r as u16, cc as u16), JUMPED, d + JUMP_COST + 2 * k as u32 + if along { order.along } else { 0 }, &mut heap);
+                        let cost = d + JUMP_COST + 2 * k as u32 + if along { order.along } else { 0 } + from_under;
+                        // a hole under a chip's body: landed on at a cost, and the jump goes on over the chip to the free holes past it
+                        if is_under[to] {
+                            push((r as u16, cc as u16), JUMPED, cost + UNDER_COST, &mut heap);
+                            along |= self.chip_of[to] != u32::MAX && self.chip_of[to] == last_chip;
+                            last_chip = self.chip_of[to];
+                            continue;
+                        }
+                        push((r as u16, cc as u16), JUMPED, cost, &mut heap);
                         break;
                     }
                     along |= self.chip_of[to] != u32::MAX && self.chip_of[to] == last_chip;
@@ -590,7 +610,8 @@ impl Board {
     /// wire's end; with a lead only, a free hole beside it, joined by a bare wire.
     fn ground_end(&mut self, l: &mut StripLayout, tree: &[At], k: usize, gnd: Option<u32>, toward: At) -> Option<At> {
         let ok = |b: &Board, h: &At| !b.lead_holes.contains(h) && !b.link_ends.contains(h) && b.inside(k, *h);
-        let dist = |h: &At| h.0.abs_diff(toward.0) as u32 + h.1.abs_diff(toward.1) as u32;
+        // a hole under a chip's body last (a wire on top ending there goes in before the chip)
+        let dist = |h: &At| h.0.abs_diff(toward.0) as u32 + h.1.abs_diff(toward.1) as u32 + if self.under.contains(h) { 1000 } else { 0 };
         if let Some(h) = tree.iter().filter(|h| ok(self, h)).min_by_key(|h| dist(h)) {
             return Some(*h);
         }

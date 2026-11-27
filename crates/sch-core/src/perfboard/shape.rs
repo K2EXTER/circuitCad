@@ -116,3 +116,12 @@ pub(super) fn outline(p: &StripPart) -> Vec<At> {
     let (c0, c1) = (p.leads.iter().map(|x| x.1 .1).min().unwrap_or(0), p.leads.iter().map(|x| x.1 .1).max().unwrap_or(0));
     (r0..=r1).flat_map(|r| (c0..=c1).map(move |cc| (r, cc))).collect()
 }
+
+/// The holes under a chip's body that are none of its leads (`outline` less the leads): between a chip's, a socket's, a relay's or an
+/// adapter board's pins. A wire on top can't end there (the body covers the hole); a bare wire on the copper side may pass. A two-lead
+/// part (a resistor lying over a hole or two: a wire may go in first, under it) and a part on the copper side (`Mount::Back`) are not
+/// counted.
+pub fn under_parts(l: &StripLayout) -> BTreeSet<At> {
+    let leads: BTreeSet<At> = l.parts.iter().flat_map(|p| p.leads.iter().map(|x| x.1)).collect();
+    l.parts.iter().filter(|p| !p.leads.is_empty() && p.look != Look::TwoLead && !matches!(p.mount, crate::mount::Mount::Back { .. })).flat_map(outline).filter(|h| !leads.contains(h)).collect()
+}

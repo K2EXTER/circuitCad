@@ -182,6 +182,11 @@ pub(super) fn wire_try(l: &mut StripLayout, hole_nets: &BTreeMap<At, String>, pa
     let mut taken = vec![false; rows * cols];
     let mut lead = vec![false; rows * cols];
     let mut link_end = vec![false; rows * cols];
+    // the holes under a chip's body: a link ends there only at `UNDER_COST` (it goes in before the chip)
+    let mut under = vec![false; rows * cols];
+    for a in super::shape::under_parts(l).into_iter().filter(|a| fits(*a)) {
+        under[idx(a)] = true;
+    }
     for a in l.used().into_iter().map(|(a, _)| a).filter(|a| fits(*a)) {
         taken[idx(a)] = true;
     }
@@ -304,12 +309,17 @@ pub(super) fn wire_try(l: &mut StripLayout, hole_nets: &BTreeMap<At, String>, pa
                     }
                     // a hole right beside is a step, not a jump
                     if over {
-                        let c1 = c0 + JUMP_COST + 2 * k as u32;
+                        let ends_under = under[h] as u32 + under[n] as u32;
+                        let c1 = c0 + JUMP_COST + 2 * k as u32 + ends_under * UNDER_COST;
                         let t = n * 5 + 4;
                         if c1 < cost[t] {
                             cost[t] = c1;
                             prev[t] = Some((s, true));
                             heap.push(Reverse((c1, t)));
+                        }
+                        // under a chip's body: the jump may also go on over the chip to the free holes past it
+                        if under[n] {
+                            continue;
                         }
                     }
                     break;

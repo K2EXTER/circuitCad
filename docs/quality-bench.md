@@ -81,7 +81,7 @@ cargo run --release -p sch-core --example strip_bench -- --strip --cols 59 F.sch
 cargo run --release -p sch-core --example strip_bench -- --strip --back --cols 40       # チップ部品を裏に (裏に置けた数も)
 ```
 
-ユニバーサル基板の線の引き方 (`perfboard/route.rs`・`reroute.rs`) だけを変えたときは `perf_wire_bench.rs`: 変える前に自動の並べ方の部品の置き場所を書き出し、変えたあと同じ置き場所で「自動配線」だけを回して、つながらないネット・表の線・すずめっき線の本数と長さ・各ネットの足の最短の木より何 % 長いかを比べる (置き方が変わって比べられなくなるのを避ける)。
+ユニバーサル基板の線の引き方 (`perfboard/route.rs`・`reroute.rs`) だけを変えたときは `perf_wire_bench.rs`: 変える前に自動の並べ方の部品の置き場所を書き出し、変えたあと同じ置き場所で「自動配線」だけを回して、つながらないネット・表の線・すずめっき線の本数と長さ・各ネットの足の最短の木より何 % 長いか・IC の体の下の穴にある表の線の端 (`under`、部品より先に付けるしかない) を比べる (置き方が変わって比べられなくなるのを避ける)。
 
 ```bash
 cargo run --release -p sch-core --example perf_wire_bench -- --save DIR    # 変える前 (置き場所を DIR に)
