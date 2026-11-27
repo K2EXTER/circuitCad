@@ -9,7 +9,7 @@
 cargo test --workspace        # 全テスト (CIと同じ)
 python tools/test_changed.py  # 変わったクレートと、それを使うクレートだけ test + clippy (コミット前。--list で選んだ理由)
 python tools/test_times.py    # 1件ずつの時間と 2 秒を超えたテスト
-python tools/clean_target.py  # target/ にたまった古いビルドを消す (--dry-run で見るだけ、--extra で別の置き場所も)
+python tools/clean_target.py  # target/ にたまった古いビルドを消す (test_changed.py が最後に自動で。--dry-run で見るだけ、--extra で別の置き場所も)
 powershell -File tools/shot.ps1 -AppArgs "docs\examples\x.schjson --proto" -Out x.png   # 画面を 1 枚撮る (-Crop "x,y,w,h" -Scale 2 で一部を拡大、-NoBuild)
 cargo clippy --workspace --all-targets   # CIはエラーを禁止 (警告は可)
 cargo run -p cli -- script.ccad   # 画面なしで実行 (docs/cli.md)

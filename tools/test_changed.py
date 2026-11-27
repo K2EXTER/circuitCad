@@ -11,6 +11,8 @@ everything. Anything else (most of docs/, tools/) picks nothing.
 
 The test binaries are built once and then run at the same time, clippy beside them (`run_tests`): one line a binary, a failing
 one's whole output. This is for while working. Before a push, and in CI, the whole workspace still runs (`cargo test --workspace`).
+
+At the end, the old builds are taken out of target/ (`tools/clean_target.py --auto`, about 2 s): it would grow by gigabytes a day.
 """
 
 import argparse
@@ -123,8 +125,18 @@ def main():
     if a.list:
         return
     ps = [x for c in sorted(crates) for x in ("-p", c)]
-    if not run_tests(sorted(crates), ps, not a.no_clippy):
+    ok = run_tests(sorted(crates), ps, not a.no_clippy)
+    clean_target()
+    if not ok:
         sys.exit(1)
+
+
+def clean_target():
+    """The old builds out of target/, quietly (a line when something went). A failure here never fails the tests."""
+    try:
+        subprocess.run([sys.executable, "-I", os.path.join(ROOT, "tools", "clean_target.py"), "--auto"], cwd=ROOT, timeout=300)
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"clean_target.py did not run: {e}")
 
 
 def run_tests(crates, ps, clippy):
