@@ -93,6 +93,8 @@ struct Board {
     cols: usize,
     /// The nets' names by id (a lead on no net has one of its own, "\0" and a number).
     names: Vec<String>,
+    /// Each net's id by its name.
+    ids: std::collections::HashMap<String, u32>,
     /// Each hole's net (copper or a lead).
     owner: Vec<Option<u32>>,
     /// Each lead's hole and net (the parts' leads, then the off-board wires).
@@ -137,13 +139,13 @@ impl Board {
 
     /// A net's id by its name, added when new.
     fn id(&mut self, n: &str) -> u32 {
-        match self.names.iter().position(|x| x == n) {
-            Some(i) => i as u32,
-            None => {
-                self.names.push(n.to_string());
-                (self.names.len() - 1) as u32
-            }
+        if let Some(i) = self.ids.get(n) {
+            return *i;
         }
+        self.names.push(n.to_string());
+        let i = (self.names.len() - 1) as u32;
+        self.ids.insert(n.to_string(), i);
+        i
     }
 
     /// The board read from the layout: each lead's hole taken by its net (a lead on no net keeps its hole to itself), the holes kept
@@ -154,6 +156,7 @@ impl Board {
             rows,
             cols,
             names: vec![],
+            ids: Default::default(),
             owner: vec![None; rows * cols],
             leads: vec![],
             lead_holes: BTreeSet::new(),

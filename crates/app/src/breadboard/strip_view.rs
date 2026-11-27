@@ -55,6 +55,18 @@ pub(super) enum StripDrag {
     Section { k: usize, from: At, now: At },
 }
 
+/// What a layout made on another thread (`StripState::around`) is for.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum AroundFor {
+    /// The parts placed again round the locked ones and wired.
+    #[default]
+    Relayout,
+    /// "自動配置": its parts kept, its wires left off (wired by "自動配線").
+    PlaceOnly,
+    /// "自動配線": the nets left apart wired (this many nets were apart before).
+    Route { before: usize },
+}
+
 /// The stripboard / perfboard view's own state.
 #[derive(Default)]
 pub struct StripState {
@@ -67,10 +79,11 @@ pub struct StripState {
     synced: Option<(u64, usize, StripLayout, StripLayout)>,
     /// A layout being made on another thread (a perfboard's tries take up to 1.5 s: the window does not stop meanwhile).
     job: Option<StripJob>,
-    /// "自動配置" (and a box put, parts lined up) on another thread: the layout round the locked parts comes back here.
+    /// "自動配置" (and a box put, parts lined up) or "自動配線" on another thread: the layout round the locked parts, or the board
+    /// wired, comes back here.
     pub(super) around: Option<std::sync::mpsc::Receiver<StripLayout>>,
-    /// The layout coming back on `around` is "自動配置"'s: its parts kept, its wires left off (wired by "自動配線").
-    place_only: bool,
+    /// What the layout coming back on `around` is.
+    around_for: AroundFor,
     /// A section's box let go where it was dragged, drawn there until the layout round it comes back.
     put_box: Option<(At, At)>,
     pub(super) drag: Option<StripDrag>,
@@ -302,17 +315,30 @@ impl BreadboardView {
                 self.strip.put_box = None;
                 self.strip_unpick();
                 self.strip.picked_link = None;
-                if std::mem::take(&mut self.strip.place_only) {
-                    self.strip_set(sch, Some(without_wires(&m)));
-                    sch.status = i18n::tr("部品を置き直しました (固定した部品・置いた区画の箱はそのまま)。線は消えたので、黄色の線を見て手で引くか「自動配線」で引きます (元に戻すで戻せます)").to_string();
-                } else {
-                    self.strip_set(sch, Some(m));
-                    sch.status = i18n::tr("固定した部品・置いた区画の箱はそのままで、ほかの部品を並べ直し、線を引き直しました (元に戻すで戻せます)").to_string();
+                match std::mem::take(&mut self.strip.around_for) {
+                    AroundFor::PlaceOnly => {
+                        self.strip_set(sch, Some(without_wires(&m)));
+                        sch.status = i18n::tr("部品を置き直しました (固定した部品・置いた区画の箱はそのまま)。線は消えたので、黄色の線を見て手で引くか「自動配線」で引きます (元に戻すで戻せます)").to_string();
+                    }
+                    AroundFor::Relayout => {
+                        self.strip_set(sch, Some(m));
+                        sch.status = i18n::tr("固定した部品・置いた区画の箱はそのままで、ほかの部品を並べ直し、線を引き直しました (元に戻すで戻せます)").to_string();
+                    }
+                    AroundFor::Route { before } => {
+                        let after = strip_unjoined(&sch.sch, &m).iter().map(|x| x.0.clone()).collect::<std::collections::BTreeSet<_>>().len();
+                        self.strip_set(sch, Some(m));
+                        sch.status = if after == 0 {
+                            i18n::trf!("つながっていなかった {} 個のネットに線を引きました。前からある線はそのままです (元に戻すで戻せます)", before)
+                        } else {
+                            i18n::trf!("{} 個のネットに線を引きました。{} 個は通り道が無く引けませんでした (黄色の線)。部品を少し動かすか、表の線を手で引きます", before - after.min(before), after)
+                        };
+                    }
                 }
             }
             Err(TryRecvError::Disconnected) => {
                 self.strip.around = None;
                 self.strip.put_box = None;
+                self.strip.around_for = AroundFor::Relayout;
             }
             Err(TryRecvError::Empty) => {}
         }
@@ -322,25 +348,25 @@ impl BreadboardView {
     /// (`strip_around_done`).
     pub(super) fn strip_place(&mut self, sch: &SchEditor, l: &StripLayout) {
         self.strip_relayout(sch, l);
-        self.strip.place_only = true;
+        self.strip.around_for = AroundFor::PlaceOnly;
     }
 
-    /// "自動配線": the nets left apart wired, every wire on the board kept (`perf_route_left`).
-    pub(super) fn strip_route(&mut self, sch: &mut SchEditor, l: &StripLayout) {
+    /// "自動配線": the nets left apart wired, every wire on the board kept (`perf_route_left`), on another thread (a big board's
+    /// tries take a second or two; `strip_around_done` keeps the result).
+    pub(super) fn strip_route(&mut self, sch: &SchEditor, l: &StripLayout) {
         let before = strip_unjoined(&sch.sch, l).iter().map(|x| x.0.clone()).collect::<std::collections::BTreeSet<_>>().len();
-        let m = perf_route_left(&sch.sch, l);
-        let after = strip_unjoined(&sch.sch, &m).iter().map(|x| x.0.clone()).collect::<std::collections::BTreeSet<_>>().len();
-        self.strip_set(sch, Some(m));
-        sch.status = if after == 0 {
-            i18n::trf!("つながっていなかった {} 個のネットに線を引きました。前からある線はそのままです (元に戻すで戻せます)", before)
-        } else {
-            i18n::trf!("{} 個のネットに線を引きました。{} 個は通り道が無く引けませんでした (黄色の線)。部品を少し動かすか、表の線を手で引きます", before - after.min(before), after)
-        };
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (s, from) = (sch.sch.clone(), l.clone());
+        std::thread::spawn(move || {
+            let _ = tx.send(perf_route_left(&s, &from));
+        });
+        self.strip.around = Some(rx);
+        self.strip.around_for = AroundFor::Route { before };
     }
 
     /// The layout round `l`'s locked parts (placed and wired), made on another thread (`strip_around_done` keeps it).
     pub(super) fn strip_relayout(&mut self, sch: &SchEditor, l: &StripLayout) {
-        self.strip.place_only = false;
+        self.strip.around_for = AroundFor::Relayout;
         let (tx, rx) = std::sync::mpsc::channel();
         let (s, from, opt) = (sch.sch.clone(), l.clone(), strip_options(sch.strip_size, sch.strip_chips_back, sch.strip_mount_holes));
         std::thread::spawn(move || {
@@ -793,11 +819,18 @@ impl BreadboardView {
         let l = self.strip_shown(sch);
         let strip = self.kind == BoardKind::Stripboard;
         if self.strip_busy().0 {
+            let wiring = matches!(self.strip.around_for, AroundFor::Route { .. }) && self.strip.around.is_some();
             ui.horizontal(|ui| {
                 ui.spinner();
-                ui.label(i18n::tr("並べています…")).on_hover_text(i18n::tr(
-                    "部品の置き方と線の引き方をいくつも試して、表の線がいちばん少ない形を選んでいます (ユニバーサル基板で最長 1.5 秒)。終わるまでは前の並べ方を見せ、自動の並べ方は動かせません",
-                ));
+                if wiring {
+                    ui.label(i18n::tr("線を引いています…")).on_hover_text(i18n::tr(
+                        "ネットを引く順番をいくつも試し、そのあと 1 本ずつ外して引き直し、短くなる道を選んでいます (大きい基板で 2 秒ほど)。終わるまでは前の基板を見せます",
+                    ));
+                } else {
+                    ui.label(i18n::tr("並べています…")).on_hover_text(i18n::tr(
+                        "部品の置き方と線の引き方をいくつも試して、表の線がいちばん少ない形を選んでいます (ユニバーサル基板で最長 1.5 秒)。終わるまでは前の並べ方を見せ、自動の並べ方は動かせません",
+                    ));
+                }
             });
             ui.ctx().request_repaint_after(std::time::Duration::from_millis(50));
             // nothing to show yet: no check, size or list of an empty board

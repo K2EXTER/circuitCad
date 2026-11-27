@@ -180,8 +180,12 @@ pub fn bare_crossings(a: At, b: At) -> Vec<((i32, i32), bool)> {
 
 impl StripLayout {
     /// The automatic bare wires of a perfboard: along each piece of strip from its first hole in use to its last (a lead, a link's or
-    /// an off-board wire's end, or the end of a bare wire drawn by hand), where there are two.
+    /// an off-board wire's end, or the end of a bare wire drawn by hand), where there are two. None on a perfboard laid out for one
+    /// (`perf`: every hole a piece of its own, so no piece has two).
     pub fn perf_spans(&self) -> Vec<(At, At)> {
+        if self.perf {
+            return vec![];
+        }
         let used: Vec<At> = self.used().into_iter().map(|(a, _)| a).chain(self.bare.iter().flat_map(|(a, b)| [*a, *b])).collect();
         self.pieces()
             .into_iter()

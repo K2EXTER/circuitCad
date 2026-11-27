@@ -32,21 +32,58 @@ pub fn links_along_pins(l: &StripLayout) -> Vec<(usize, String)> {
 /// pieces of copper is wired from piece to piece as the automatic wiring goes (bare wires on the copper side, along a row, a column
 /// or at 45 degrees, and a wire on top over what is in the way), round the copper already there. The new wires' sides are chosen as
 /// the automatic layout's are (`wire_sides`); the old ones are left as they are. Four orders are tried (the supplies first or last,
-/// with or without a way out kept by each lead): the one with the fewest nets left apart, then the fewest wires on top.
+/// with or without a way out kept by each lead), each again with the nets left apart first and then with the nets that needed wires
+/// on top first (as the automatic layout's rounds, up to `STEPS` of work): the one with the fewest nets left apart, then the fewest
+/// wires on top. Then each net wired here is wired again alone round all the others, the shorter way kept (`reroute`).
 pub fn perf_route_left(s: &Schematic, l: &StripLayout) -> StripLayout {
     let c = read(s);
     let net_of_lead = |r: &str, p: &str| lead_net(&c, r, p);
     let mut best: Option<((usize, usize), StripLayout)> = None;
     let work = std::cell::Cell::new(0u64);
     for (rails_first, escapes) in [(true, false), (false, false), (true, true), (false, true)] {
-        let mut m = l.clone();
-        route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &[], forks: &[], along: ALONG_COST, bypass: &[], keep: true, work: &work });
-        let key = (crate::stripboard::strip_unjoined(s, &m).len(), m.links.len());
-        if best.as_ref().is_none_or(|b| key < b.0) {
-            best = Some((key, m));
+        // each order again with the nets left apart first, and once all are joined with the nets that needed wires on top first (as
+        // the automatic layout's rounds)
+        let mut first: Vec<String> = vec![];
+        let mut extra = 0;
+        for _ in 0..ROUNDS + MORE_ROUNDS {
+            if best.is_some() && work.get() > STEPS {
+                break;
+            }
+            let mut m = l.clone();
+            route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &first, forks: &[], along: ALONG_COST, bypass: &[], keep: true, work: &work });
+            let apart = crate::stripboard::strip_unjoined(s, &m);
+            let key = (apart.len(), m.links.len());
+            let on_top: Vec<String> = m.links[l.links.len()..].iter().map(|k| k.net.clone()).collect();
+            if best.as_ref().is_none_or(|b| key < b.0) {
+                best = Some((key, m));
+            }
+            if apart.is_empty() {
+                if extra >= MORE_ROUNDS || on_top.is_empty() {
+                    break;
+                }
+                extra += 1;
+                let mut count: BTreeMap<String, usize> = BTreeMap::new();
+                for n in on_top {
+                    *count.entry(n).or_default() += 1;
+                }
+                let mut v: Vec<(String, usize)> = count.into_iter().collect();
+                v.sort_by_key(|x| Reverse(x.1));
+                for (n, _) in v.into_iter().rev() {
+                    first.retain(|x| *x != n);
+                    first.insert(0, n);
+                }
+                continue;
+            }
+            for (n, _, _) in apart {
+                if !first.contains(&n) {
+                    first.insert(0, n);
+                }
+            }
         }
     }
     let mut m = best.map(|b| b.1).unwrap_or_else(|| l.clone());
+    // each net wired here wired again alone round the others, the shorter kept (the wires already on the board left as they are)
+    reroute(s, &c, &mut m, &net_of_lead, (l.bare.len(), l.links.len()), &BTreeSet::new(), &work);
     let old = l.links.len();
     let mut new = StripLayout { links: m.links.split_off(old), ..m.clone() };
     wire_sides(&mut new);

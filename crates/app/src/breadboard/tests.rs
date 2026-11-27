@@ -643,7 +643,8 @@ fn a_part_locked_on_the_perfboard_stays_when_the_rest_is_laid_out_again() {
     let b = [(a.0, a.1.wrapping_sub(1)), (a.0.wrapping_sub(1), a.1), (a.0 + 1, a.1)].into_iter().find(|h| h.1 < placed.cols && h.0 < placed.rows && !placed.used().iter().any(|x| x.0 == *h)).unwrap();
     let mut hand = placed.clone();
     hand.bare.push((a, b));
-    app.breadboard.strip_route(&mut app.sch, &hand);
+    app.breadboard.strip_route(&app.sch, &hand);
+    run(&mut app, vec![]);
     let wired = app.sch.stripboard.clone().unwrap();
     assert!(sch_core::stripboard::strip_unjoined(&app.sch.sch, &wired).is_empty() && sch_core::stripboard::strip_check(&app.sch.sch, &wired).is_empty(), "{:?}", sch_core::stripboard::strip_check(&app.sch.sch, &wired));
     assert!(wired.bare.contains(&(a, b)), "the wire drawn by hand kept");

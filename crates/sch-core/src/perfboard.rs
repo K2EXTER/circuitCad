@@ -21,6 +21,7 @@ mod anneal;
 mod back;
 mod lock;
 mod place;
+mod reroute;
 mod river;
 mod route;
 mod shape;
@@ -30,6 +31,7 @@ mod wires;
 use anneal::*;
 use back::*;
 use place::*;
+use reroute::reroute;
 use river::*;
 use shape::*;
 use wants::*;
@@ -211,8 +213,30 @@ fn perf_layout_keeping(s: &Schematic, opt: StripOptions, keep: Vec<StripPart>, b
         }
     }
     let mut l = best.map(|b| b.1).unwrap_or_default();
+    // each net wired again alone round the others, the shorter way kept; not the nets whose wiring keeps a rule the plain wiring
+    // does not (a Kelvin fork's, a bypass capacitor's, ground split by section)
+    let skip = ruled_nets(s, &full, &wants, &l);
+    reroute(s, &full, &mut l, &net_of_lead, (0, 0), &skip, &work);
     wire_sides(&mut l);
     l
+}
+
+/// The nets whose wiring keeps a rule of its own (`reroute` leaves them): a Kelvin fork's, a bypass capacitor's, and ground when it
+/// is split by section.
+fn ruled_nets(s: &Schematic, c: &Circuit, wants: &Wants, l: &StripLayout) -> BTreeSet<String> {
+    let net_at: BTreeMap<At, String> = l.parts.iter().flat_map(|p| p.leads.iter().map(|(pin, a)| (*a, lead_net(c, &p.refdes, pin)))).collect();
+    let mut skip: BTreeSet<String> = BTreeSet::new();
+    for m in s.requirements.measures.iter().filter(|m| m.what == "fork") {
+        skip.extend(m.pads.iter().filter_map(|p| crate::stripboard::pad_at(l, p)).filter_map(|a| net_at.get(&a).cloned()));
+    }
+    for (p, q) in bypass_pairs(c, wants, l) {
+        skip.extend([p, q].iter().filter_map(|a| net_at.get(a).cloned()));
+    }
+    if !l.sections.is_empty() {
+        skip.extend(net_at.values().filter(|n| is_ground_name(n)).cloned());
+    }
+    skip.remove("");
+    skip
 }
 
 /// How good a wired layout is, the smaller the better: what is left on the mounting holes' corners, the nets left apart (`apart`),
@@ -251,6 +275,43 @@ mod tests {
     fn load(name: &str) -> Schematic {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples").join(name);
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+    }
+
+    /// Each net wired again alone round the others (`reroute`) makes the 7-segment counter's copper shorter than the nets wired one
+    /// after the other, with no more wires on top and every net still joined; the wires drawn before (`from`) are left as they are.
+    #[test]
+    fn each_net_wired_again_alone_makes_the_copper_shorter() {
+        let s = load("seg7_counter.schjson");
+        let c = read(&s);
+        let net_of_lead = |r: &str, p: &str| lead_net(&c, r, p);
+        let work = std::cell::Cell::new(0u64);
+        let placed = without_wires(&crate::test_layouts::perf(&s));
+        // the first of the orders that joins every net
+        let once = [(true, false), (false, false), (true, true), (false, true)]
+            .into_iter()
+            .map(|(rails_first, escapes)| {
+                let mut m = placed.clone();
+                route(&c, &mut m, &net_of_lead, Order { rails_first, escapes, first: &[], forks: &[], along: ALONG_COST, bypass: &[], keep: true, work: &work });
+                m
+            })
+            .find(|m| crate::stripboard::strip_unjoined(&s, m).is_empty())
+            .expect("an order that joins every net");
+        let length = |l: &StripLayout| -> f64 {
+            let len = |a: At, b: At| {
+                let (dr, dc) = (a.0.abs_diff(b.0) as f64, a.1.abs_diff(b.1) as f64);
+                dr.max(dc) - dr.min(dc) + dr.min(dc) * std::f64::consts::SQRT_2
+            };
+            l.bare.iter().map(|(a, b)| len(*a, *b)).sum::<f64>() + l.links.iter().map(|k| len(k.a, k.b)).sum::<f64>()
+        };
+        let mut again = once.clone();
+        reroute(&s, &c, &mut again, &net_of_lead, (0, 0), &BTreeSet::new(), &work);
+        assert!(strip_check(&s, &again).is_empty() && crate::stripboard::strip_unjoined(&s, &again).is_empty(), "{:?}", strip_check(&s, &again));
+        assert!(again.links.len() <= once.links.len(), "{} > {}", again.links.len(), once.links.len());
+        assert!(length(&again) < length(&once) - 1.0, "{} vs {}", length(&again), length(&once));
+        // the wires before `from` are kept
+        let mut kept = once.clone();
+        reroute(&s, &c, &mut kept, &net_of_lead, (once.bare.len(), once.links.len()), &BTreeSet::new(), &work);
+        assert_eq!(kept, once);
     }
 
     /// With `chips_back`, the 0805 / 1206 resistors and capacitors go on the copper side across two holes side by side, one end on a
