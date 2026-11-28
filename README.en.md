@@ -14,7 +14,7 @@ circuitCad combines schematic capture, SPICE-style simulation, breadboard protot
 
 Project page (features, analyses, known issues and roadmap): <https://k2exter.github.io/circuitCad/en/>
 
-> **Status: early alpha.** Mainly tested on Windows (Linux: lightly checked on WSL2 only). A board made with this software has been manufactured and its copper checked; it has not been assembled and tested yet. See [Limitations](#limitations) before relying on it.
+> **Status: early alpha.** Mainly tested on Windows (Linux: lightly checked on WSL2 only). An evaluation board designed with this software has been manufactured, assembled and measured against the simulation (see [Used in](#used-in)). See [Limitations](#limitations) before relying on it.
 
 ![A series regulator schematic with node voltages and branch currents overlaid on the wires (English UI)](docs/images/en/schematic-dc.png)
 
@@ -121,10 +121,11 @@ A code map for contributors is in [CLAUDE.md](CLAUDE.md), with per-file notes in
 
 ## Used in
 - **[Ladder Lab](https://github.com/K2EXTER/ladder-lab)**: building measuring instruments, power supplies and electronic loads from simple ones up, and using them to improve each other's accuracy. The first instrument, a DMM, was drawn in circuitCad, checked with ERC and the DC operating point, then built on a breadboard and measured (ADC-only noise 1.2 µV). The build log, mistakes included, is in [an article](https://zenn.dev/k2exter/articles/5ff24daec3b92a) (Japanese).
+  - **Evaluation board**: to check how closely the simulation matches real parts, a small board (60 × 36 mm: an LDO, RC filters and three diodes) was designed in circuitCad, ordered from JLCPCB and hand-soldered. On the first board (2026-11-25) the 3.3 V output read 3.319 V (predicted 3.299 V, within spec) and the RC filter's −3 dB point was about 691 Hz (predicted 699 Hz, inside the 647–758 Hz range expected from part tolerances). The largest miss was the diode forward voltage: even re-solved at the room temperature (about 18 °C), the measured values were 8–23 mV higher. These differences go back into fixing the models.
 
 ## Limitations
 - **Tested mainly on Windows 10 / 11.** On Linux, the author built it, launched it and tried basic operation on WSL2 (Ubuntu 26.04, no GPU) only; other distributions and real hardware are untested, and you may need GTK and related runtime libraries. macOS builds and passes the tests in CI, but nobody has launched the app there yet.
-- **Board output is proven only up to a delivered bare board.** A board ordered from this software's Gerber and drill files has been delivered, and its copper pattern was checked with no defects found. It has not been assembled and tested yet. For a first order, use a small quantity and check the result in the fabricator's Gerber viewer.
+- **Board output is proven on one small evaluation board.** A board ordered from this software's Gerber and drill files was assembled, worked, and measured close to the prediction (2 layers, 18 parts, hand-soldered). Larger boards, fine-pitch ICs and high-frequency designs are untested. For a first order, use a small quantity and check the result in the fabricator's Gerber viewer.
 - **The simulator uses simplified models** and can differ noticeably from real hardware. Each lesson explains the differences.
 - **Part data and fabricator rules are approximate.** Always check the datasheet and the fabricator's current page. A part whose land pattern has not been checked against the datasheet is flagged `land_unverified`, and the pre-order check warns about it.
 - **Do not use it as the basis for safety-critical designs** (medical, automotive, high voltage, lithium-cell chargers, and so on).
