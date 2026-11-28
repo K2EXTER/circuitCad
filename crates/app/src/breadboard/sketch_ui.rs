@@ -328,11 +328,15 @@ impl BreadboardView {
         let board = board_of(&sch.sch, &refdes);
         let real = sch.sketch_real.contains(&refdes);
         let mut open = true;
+        // as big as the area right of the panel (above the status lines): blocks and code side by side want the room
+        let at = crate::widgets::beside_panel();
+        let area = ctx.content_rect();
+        let size = [(area.right() - at.x - 16.0).max(680.0), (area.bottom() - at.y - 70.0).max(560.0)];
         egui::Window::new(i18n::trf!("スケッチ ({refdes})"))
             .id(egui::Id::new("sketch_window"))
             .open(&mut open)
             .default_pos(crate::widgets::beside_panel())
-            .default_size([680.0, 560.0])
+            .default_size(size)
             .resizable(true)
             .show(ctx, |ui| {
                 let mut text = sketch_of(sch, &refdes);
