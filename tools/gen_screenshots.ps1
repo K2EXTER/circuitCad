@@ -41,6 +41,7 @@ $shots = [ordered]@{
     "mixed-signal-waveform"  = @("$ex\mixed_signal.schjson", "--tran", "8m", "10u", "--signals", "CLK,Q1,Q2,FILT")
     "prototype"              = @("$ex\pot_dimmer.schjson", "--proto", "--proto-power")
     "bench"                  = @("$ex\mixed_signal.ccproj", "--bench-tab", "power_on")
+    "blocks"                 = @("$ex\arduino_blocks.schjson", "--proto", "--proto-sketch", "U1")
 }
 
 $failed = @()

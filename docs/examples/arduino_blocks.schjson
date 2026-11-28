@@ -395,7 +395,7 @@
     "U1"
   ],
   "sketches": {
-    "U1": "// ブロックで作ったスケッチ\nint presses = 0;\n\nvoid setup() {\n  pinMode(LED_BUILTIN, OUTPUT);\n  pinMode(2, INPUT_PULLUP);\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  if (digitalRead(2) == LOW) {\n    digitalWrite(LED_BUILTIN, HIGH);\n    presses += 1;\n    Serial.print(\"押した回数: \");\n    Serial.println(presses);\n    while (digitalRead(2) == LOW) {\n      delay(10);\n    }\n  } else {\n    digitalWrite(LED_BUILTIN, LOW);\n  }\n  delay(20);\n}\n"
+    "U1": "int presses = 0;\n\nvoid setup() {\n  pinMode(LED_BUILTIN, OUTPUT);\n  pinMode(2, INPUT_PULLUP);\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  if (digitalRead(2) == LOW) {\n    digitalWrite(LED_BUILTIN, HIGH);\n    presses += 1;\n    Serial.print(\"presses: \");\n    Serial.println(presses);\n    while (digitalRead(2) == LOW) {\n      delay(10);\n    }\n  } else {\n    digitalWrite(LED_BUILTIN, LOW);\n  }\n  delay(20);\n}\n"
   },
   "wires": [
     {

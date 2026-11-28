@@ -87,7 +87,7 @@ a{color:var(--accent)}
     <a class="btn sub" href="https://github.com/K2EXTER/circuitCad">Source code (GitHub)</a>
   </div>
   <p class="note">Alpha, free, no installer: unzip and run circuitCad.exe. Switch to English with <strong>Settings → Language / 言語 → English</strong> (from v0.1.0-alpha.11).<br>The executable is not signed, so Windows SmartScreen may warn you: choose "More info" then "Run anyway".</p>
-  <img class="hero" src="../images/en/schematic-dc.png" alt="A series regulator schematic with node voltages as wire colours and branch currents as arrows" width="960">
+  <img class="hero" src="../images/demo-live-en.gif" alt="A screen recording of about 110 seconds: a potentiometer dimming an LED, from the DC result on the schematic to the breadboard running, the board autorouted and checked by DRC, the 3D view and the first power-on, then an Arduino sketch written with blocks and run on the breadboard" width="960">
 </header>
 
 <section>
@@ -112,6 +112,7 @@ a{color:var(--accent)}
     <div class="card"><h3>Explains itself</h3><p>Every button and field has hover help. Wiring mistakes and rating problems come with the cause and how to fix it. F1 opens the operation guide.</p></div>
     <div class="card"><h3>Learn as you go</h3><p>9 learning paths, more than 90 step-by-step lessons, 8 board lessons and 10 "Build it yourself" challenges that check your circuit. Lessons ask you to predict first.</p></div>
     <div class="card"><h3>Try it on a breadboard</h3><p>The schematic's parts are laid out on a breadboard; switch the power on and it runs as plugged in. LEDs light, a buzzer sounds, and parts over their rating get scorched.</p></div>
+    <div class="card"><h3>An Arduino runs too</h3><p>Sketches for an Arduino Nano, Mega or ATtiny85 run together with the circuit. Write them as code, or stack blocks.</p></div>
     <div class="card"><h3>Learn by breaking things</h3><p>Open, short or reverse parts and pins and compare the results. Repair a board with a fault put in on purpose.</p></div>
     <div class="card"><h3>See it, then understand it</h3><p>Voltages as wire colours and currents as arrows, right on the schematic. Analyses from DC to loop gain, noise and Monte Carlo.</p></div>
     <div class="card"><h3>All the way to an order</h3><p>Autoroute, DRC and a 3D view, then a pre-order check against JLCPCB / PCBWay / OSH Park rules and Gerber export.</p></div>
@@ -146,6 +147,20 @@ a{color:var(--accent)}
         <li>Turn the supply voltage, the ambient temperature and potentiometers while it runs; click switches and buttons</li>
         <li>A buzzer sounds through your speakers, and parts over their rating get scorched and fail in the circuit too</li>
         <li>A meter (DC voltage) and a scope (voltage over time)</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="spot">
+    <div class="pic"><img src="../images/en/spot/blocks.png" alt="The sketch window of an Arduino Nano: If and Repeat blocks that light an LED while a button is held, next to the same Arduino code" loading="lazy"></div>
+    <div>
+      <h3>Write the Arduino sketch in blocks, or in code<span class="tag">from alpha.13</span></h3>
+      <p>Write a sketch for an Arduino Nano, Mega or ATtiny85 and it runs together with the circuit when you switch the power on. Write it as code, or stack blocks.</p>
+      <ul>
+        <li>Drag blocks into place and they are the Arduino code; edit the code and the blocks follow</li>
+        <li>With the power on, the running block lights up. Hold the push button: the LED turns on and the serial monitor counts the presses</li>
+        <li>With arduino-cli installed, the compiled program itself runs, instruction by instruction (libraries and interrupts too)</li>
+        <li>Stripboard and perfboard layouts (strip cuts, tinned-wire links, the view from the solder side) switch on and run the same way</li>
       </ul>
     </div>
   </div>
@@ -265,11 +280,13 @@ a{color:var(--accent)}
   </details>
 
   <details>
-    <summary>Prototype and bench<small>breadboard, the board you received</small></summary>
+    <summary>Prototype and bench<small>breadboard, stripboard, Arduino, the board you received</small></summary>
     <ul>
       <li><strong>Prototype</strong>: the schematic's parts laid out on a breadboard, connected holes lit, drag to move, leads that differ from the schematic marked in red and listed<span class="tag">from alpha.12</span></li>
       <li>Switch the power on and it runs as plugged in: LEDs, switches, push buttons, potentiometers, a buzzer you can hear, a DC motor; parts over their rating get scorched and fail</li>
       <li>Change the supply voltage, ambient temperature and potentiometers while it runs; a meter and a scope</li>
+      <li><strong>Stripboard and perfboard</strong>: part layout, strip cuts, tinned-wire links, the view from the solder side, the order to build and power it section by section, a printable drawing; switch it on and probe it with the meter and the scope<span class="tag">from alpha.13</span></li>
+      <li><strong>Arduino</strong>: sketches for a Nano, Mega or ATtiny85 run with the circuit (serial monitor, servos, an I²C temperature and humidity sensor), written as code or as blocks; with arduino-cli, the compiled program itself runs<span class="tag">from alpha.13</span></li>
       <li><strong>Bench</strong>: assembly → first power-on → measure → pass / fail → repair, with the parts and probe points lit on the board layout at each step</li>
       <li>A first power-on guide (normal current range, current limit, where to look when it is off) and a printable assembly sheet (soldering order, polarity marks)</li>
     </ul>
@@ -388,7 +405,7 @@ a{color:var(--accent)}
     <li><strong>Proven only up to a delivered bare board.</strong> A board ordered from circuitCad's Gerber and drill files has been delivered and its copper checked with no defects found; it has not been assembled and tested yet.</li>
     <li><strong>Simplified models.</strong> Results agree with ngspice on the bundled examples, but agreement with real hardware has not been measured yet. Makers' SPICE models load only partly (some syntax, many XSPICE devices are not supported).</li>
     <li><strong>The user interface is still being reworked.</strong> It is the area we are improving most actively, release by release (layout, wording, icons, and the same look and behaviour across the schematic editor, the board editor and the windows), but it is not finished: some panels are still dense, some screens do not look like the others yet, and some operations take more clicks than they should. Feedback on what confused you is especially welcome.</li>
-    <li><strong>The English text is new</strong> and was translated with AI help from the Japanese original; some wording may be awkward, and a few messages may still appear in Japanese (the breadboard's hole names, such as <code>上+1</code>, are still Japanese). Most documentation (docs/, the code notes) is in Japanese.</li>
+    <li><strong>The English text is new</strong> and was translated with AI help from the Japanese original; some wording may be awkward, and a few messages may still appear in Japanese. Most documentation (docs/, the code notes) is in Japanese.</li>
     <li><strong>OCR of scanned data sheets works on Windows only.</strong> Makers' SPICE models cannot be redistributed, so they are not bundled; download them yourself.</li>
     <li><strong>Gaps compared with mature tools:</strong> symbols are drawn as boxes (no graphical symbol or footprint editor), no KiCad board (<code>.kicad_pcb</code>) or EAGLE import, no panelization, dark theme only, shortcuts cannot be changed.</li>
     <li>It is developed by one person with an AI assistant, so replies and fixes can be slow.</li>

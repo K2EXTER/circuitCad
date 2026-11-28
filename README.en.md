@@ -8,7 +8,7 @@ circuitCad combines schematic capture, SPICE-style simulation, breadboard protot
 
 > **English UI.** The whole interface (menus, hover help, error messages, the operation guide, the glossary, the learning paths and all lessons) can be shown in English: **Settings → Language / 言語 → English**, or start it with `--lang en`. The English text was translated with AI help from the Japanese original; if a sentence reads oddly, please open an issue (or fix the line in [`crates/i18n/en/`](crates/i18n/en/)).
 >
-> The English mode is included from **`v0.1.0-alpha.11`**; the zips up to `v0.1.0-alpha.10` are Japanese only. In `v0.1.0-alpha.12` the breadboard's hole names (such as `上+1`) are still Japanese in the English UI.
+> The English mode is included from **`v0.1.0-alpha.11`**; the zips up to `v0.1.0-alpha.10` are Japanese only. In `v0.1.0-alpha.12` the breadboard's hole names (such as `上+1`) are still Japanese in the English UI; this is fixed from `v0.1.0-alpha.13`.
 
 [**Download for Windows**](https://github.com/K2EXTER/circuitCad/releases) (alpha, no installer: unzip and run `circuitCad.exe`)
 
@@ -22,7 +22,7 @@ Project page (features, analyses, known issues and roadmap): <https://k2exter.gi
 |---|---|
 | ![Lesson 1, "Dividing voltage": the lesson window asks for a prediction before the step is shown](docs/images/en/lesson.png) | ![The operation guide window with mouse and key operations](docs/images/en/guide.png) |
 
-A screen recording (about 80 s, Japanese UI) with one sample, a potentiometer that dims an LED: the DC operating point and the knob turned with the results following, the breadboard switched on and its knob turned, the board imported, routed and checked, the 3D view, then the Bench tab (assembly and first power-on).
+A screen recording (about 110 s, English UI) with one sample, a potentiometer that dims an LED: the DC operating point and the knob turned with the results following, the breadboard switched on and its knob turned, the board imported, routed and checked, the 3D view, then the Bench tab (assembly and first power-on). At the end, a second sample: an Arduino sketch written with blocks, a block dragged in and undone, then the power switched on and the button held (the running block lights up).
 
 ![A screen recording (about 110 s): DC results on the schematic, the breadboard running, the board imported, auto-routed and checked by DRC, the 3D view, the Bench tab's assembly and first power-on, and an Arduino sketch written with blocks, run on the breadboard with its button held](docs/images/demo-live-en.gif)
 
@@ -35,7 +35,8 @@ A screen recording (about 80 s, Japanese UI) with one sample, a potentiometer th
 ## Features
 - **Beginner-friendly.** Every button and field has a hover explanation. Wiring mistakes and rating violations come with the cause and how to fix it. `F1` opens an operation guide.
 - **A guided learning path.** "Build a regulated power supply" takes you from the basics to a board and a real-world measurement: 9 learning paths (power supply, Arduino-compatible board, Mega-compatible board, board craft, switching loads, battery-powered devices, signals, parts, repair), more than 90 step-by-step lessons, 8 board lessons (including repairing a board with a fault put in on purpose), 10 "build it yourself" challenges that check your circuit, and guides for bench experiments. Lessons ask you to predict a result before you simulate it. Digital circuits can be run live: click the switches and watch High / Low colours and the truth table, step one clock at a time, or slow the gate delays down to see a glitch.
-- **Try it on a breadboard** (from alpha.12). The Prototype tab lays the schematic's parts out on a breadboard and lights the holes that are connected; drag parts and jumper wires to move them, and leads that differ from the schematic get a red circle. Switch the power on and the circuit runs as it is plugged in: LEDs light, buttons click, a potentiometer turns, a buzzer sounds through your speakers, and parts over their rating get scorched (and fail in the circuit too). A meter and a scope are included.
+- **Try it on a breadboard** (from alpha.12). The Prototype tab lays the schematic's parts out on a breadboard and lights the holes that are connected; drag parts and jumper wires to move them, and leads that differ from the schematic get a red circle. Switch the power on and the circuit runs as it is plugged in: LEDs light, buttons click, a potentiometer turns, a buzzer sounds through your speakers, and parts over their rating get scorched (and fail in the circuit too). A meter and a scope are included. Stripboard and perfboard layouts (where to cut the strips, tinned-wire links, the view from the solder side, the order to build it section by section) run the same way (from alpha.13).
+- **Run an Arduino with the circuit** (from alpha.13). Write a sketch for an Arduino Nano, Mega or ATtiny85 and it runs together with the circuit when you switch the power on, with a serial monitor. Write it as code, or **stack blocks** (the blocks are the Arduino code: change one and the other follows). With arduino-cli installed, the compiled program itself can run, instruction by instruction, on a simulated ATmega328P.
 - **Learn by breaking things.** Open, short, reverse or change parts and pins, and compare how far the damage spreads. Fault diagnosis works the other way: enter the voltages you measured on a circuit that does not work, and it lists the likely causes.
 - **Schematic to fabrication files, and on to the bench.** Import into the PCB editor, then place, route (auto-route, push-and-shove, hand routing with cleanup), pour copper, run DRC, view in 3D, run pre-order checks for JLCPCB / PCBWay / OSH Park rules, and export Gerber, drill, BOM and placement files. 2 to 8 copper layers, several boards in one project (checked connections between them, stacked in 3D, simulated together) and STEP export are supported. The Bench tab walks through the board you received: assembly (soldering order and polarity marks as a printable sheet), the first power-on (the normal current range from the schematic and the current limit to set), measuring, pass/fail and repair.
 - **Simulation:** DC operating point, transient (adaptive time step, with a logic-analyser style digital view), AC (Bode plot), DC sweep, noise, poles and zeros, root locus, loop gain (phase margin, Nyquist and Nichols plots), impedance seen from a net, THD, CMRR and PSRR, sensitivity, battery life, self-heating (θjc and heatsinks, ambient sweeps, over time), parameter sweep, Monte Carlo (yield and Cpk) and worst-case tolerance analysis, temperature effects, fault simulation. Step-response figures include settling times down to a ±0.003 % band.
@@ -52,6 +53,10 @@ A screen recording (about 80 s, Japanese UI) with one sample, a potentiometer th
 | Prototype (run it on a breadboard) | Bench (first power-on of the board you received) |
 |---|---|
 | ![The Prototype tab: the schematic's parts plugged into a breadboard with the power on and the LED lit](docs/images/en/prototype.png) | ![The Bench tab: the first power-on steps and the normal current range from the schematic](docs/images/en/bench.png) |
+
+| An Arduino sketch written with blocks (left), and the same sketch as code (right) |
+|---|
+| ![The sketch window of an Arduino Nano: If and Repeat blocks that light an LED while a button is held, next to the same Arduino code](docs/images/en/blocks.png) |
 
 | Transient waveform | Bode plot (AC analysis) |
 |---|---|

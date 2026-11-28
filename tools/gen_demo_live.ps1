@@ -23,17 +23,8 @@ Copy-Item $Exe $copy -Force
 $frames = Join-Path $root "target\demo-live-frames"
 $out = if ($Lang -eq "en") { "docs\images\demo-live-en.gif" } else { "docs\images\demo-live.gif" }
 
-# the blocks sample: in English its texts too (the comment line and what it sends to the serial monitor). The copy sits under
-# target\ and is opened by a path from the repository (the status line shows it: no user folder in the picture).
-$blocks = "docs\examples\arduino_blocks.schjson"
-if ($Lang -eq "en") {
-    $dir = Join-Path $root "target\demo"
-    New-Item -ItemType Directory -Force $dir | Out-Null
-    $text = [IO.File]::ReadAllText((Join-Path $root $blocks), [Text.Encoding]::UTF8)
-    $text = $text.Replace("// ブロックで作ったスケッチ", "// Sketch made from blocks").Replace("押した回数: ", "Presses: ")
-    [IO.File]::WriteAllText((Join-Path $dir "arduino_blocks.schjson"), $text, (New-Object Text.UTF8Encoding($false)))
-    $blocks = "target\demo\arduino_blocks.schjson"
-}
+# the blocks sample has no Japanese in its sketch (no comment line; it sends "presses: "), so both languages open it as it is
+$blocks = "docs\examplesrduino_blocks.schjson"
 
 # where to click, by language: [x, y] (a drag: [x1, y1, x2, y2])
 $P = @{

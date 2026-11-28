@@ -855,7 +855,7 @@ mod tests {
             live.release();
             assert!(led(&mut live) < 1e-4, "dark when let go");
             let serial = &live.mcus[0].machine.as_ref().unwrap().serial;
-            assert!(serial.trim_end().ends_with(&format!("押した回数: {n}")), "{serial:?}");
+            assert!(serial.trim_end().ends_with(&format!("presses: {n}")), "{serial:?}");
         }
     }
 

@@ -4227,7 +4227,7 @@ fn arduino_blocks_sketch() -> String {
                 then: vec![
                     Block::DigitalWrite { pin: led(), value: BExpr::Name("HIGH".into()) },
                     Block::Change { name: "presses".into(), by: BExpr::Int(1) },
-                    Block::Print { value: BExpr::Text("押した回数: ".into()), newline: false },
+                    Block::Print { value: BExpr::Text("presses: ".into()), newline: false },
                     Block::Print { value: BExpr::Name("presses".into()), newline: true },
                     // wait for the button to be let go (one press is counted once)
                     Block::While { cond: pressed(), body: vec![Block::Delay(BExpr::Int(10))] },
@@ -4237,7 +4237,10 @@ fn arduino_blocks_sketch() -> String {
             Block::Delay(BExpr::Int(20)),
         ],
     };
-    sim_core::sketch::blocks::to_code(&s)
+    // without the "made from blocks" comment line: the sample reads the same in either language (the app writes that line,
+    // in the UI's language, when the blocks are first changed)
+    let code = sim_core::sketch::blocks::to_code(&s);
+    code.strip_prefix(sim_core::sketch::blocks::HEADER).unwrap_or(&code).trim_start_matches('\n').to_string()
 }
 
 /// The Arduino blocks sample (B6): an Arduino Nano with a push button from D2 to ground and an LED (330 ohm) on D13, its sketch
