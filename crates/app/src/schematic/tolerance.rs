@@ -41,6 +41,8 @@ pub struct SheetSettings {
     pub sketches: std::collections::BTreeMap<String, String>,
     /// The boards whose sketch runs as the chip's real instructions (built by arduino-cli; W5 (b)).
     pub sketch_real: std::collections::BTreeSet<String>,
+    /// The boards whose sketch is written as blocks (`sim_core::sketch::blocks`; the text stays what is saved and run).
+    pub sketch_blocks: std::collections::BTreeSet<String>,
 }
 
 impl Default for SheetSettings {
@@ -67,6 +69,7 @@ impl Default for SheetSettings {
             strip_mount_holes: false,
             sketches: Default::default(),
             sketch_real: Default::default(),
+            sketch_blocks: Default::default(),
         }
     }
 }
@@ -125,6 +128,9 @@ pub fn with_settings(sheet: &mut serde_json::Value, t: &SheetSettings) {
     if !t.sketch_real.is_empty() {
         obj.insert("sketch_real".into(), serde_json::json!(t.sketch_real));
     }
+    if !t.sketch_blocks.is_empty() {
+        obj.insert("sketch_blocks".into(), serde_json::json!(t.sketch_blocks));
+    }
 }
 
 /// Takes the settings out of a sheet's JSON (the defaults for what a file does not have; a box that is missing keeps its default).
@@ -158,6 +164,7 @@ pub fn take_settings(sheet: &mut serde_json::Value) -> SheetSettings {
     t.strip_mount_holes = obj.remove("strip_mount_holes").and_then(|v| v.as_bool()).unwrap_or(false);
     t.sketches = obj.remove("sketches").and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
     t.sketch_real = obj.remove("sketch_real").and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
+    t.sketch_blocks = obj.remove("sketch_blocks").and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
     if let Some(v) = obj.remove("battery") {
         for (key, slot) in [("from", &mut t.bat_from), ("to", &mut t.bat_to), ("node", &mut t.bat_node), ("v_min", &mut t.bat_vmin)] {
             if let Some(s) = v.get(key).and_then(|x| x.as_str()) {
@@ -192,6 +199,7 @@ impl SchEditor {
             strip_mount_holes: self.strip_mount_holes,
             sketches: self.sketches.clone(),
             sketch_real: self.sketch_real.clone(),
+            sketch_blocks: self.sketch_blocks.clone(),
         }
     }
 
@@ -218,6 +226,7 @@ impl SchEditor {
         self.strip_mount_holes = t.strip_mount_holes;
         self.sketches = t.sketches.clone();
         self.sketch_real = t.sketch_real.clone();
+        self.sketch_blocks = t.sketch_blocks.clone();
         self.saved_tol = t;
     }
 }

@@ -792,7 +792,7 @@ mod tests {
         // the bench supplies are knobs too (to turn a chip's supply off)
         let supplies = e.sch.components.iter().filter(|c| c.kind == sch_core::Kind::VSource).map(|c| c.refdes.clone());
         let knobs: Vec<String> = pots.into_iter().chain(supplies).collect();
-        let mut live = Live::start(e.board_circuit(&nets, None).unwrap(), &leds, vec![], &knobs);
+        let mut live = Live::start(e.board_circuit(&nets, None).unwrap(), &leds, e.live_switches(), &knobs);
         for refdes in crate::breadboard::sketch_ui::boards(&e.sch) {
             if let Some((vcc, gnd)) = crate::breadboard::sketch_ui::supply_nets(&e.sch, &refdes, &nets) {
                 live.set_supply(&refdes, vcc, gnd);
@@ -819,6 +819,34 @@ mod tests {
         assert!(live.mcus[0].machine.as_ref().unwrap().error.is_none());
         // read every 0.25 s: on for 0.5 s, off for 0.5 s (a reading at the very moment of a change shows the state up to it)
         assert_eq!(seen, [true, true, false, false, true, true, false, false], "lit every other half second");
+    }
+
+    /// The Arduino blocks sample: the LED is lit while the button is held, and each press is counted once on the serial monitor.
+    #[test]
+    fn the_blocks_sketch_counts_the_presses() {
+        let e = sample("arduino_blocks.schjson");
+        // the sketch is saved as the code of its blocks, and reads back as them
+        let text = crate::breadboard::sketch_ui::sketch_of(&e, "U1");
+        assert!(e.sketch_blocks.contains("U1"));
+        assert!(sim_core::sketch::blocks::from_code(&text).is_ok(), "{text}");
+        let mut live = with_sketch(&e);
+        let k = live.switch_index("SW1").unwrap();
+        // the LED's current over a short frame after a while (a reading is the mean since the one before)
+        let led = |live: &mut Live| {
+            run_for(live, 0.2);
+            live.advance(0.02);
+            live.current("D1").unwrap_or(0.0)
+        };
+        // the pull-up is on before the first read: no press counted at the start
+        assert!(led(&mut live) < 1e-4, "dark until pressed");
+        for n in 1..=2 {
+            live.press(k);
+            assert!(led(&mut live) > 2e-3, "lit while held");
+            live.release();
+            assert!(led(&mut live) < 1e-4, "dark when let go");
+            let serial = &live.mcus[0].machine.as_ref().unwrap().serial;
+            assert!(serial.trim_end().ends_with(&format!("押した回数: {n}")), "{serial:?}");
+        }
     }
 
     /// The Arduino pot sample: turning the knob up brightens the LED on D9, and the readings go to the serial monitor.

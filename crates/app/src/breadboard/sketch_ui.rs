@@ -172,17 +172,31 @@ impl BreadboardView {
                 });
             });
             let real = sch.sketch_real.contains(&refdes);
-            let marked = self.mistake_line(&text, board, real);
-            // as wide as the panel is, not wider; as tall as SKETCH_ROWS lines at most (a long sketch scrolls inside: the serial
-            // monitor below stays in sight while it runs; the window is for writing at length)
-            let max_h = ui.text_style_height(&egui::TextStyle::Monospace) * SKETCH_ROWS as f32 + 8.0;
-            let edit = egui::ScrollArea::vertical()
-                .id_salt(("sketch_box", &refdes))
-                .max_height(max_h)
-                .show(ui, |ui| super::code_edit::code_box(ui, &mut text, 10, ui.available_width(), marked))
-                .inner;
-            if edit.changed() {
-                sch.sketches.insert(refdes.clone(), text.clone());
+            // written as code or as blocks (the blocks are the code read back: a sketch they cannot show stays code)
+            let blocks = mode_bar(ui, sch, &refdes, &text);
+            if let Some(mut bs) = blocks {
+                let changed = egui::ScrollArea::vertical()
+                    .id_salt(("blocks_box", &refdes))
+                    .max_height(BLOCKS_PANEL_HEIGHT)
+                    .show(ui, |ui| super::blocks_ui::edit_blocks(ui, &mut bs, board, &refdes))
+                    .inner;
+                if changed {
+                    text = sim_core::sketch::blocks::to_code(&bs);
+                    sch.sketches.insert(refdes.clone(), text.clone());
+                }
+            } else {
+                let marked = self.mistake_line(&text, board, real);
+                // as wide as the panel is, not wider; as tall as SKETCH_ROWS lines at most (a long sketch scrolls inside: the serial
+                // monitor below stays in sight while it runs; the window is for writing at length)
+                let max_h = ui.text_style_height(&egui::TextStyle::Monospace) * SKETCH_ROWS as f32 + 8.0;
+                let edit = egui::ScrollArea::vertical()
+                    .id_salt(("sketch_box", &refdes))
+                    .max_height(max_h)
+                    .show(ui, |ui| super::code_edit::code_box(ui, &mut text, 10, ui.available_width(), marked))
+                    .inner;
+                if edit.changed() {
+                    sch.sketches.insert(refdes.clone(), text.clone());
+                }
             }
             // how it runs: circuitCad's own reading, or the chip's real instructions
             let real_tip = i18n::tr("スケッチを arduino-cli でコンパイルし、ボードのマイコン (Nano は ATmega328P、Mega は ATmega2560、ATtiny85) の本物の命令を 1 クロックずつ動かします (simavr)。ライブラリ・tone・割り込み・EEPROM など Arduino の C がそのまま動き、命令にかかる時間も本物どおりです。arduino-cli (Arduino IDE 2 に入っています) と、ボードの種類 (arduino:avr、ATtiny85 は ATTinyCore) が要ります。初めてのコンパイルは数十秒かかります。切ると、circuitCad の読み方 (Arduino の C の小さな部分) で動かします");
@@ -336,10 +350,33 @@ impl BreadboardView {
                 // the serial monitor keeps the bottom; the text the rest
                 let running = self.live.as_ref().is_some_and(|lv| lv.mcus.iter().any(|m| m.refdes == refdes));
                 let below = if running { 230.0 } else { 0.0 };
+                let blocks = mode_bar(ui, sch, &refdes, &text);
                 let size = egui::vec2(ui.available_width(), (ui.available_height() - below).max(120.0));
-                let edit = ui.allocate_ui(size, |ui| super::code_edit::numbered_box(ui, &mut text, marked)).inner;
-                if edit.changed() {
-                    sch.sketches.insert(refdes.clone(), text.clone());
+                if let Some(mut bs) = blocks {
+                    // the blocks on the left, the code they make on the right (a change of either is in the other)
+                    let w = (size.x - 8.0) / 2.0;
+                    ui.allocate_ui(size, |ui| {
+                        ui.horizontal_top(|ui| {
+                            let changed = ui
+                                .allocate_ui_with_layout(egui::vec2(w, size.y), egui::Layout::top_down(egui::Align::Min), |ui| {
+                                    egui::ScrollArea::vertical().id_salt(("blocks_window", &refdes)).max_height(size.y).show(ui, |ui| super::blocks_ui::edit_blocks(ui, &mut bs, board, &format!("{refdes}_window"))).inner
+                                })
+                                .inner;
+                            if changed {
+                                text = sim_core::sketch::blocks::to_code(&bs);
+                                sch.sketches.insert(refdes.clone(), text.clone());
+                            }
+                            let edit = ui.allocate_ui_with_layout(egui::vec2(w, size.y), egui::Layout::top_down(egui::Align::Min), |ui| super::code_edit::numbered_box(ui, &mut text, marked)).inner;
+                            if edit.changed() {
+                                sch.sketches.insert(refdes.clone(), text.clone());
+                            }
+                        });
+                    });
+                } else {
+                    let edit = ui.allocate_ui(size, |ui| super::code_edit::numbered_box(ui, &mut text, marked)).inner;
+                    if edit.changed() {
+                        sch.sketches.insert(refdes.clone(), text.clone());
+                    }
                 }
                 if running {
                     self.serial_ui(ui, &refdes, &text, (ui.available_height() - 40.0).max(80.0));
@@ -350,6 +387,52 @@ impl BreadboardView {
         }
     }
 }
+
+/// The choice of writing a board's sketch as code or as blocks (saved in `sketch_blocks`): the blocks to show when they are
+/// chosen and the sketch reads as blocks. A sketch they cannot show (a function of its own, an array…) says why, and stays code.
+fn mode_bar(ui: &mut egui::Ui, sch: &mut SchEditor, refdes: &str, text: &str) -> Option<sim_core::sketch::blocks::BlockSketch> {
+    let on = sch.sketch_blocks.contains(refdes);
+    let read = sim_core::sketch::blocks::from_code(text);
+    let why = read.as_ref().err().map(|e| i18n::trf!("いまのスケッチはブロックで表せません ({e})。コードで直すか、見本に戻すとブロックにできます"));
+    let items = [("コード", None), ("ブロック", if on { None } else { why.as_deref() })];
+    let tips = [
+        i18n::tr("スケッチを文字 (Arduino の C) で書きます"),
+        i18n::tr("命令のブロックを積み重ねて書きます (Scratch のように)。打ち間違いが起きません。ブロックからコードが作られ、「コード」に切り替えると、そのまま続きを文字で書けます"),
+    ];
+    for (k, r) in crate::widgets::segment_bar(ui, &items, Some(usize::from(on))).into_iter().enumerate() {
+        let r = match (k, &why) {
+            (1, Some(w)) if !on => r.on_hover_text(w.as_str()),
+            _ => r.on_hover_text(tips[k]),
+        };
+        if r.clicked() && (k == 1) != on {
+            if k == 1 {
+                sch.sketch_blocks.insert(refdes.to_string());
+            } else {
+                sch.sketch_blocks.remove(refdes);
+            }
+        }
+    }
+    if !sch.sketch_blocks.contains(refdes) {
+        return None;
+    }
+    match read {
+        Ok(bs) => {
+            // comments are not blocks: they go when the blocks are first changed
+            let comments = text.lines().any(|l| (l.contains("//") || l.contains("/*")) && l.trim() != sim_core::sketch::blocks::HEADER);
+            if comments {
+                ui.label(egui::RichText::new(i18n::tr("ブロックを変えると、コードのコメント (// の行) は消えます")).small().color(NOTE));
+            }
+            Some(bs)
+        }
+        Err(e) => {
+            ui.colored_label(crate::theme::warn(), i18n::trf!("ブロックで表せないので、コードで出しています ({e})"));
+            None
+        }
+    }
+}
+
+/// How tall the blocks are in the panel before they scroll inside.
+const BLOCKS_PANEL_HEIGHT: f32 = 420.0;
 
 /// The most lines the sketch box shows in the panel before it scrolls inside.
 const SKETCH_ROWS: usize = 14;

@@ -4208,6 +4208,74 @@ fn write_arduino_examples() {
     }
 }
 
+/// The blocks of the Arduino blocks sample: the button on D2 (to ground, the pin pulled up inside) lights the LED on D13 while it
+/// is held, and each press is counted and sent to the serial monitor.
+fn arduino_blocks_sketch() -> String {
+    use sim_core::sketch::blocks::{BExpr, Block, BlockSketch, PinMode, VarDecl};
+    let pressed = || BExpr::Bin("==".into(), Box::new(BExpr::DigitalRead(Box::new(BExpr::Int(2)))), Box::new(BExpr::Name("LOW".into())));
+    let led = || BExpr::Name("LED_BUILTIN".into());
+    let s = BlockSketch {
+        vars: vec![VarDecl { name: "presses".into(), float: false, init: BExpr::Int(0) }],
+        setup: vec![
+            Block::PinMode { pin: led(), mode: PinMode::Output },
+            Block::PinMode { pin: BExpr::Int(2), mode: PinMode::InputPullup },
+            Block::SerialBegin(BExpr::Int(9600)),
+        ],
+        looped: vec![
+            Block::If {
+                cond: pressed(),
+                then: vec![
+                    Block::DigitalWrite { pin: led(), value: BExpr::Name("HIGH".into()) },
+                    Block::Change { name: "presses".into(), by: BExpr::Int(1) },
+                    Block::Print { value: BExpr::Text("押した回数: ".into()), newline: false },
+                    Block::Print { value: BExpr::Name("presses".into()), newline: true },
+                    // wait for the button to be let go (one press is counted once)
+                    Block::While { cond: pressed(), body: vec![Block::Delay(BExpr::Int(10))] },
+                ],
+                els: Some(vec![Block::DigitalWrite { pin: led(), value: BExpr::Name("LOW".into()) }]),
+            },
+            Block::Delay(BExpr::Int(20)),
+        ],
+    };
+    sim_core::sketch::blocks::to_code(&s)
+}
+
+/// The Arduino blocks sample (B6): an Arduino Nano with a push button from D2 to ground and an LED (330 ohm) on D13, its sketch
+/// written as blocks. `cargo test -p app write_arduino_blocks_example -- --ignored`
+#[test]
+#[ignore]
+fn write_arduino_blocks_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let nano = library_part("ARDUINO_NANO");
+    let mut s = sch_core::Schematic::default();
+    let u = s.add_custom(nano.symbol(), &nano.default_value(), &nano.footprint_name(), (20, 0), 0);
+    // pins: 5 D2, 16 D13, 4 and 29 GND (named sideways: D2 is near the top, where a label going up would cross its neighbours)
+    side_label(&mut s, u, "5", "BTN");
+    side_label(&mut s, u, "16", "OUT");
+    side_label(&mut s, u, "4", "GND");
+    side_label(&mut s, u, "29", "GND");
+    let sw_part = library_part("SW_PUSH");
+    let sw = s.add_custom(sw_part.symbol(), &sw_part.default_value(), &sw_part.footprint_name(), (-30, 20), 0);
+    label_pin(&mut s, sw, "1", "BTN");
+    label_pin(&mut s, sw, "2", "GND");
+    let r = s.add(Kind::Resistor, (60, -10), 1);
+    s.components[r].value = "330".into();
+    label_pin(&mut s, r, "1", "OUT");
+    label_pin(&mut s, r, "2", "LEDA");
+    let d = s.add(Kind::Led, (60, 10), 1);
+    label_pin(&mut s, d, "A", "LEDA");
+    label_pin(&mut s, d, "K", "GND");
+    let mut v = serde_json::to_value(&s).unwrap();
+    let refdes = s.components[u].refdes.clone();
+    let settings = crate::schematic::SheetSettings {
+        sketches: [(refdes.clone(), arduino_blocks_sketch())].into_iter().collect(),
+        sketch_blocks: [refdes].into_iter().collect(),
+        ..Default::default()
+    };
+    crate::schematic::with_settings(&mut v, &settings);
+    std::fs::write(root.join("arduino_blocks.schjson"), serde_json::to_string_pretty(&v).unwrap()).unwrap();
+}
+
 /// The listening sample (B4): a 440 Hz tone with a 4 kHz whistle on it into an RC low-pass (1.5 kohm, 100 nF: fc about 1.06 kHz).
 /// Heard in the transient viewer's "音で聴く", the input whistles and the output does not. `cargo test -p app write_audio_filter_example -- --ignored`
 fn audio_filter_schematic() -> serde_json::Value {

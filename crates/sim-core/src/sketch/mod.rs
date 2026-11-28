@@ -6,6 +6,7 @@
 //! the sketch takes between two `delay`s is none. `analogWrite` gives the pulses of the real board (`Drive::Pwm`: 490 Hz, 980 Hz on
 //! D5 and D6), so an LED on it lights for that share of the time.
 
+pub mod blocks;
 mod lex;
 mod parse;
 mod vm;
@@ -144,6 +145,8 @@ impl Board {
 }
 /// Instructions one call of `run` may take before it gives the circuit its turn (a loop without `delay` goes on next frame).
 const BUDGET: usize = 200_000;
+/// How long a read waits after a pin was changed, for the circuit to follow (seconds).
+const SETTLE: f64 = 1e-6;
 /// The most text the serial window keeps.
 const SERIAL_MAX: usize = 20_000;
 
@@ -227,12 +230,14 @@ pub struct Machine {
     pub serial: String,
     pub error: Option<SketchError>,
     seed: u64,
+    /// A pin's drive changed since the circuit was last solved: a read waits for the circuit to follow (`SETTLE`).
+    unsettled: bool,
 }
 
 impl Machine {
     pub fn new(sketch: Sketch) -> Machine {
         let (g, pins) = (sketch.code.globals, sketch.board.pins());
-        Machine { sketch, pc: 0, stack: vec![], globals: vec![Val::I(0); g], locals: vec![], frames: vec![], wake: 0.0, drives: vec![Drive::Input; pins], serial: String::new(), error: None, seed: 0x2545_F491_4F6C_DD1D }
+        Machine { sketch, pc: 0, stack: vec![], globals: vec![Val::I(0); g], locals: vec![], frames: vec![], wake: 0.0, drives: vec![Drive::Input; pins], serial: String::new(), error: None, seed: 0x2545_F491_4F6C_DD1D, unsettled: false }
     }
 
     /// When the sketch is waiting in `delay` until (simulated seconds).
@@ -251,6 +256,8 @@ impl Machine {
         if self.error.is_some() || now < self.wake {
             return;
         }
+        // the circuit has been solved up to now: what the pins were given is in it
+        self.unsettled = false;
         for _ in 0..BUDGET {
             match self.step(now, io) {
                 Ok(true) => {}
@@ -285,6 +292,7 @@ impl Machine {
         if self.drives[pin as usize] != d {
             self.drives[pin as usize] = d;
             io.drive(pin, d);
+            self.unsettled = true;
         }
     }
 
@@ -383,6 +391,13 @@ impl Machine {
                 self.stack.push(v);
             }
             Op::Builtin(b, argc) => {
+                // a read just after a pin was changed (a pull-up turned on, an output written) waits a moment for the circuit
+                // to follow, as the real pin does in well under a microsecond: else it reads the circuit as it was before
+                if self.unsettled && matches!(b, Bi::DigitalRead | Bi::AnalogRead) {
+                    self.pc -= 1;
+                    self.wake = now + SETTLE;
+                    return Ok(false);
+                }
                 let args: Vec<Val> = self.stack.split_off(self.stack.len().saturating_sub(argc));
                 let a = |k: usize| args.get(k).cloned().unwrap_or(Val::I(0));
                 let r = match b {
@@ -577,6 +592,8 @@ mod tests {
         let mut m = machine("void setup() { pinMode(9, OUTPUT); }\nvoid loop() { int v = analogRead(A0); analogWrite(9, v / 4); delay(10); }");
         let mut io = Pins { a0: 2.5, ..Default::default() };
         m.run(0.0, &mut io);
+        // the read after pinMode waits for the circuit to follow
+        m.run(1e-6, &mut io);
         // 2.5 V of 5: 512 of 1023, 128 of 255: pulses of 490 Hz, High half the time
         match io.out.get(&9).copied() {
             Some(Drive::Pwm { duty, hz }) => assert!((duty - 0.5).abs() < 0.01 && hz == 490.0, "{duty} {hz}"),
@@ -612,6 +629,7 @@ void loop() { delay(10); }", b).unwrap());
         let mut io = Pins::default();
         io.out.insert(2, Drive::Out(0.5));
         m.run(0.0, &mut io);
+        m.run(1e-6, &mut io);
         assert!(m.error.is_none(), "{:?}", m.error);
         assert_eq!(m.serial, "2
 512

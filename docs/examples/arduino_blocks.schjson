@@ -1,0 +1,502 @@
+{
+  "components": [
+    {
+      "custom": {
+        "name": "ARDUINO_NANO",
+        "pins": [
+          {
+            "kind": "bidir",
+            "name": "D1",
+            "number": "1",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "D0",
+            "number": "2",
+            "side": "left"
+          },
+          {
+            "name": "RST",
+            "number": "3",
+            "side": "left"
+          },
+          {
+            "kind": "power_in",
+            "name": "GND",
+            "number": "4",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "D2",
+            "number": "5",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "D3",
+            "number": "6",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "D4",
+            "number": "7",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "D5",
+            "number": "8",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "D6",
+            "number": "9",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "D7",
+            "number": "10",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "D8",
+            "number": "11",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "D9",
+            "number": "12",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "D10",
+            "number": "13",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "D11",
+            "number": "14",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "D12",
+            "number": "15",
+            "side": "left"
+          },
+          {
+            "kind": "bidir",
+            "name": "D13",
+            "number": "16",
+            "side": "right"
+          },
+          {
+            "kind": "power_out",
+            "name": "3V3",
+            "number": "17",
+            "side": "right"
+          },
+          {
+            "name": "AREF",
+            "number": "18",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "A0",
+            "number": "19",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "A1",
+            "number": "20",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "A2",
+            "number": "21",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "A3",
+            "number": "22",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "A4",
+            "number": "23",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "A5",
+            "number": "24",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "A6",
+            "number": "25",
+            "side": "right"
+          },
+          {
+            "kind": "bidir",
+            "name": "A7",
+            "number": "26",
+            "side": "right"
+          },
+          {
+            "kind": "power_out",
+            "name": "5V",
+            "number": "27",
+            "side": "right"
+          },
+          {
+            "name": "RST",
+            "number": "28",
+            "side": "right"
+          },
+          {
+            "kind": "power_in",
+            "name": "GND",
+            "number": "29",
+            "side": "right"
+          },
+          {
+            "name": "VIN",
+            "number": "30",
+            "side": "right"
+          }
+        ],
+        "prefix": "U",
+        "sim": {
+          "element": "",
+          "kind": "subckt",
+          "limits": [
+            "ピンごとに、スケッチが決める電源と抵抗を入れただけのモデルです。出力は 25Ω の向こうの 0 V か 5 V (analogWrite はパルス)、入力は 1 GΩ、INPUT_PULLUP は 35 kΩ で 5 V に引きます。",
+            "扱わないもの (circuitCad の読み方のとき): 命令にかかる時間 (delay の間以外は時間が進みません)、割り込み・タイマー・ライブラリ。「本物の命令で動かす」ならこれらも動きます。3V3・AREF・VIN・RST のピンと、ピンの電流の上限 (40 mA) の点検は、どちらでも扱いません。"
+          ],
+          "name": "ARDUINO_NANO",
+          "origin": {
+            "kind": "generic",
+            "source": "Arduino Nano のピン配置と、ATmega328P の出力抵抗・プルアップの代表値"
+          },
+          "params": {},
+          "pins": [
+            "2",
+            "1",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16",
+            "19",
+            "20",
+            "21",
+            "22",
+            "23",
+            "24",
+            "25",
+            "26",
+            "27",
+            "4",
+            "29"
+          ],
+          "text": ".subckt ARDUINO_NANO d0 d1 d2 d3 d4 d5 d6 d7 d8 d9 d10 d11 d12 d13 a0 a1 a2 a3 a4 a5 a6 a7 v5 gnd gnd2\n* Arduino Nano for the sketch beside the circuit: each of D0..D13 and A0..A7 is a source behind a resistor. The sketch sets them\n* (TranRun::set_source / set_resistance): an output 0 or 5 V behind 25 ohm, an input 1 Gohm, INPUT_PULLUP 5 V behind 35 kohm.\n* 5V is the USB supply behind 0.2 ohm; the chip itself takes about 20 mA.\nVpD0 sd0 gnd DC 0\nRpD0 sd0 d0 1G\nVpD1 sd1 gnd DC 0\nRpD1 sd1 d1 1G\nVpD2 sd2 gnd DC 0\nRpD2 sd2 d2 1G\nVpD3 sd3 gnd DC 0\nRpD3 sd3 d3 1G\nVpD4 sd4 gnd DC 0\nRpD4 sd4 d4 1G\nVpD5 sd5 gnd DC 0\nRpD5 sd5 d5 1G\nVpD6 sd6 gnd DC 0\nRpD6 sd6 d6 1G\nVpD7 sd7 gnd DC 0\nRpD7 sd7 d7 1G\nVpD8 sd8 gnd DC 0\nRpD8 sd8 d8 1G\nVpD9 sd9 gnd DC 0\nRpD9 sd9 d9 1G\nVpD10 sd10 gnd DC 0\nRpD10 sd10 d10 1G\nVpD11 sd11 gnd DC 0\nRpD11 sd11 d11 1G\nVpD12 sd12 gnd DC 0\nRpD12 sd12 d12 1G\nVpD13 sd13 gnd DC 0\nRpD13 sd13 d13 1G\nVpA0 sa0 gnd DC 0\nRpA0 sa0 a0 1G\nVpA1 sa1 gnd DC 0\nRpA1 sa1 a1 1G\nVpA2 sa2 gnd DC 0\nRpA2 sa2 a2 1G\nVpA3 sa3 gnd DC 0\nRpA3 sa3 a3 1G\nVpA4 sa4 gnd DC 0\nRpA4 sa4 a4 1G\nVpA5 sa5 gnd DC 0\nRpA5 sa5 a5 1G\nVpA6 sa6 gnd DC 0\nRpA6 sa6 a6 1G\nVpA7 sa7 gnd DC 0\nRpA7 sa7 a7 1G\nVusb usb gnd DC 5\nRusb usb v5 0.2\nRq v5 gnd 250\nRg gnd gnd2 0.01\n.ends ARDUINO_NANO"
+        }
+      },
+      "footprint": "ARDUINO_NANO_DIP30",
+      "kind": "Custom",
+      "pos": [
+        20,
+        0
+      ],
+      "refdes": "U1",
+      "rot": 0,
+      "value": "ARDUINO_NANO"
+    },
+    {
+      "custom": {
+        "glyph": "switch_push",
+        "name": "SW_PUSH",
+        "pins": [
+          {
+            "name": "1",
+            "number": "1",
+            "side": "left"
+          },
+          {
+            "name": "2",
+            "number": "2",
+            "side": "right"
+          }
+        ],
+        "prefix": "SW",
+        "ratings": {
+          "i_max": 0.05,
+          "rows": [
+            {
+              "condition": "DC (6mm 角のタクトスイッチの代表値)",
+              "name": "定格",
+              "value": "12V 50mA"
+            }
+          ],
+          "v_max": 12.0
+        },
+        "sim": {
+          "element": "",
+          "kind": "subckt",
+          "limits": [
+            "押していないときは 1GΩ、押したときは 0.05Ω の理想のスイッチです。実物は、押した瞬間と離した瞬間に接点が何度も跳ねて (チャタリング、数 ms)、ロジック IC には何回も押したように見えることがあります。このモデルは跳ねません。",
+            "ふつうの解析 (DC・過渡など) では、離したまま (開いた状態) で計算します。押した状態を調べるには、回路図の「デジタル回路を動かす」を使います。"
+          ],
+          "name": "SW_PUSH",
+          "origin": {
+            "kind": "generic",
+            "source": "学習用の理想のスイッチ (6mm 角のタクトスイッチの足の位置)"
+          },
+          "params": {},
+          "pins": [
+            "1",
+            "2"
+          ],
+          "text": ".subckt SW_PUSH 1 2\n* pressed while Vpress is 1 V (0 V = released): the live logic view of the schematic sets it while the button is held down\nS1 1 2 press 0 SWPUSH\nVpress press 0 0\n.model SWPUSH SW(RON=0.05 ROFF=1G VT=0.5 VW=0.1)\n.ends SW_PUSH"
+        }
+      },
+      "footprint": "SW_Tactile_6x6",
+      "kind": "Custom",
+      "pos": [
+        -30,
+        20
+      ],
+      "refdes": "SW1",
+      "rot": 0,
+      "value": "SW_PUSH"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        60,
+        -10
+      ],
+      "refdes": "R1",
+      "rot": 1,
+      "value": "330"
+    },
+    {
+      "custom": null,
+      "footprint": "LED_0805",
+      "kind": "Led",
+      "pos": [
+        60,
+        10
+      ],
+      "refdes": "D1",
+      "rot": 1,
+      "value": "LED"
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        13,
+        -6
+      ],
+      "text": "BTN"
+    },
+    {
+      "pos": [
+        27,
+        -14
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        13,
+        -8
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        27,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        -37,
+        20
+      ],
+      "text": "BTN"
+    },
+    {
+      "pos": [
+        -23,
+        20
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        60,
+        -15
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        60,
+        -5
+      ],
+      "text": "LEDA"
+    },
+    {
+      "pos": [
+        60,
+        5
+      ],
+      "text": "LEDA"
+    },
+    {
+      "pos": [
+        60,
+        15
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1,
+  "sketch_blocks": [
+    "U1"
+  ],
+  "sketches": {
+    "U1": "// ブロックで作ったスケッチ\nint presses = 0;\n\nvoid setup() {\n  pinMode(LED_BUILTIN, OUTPUT);\n  pinMode(2, INPUT_PULLUP);\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  if (digitalRead(2) == LOW) {\n    digitalWrite(LED_BUILTIN, HIGH);\n    presses += 1;\n    Serial.print(\"押した回数: \");\n    Serial.println(presses);\n    while (digitalRead(2) == LOW) {\n      delay(10);\n    }\n  } else {\n    digitalWrite(LED_BUILTIN, LOW);\n  }\n  delay(20);\n}\n"
+  },
+  "wires": [
+    {
+      "a": [
+        16,
+        -6
+      ],
+      "b": [
+        13,
+        -6
+      ]
+    },
+    {
+      "a": [
+        24,
+        -14
+      ],
+      "b": [
+        27,
+        -14
+      ]
+    },
+    {
+      "a": [
+        16,
+        -8
+      ],
+      "b": [
+        13,
+        -8
+      ]
+    },
+    {
+      "a": [
+        24,
+        12
+      ],
+      "b": [
+        27,
+        12
+      ]
+    },
+    {
+      "a": [
+        -34,
+        20
+      ],
+      "b": [
+        -37,
+        20
+      ]
+    },
+    {
+      "a": [
+        -26,
+        20
+      ],
+      "b": [
+        -23,
+        20
+      ]
+    },
+    {
+      "a": [
+        60,
+        -12
+      ],
+      "b": [
+        60,
+        -15
+      ]
+    },
+    {
+      "a": [
+        60,
+        -8
+      ],
+      "b": [
+        60,
+        -5
+      ]
+    },
+    {
+      "a": [
+        60,
+        8
+      ],
+      "b": [
+        60,
+        5
+      ]
+    },
+    {
+      "a": [
+        60,
+        12
+      ],
+      "b": [
+        60,
+        15
+      ]
+    }
+  ]
+}

@@ -22,6 +22,7 @@ mod live;
 mod flow_dots;
 pub(crate) mod sketch_ui;
 mod code_edit;
+mod blocks_ui;
 mod build_steps;
 mod looks;
 mod strip_view;
