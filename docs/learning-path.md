@@ -76,6 +76,12 @@
 - 新しいレッスン 48 `poles`(`rlc_poles.schjson`: 直列 RLC。AC 解析の山 → 「極と零を求める」で 5.03kHz・Q=3.16 の複素数の極 → R1 を 100Ω にして実数の極=山が消える)と、49 `phase_margin`(`opamp_loop_gain.schjson`: 出力に 10nF のオペアンプ。AC 解析の「安定性の余裕」で位相余裕が小さい → C1 を 1p で戻る → 100n でさらに減る)。どの孤立レッスンもパスに入った(RC・RLC・555 も)。50 `noise`(`bjt_noise.schjson`: 出力 C・入力 V2、10Hz〜100kHz。R1=100k では Q1.ib が主役で入力換算 32µV → R1=10k で 5.6µV → R1=1k で主役が抵抗の熱雑音(R3・R1)に入れ替わる)を「増幅と安定」の段に足した。`NoiseView` に回路の署名を持たせて古い結果を見分ける。`noise_filter` は過渡解析の NOISE 電源の例で、ノイズ解析ではない。
 - 51 `debug_circuit`(回路図の修理の練習。ツェナーの電源に、始めるたびに違う故障が1つ入っている。電圧を順に見て直す。基板の修理は基板レッスン8)を電源の道の「基礎」の段(ツェナーのあと)に足した。
 
+## 土台のパスと試作の道 (2026-11-28)
+調査 `reports/電気回路の学習カリキュラム調査.md` (工業高校・高専・大学の入門・独学の本・Arduino の教材・誤概念の研究を比べた) の優先度 A の 4 つ。
+- **土台: 電圧・電流と回路の法則** (`foundation`、`PATHS` の先頭、`FIRST_PATH_ID`): はじめに 1・2 (`intro_ohm`・`intro_read`、部品の素顔のパスと共有) → はじめに 3「電流は減らない、電池は電圧を保つ」(`basics_current`) → はじめに 4「切れた所にも電圧がある、遠くの変化も効く」(`basics_open`) → キルヒホッフ (`kirchhoff`) → テブナン (`thevenin`)。新しい 4 本は `schematic/lessons/foundation.rs`、各手順に予想の問い (`predict.rs`) を付け、選択肢に研究で多い思い込みを入れた。電位 (電圧) を先に見せる教え方に一番強い証拠がある (Burde & Wilhelm 2020) ので、問いは電流より電圧の見方を問う。
+- **試作の道: ブレッドボードと Arduino** (`proto`、2 本目): 試作のレッスン 7 本 (`proto_lessons.rs`、`docs/code-notes/app/proto/lessons.md`) と PWM のレッスン。1. ブレッドボード・テスター → 2. 点滅・オシロ・押しボタン (ブロック) → 3. ボリューム・PWM → 4. コードだけで書く。Arduino の Starter Kit と Adafruit の順 (LED → ボタン → ボリューム → PWM)。
+- Arduino 互換ボードのパスの目標の文の「マイコンの中身はシミュレーションできない」を、今の機能に合わせて直した。
+
 ## 道筋を変えるには
 `crates/app/src/learn.rs` の `PATHS` に、段階 (`Stage`) と項目 (`Item`) を足します。レッスンの項目は、レッスンの `id` (`crates/app/src/schematic/lessons/` (型は `mod.rs`、レッスンのデータは `basics.rs` `devices.rs` `analog.rs` `supply.rs` ほか)) で指定します。準備中の項目は `planned(...)` で書きます。道筋に書いたレッスンが存在することは、テストが確認します。
 

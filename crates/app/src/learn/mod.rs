@@ -109,6 +109,8 @@ pub enum Kind {
     /// A hands-on task on the bench that the program cannot judge (soldering, flashing): a checklist the learner ticks herself
     /// (`bench_guide.rs`, by the item's id).
     Hands,
+    /// A prototype lesson (`proto_lessons.rs`, by its id): a sample on the breadboard, steps ticked from the prototype tab.
+    Proto(&'static str),
     /// Not written yet: shown so the whole route is visible.
     Planned,
 }
@@ -242,6 +244,8 @@ pub enum Action {
     Measure,
     /// The checklist of a hands-on item (by the item's id).
     Hands(&'static str),
+    /// A prototype lesson (by its id).
+    Proto(&'static str),
 }
 
 /// Colour of the grey explanation lines (`weak()` was too faint on the dark background).
@@ -260,6 +264,7 @@ fn item_action(item: &Item) -> Option<Action> {
         Kind::Board(n) => Some(Action::Board(n)),
         Kind::Measure => Some(Action::Measure),
         Kind::Hands => Some(Action::Hands(item.id)),
+        Kind::Proto(id) => Some(Action::Proto(id)),
         Kind::Planned => None,
     }
 }
@@ -277,7 +282,7 @@ pub enum Welcome {
 }
 
 /// The path a new learner starts on: the parts path, whose first lessons explain voltage, current and how to read a drawn circuit.
-pub const FIRST_PATH_ID: &str = "parts";
+pub const FIRST_PATH_ID: &str = "foundation";
 
 /// The path of `FIRST_PATH_ID` (the first of `PATHS` if it were renamed).
 pub fn first_path() -> &'static LearningPath {

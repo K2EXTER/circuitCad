@@ -55,6 +55,7 @@ mod conditions;
 mod debug;
 mod devices;
 mod digital;
+mod foundation;
 mod hierarchy;
 mod micro;
 mod models;
@@ -167,6 +168,10 @@ const LESSONS: &[Lesson] = &[
     digital::SR_LATCH,
     digital::COUNTER_LIVE,
     digital::RING_OSCILLATOR,
+    foundation::CURRENT_KEPT,
+    foundation::OPEN_VOLTAGE,
+    foundation::KIRCHHOFF,
+    foundation::THEVENIN,
 ];
 
 impl SchEditor {

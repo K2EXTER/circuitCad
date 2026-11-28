@@ -1980,6 +1980,81 @@ fn write_intro_read_example() {
     std::fs::write(root.join("intro_read.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// A resistor between two nets (drawn upright, joined by labels), named `refdes` when it is given.
+fn foundation_resistor(s: &mut sch_core::Schematic, x: i32, value: &str, top: &str, bottom: &str, refdes: Option<&str>) {
+    let r = s.add(Kind::Resistor, (x, 0), 1);
+    s.components[r].value = value.into();
+    if let Some(name) = refdes {
+        s.components[r].refdes = name.into();
+    }
+    label(s, r, "1", top);
+    label(s, r, "2", bottom);
+}
+
+/// A voltage source between `plus` and GND, named `refdes` when it is given.
+fn foundation_source(s: &mut sch_core::Schematic, x: i32, value: &str, plus: &str, refdes: Option<&str>) {
+    let v = s.add(Kind::VSource, (x, 0), 0);
+    s.components[v].value = value.into();
+    if let Some(name) = refdes {
+        s.components[v].refdes = name.into();
+    }
+    label(s, v, "+", plus);
+    label(s, v, "-", "GND");
+}
+
+/// Generates the four circuits of the foundation path's own lessons (`lessons/foundation.rs`), drawn with net labels like intro_read:
+/// basics_current (V1 5 V, R1 1k IN->MID, R2 1k MID->GND, R3 10k IN->GND), basics_open (V1 5 V, R1 1k IN->MID, R2 1k MID->GND,
+/// R3 1G MID->GND: not joined yet), kirchhoff (V1 9 V, R1 1k IN->A, R2 1k and R3 2k A->GND) and thevenin (V1 10 V, R1 1k IN->A,
+/// R2 1k A->GND, load RL 1k A->GND; the equivalent to fill in: VTH 1 V, RTH 1 ohm TH->OUT2, RL2 1k OUT2->GND):
+/// `cargo test -p app write_foundation_examples -- --ignored`
+#[test]
+#[ignore]
+fn write_foundation_examples() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let save = |s: &sch_core::Schematic, name: &str| std::fs::write(root.join(format!("{name}.schjson")), serde_json::to_string_pretty(s).unwrap()).unwrap();
+    let mut s = sch_core::Schematic::default();
+    foundation_source(&mut s, 0, "5", "IN", None);
+    foundation_resistor(&mut s, 20, "1k", "IN", "MID", None);
+    foundation_resistor(&mut s, 36, "1k", "MID", "GND", None);
+    foundation_resistor(&mut s, 52, "10k", "IN", "GND", None);
+    save(&s, "basics_current");
+
+    let mut s = sch_core::Schematic::default();
+    foundation_source(&mut s, 0, "5", "IN", None);
+    foundation_resistor(&mut s, 20, "1k", "IN", "MID", None);
+    foundation_resistor(&mut s, 36, "1k", "MID", "GND", None);
+    foundation_resistor(&mut s, 52, "1G", "MID", "GND", None);
+    save(&s, "basics_open");
+
+    let mut s = sch_core::Schematic::default();
+    foundation_source(&mut s, 0, "9", "IN", None);
+    foundation_resistor(&mut s, 20, "1k", "IN", "A", None);
+    foundation_resistor(&mut s, 36, "1k", "A", "GND", None);
+    foundation_resistor(&mut s, 52, "2k", "A", "GND", None);
+    save(&s, "kirchhoff");
+
+    let mut s = sch_core::Schematic::default();
+    foundation_source(&mut s, 0, "10", "IN", None);
+    foundation_resistor(&mut s, 20, "1k", "IN", "A", None);
+    foundation_resistor(&mut s, 36, "1k", "A", "GND", None);
+    foundation_resistor(&mut s, 52, "1k", "A", "GND", Some("RL"));
+    foundation_source(&mut s, 80, "1", "TH", Some("VTH"));
+    foundation_resistor(&mut s, 100, "1", "TH", "OUT2", Some("RTH"));
+    foundation_resistor(&mut s, 116, "1k", "OUT2", "GND", Some("RL2"));
+    save(&s, "thevenin");
+
+    // the breadboard and meter lessons (proto_lessons.rs): a divider to measure (MID 2.5 V) and an LED to light and to break into
+    let mut s = sch_core::Schematic::default();
+    foundation_source(&mut s, 0, "5", "IN", None);
+    foundation_resistor(&mut s, 20, "1k", "IN", "MID", None);
+    foundation_resistor(&mut s, 36, "1k", "MID", "GND", None);
+    foundation_resistor(&mut s, 52, "330", "IN", "LEDA", None);
+    let d = s.add(Kind::Led, (68, 0), 1);
+    label(&mut s, d, "A", "LEDA");
+    label(&mut s, d, "K", "GND");
+    save(&s, "proto_basics");
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]

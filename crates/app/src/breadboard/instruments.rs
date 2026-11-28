@@ -32,9 +32,11 @@ impl BreadboardView {
         }
         let have_red = red.is_some();
         let (Some((red, na)), Some((black, nb))) = (red, black) else {
+            self.seen.reading = None;
             ui.label(egui::RichText::new(if !have_red { i18n::tr("赤い棒を当てる穴をクリックします") } else { i18n::tr("黒い棒を当てる穴をクリックします (ふつうは GND の青い列)") }).color(NOTE));
             return;
         };
+        (self.seen.red, self.seen.black, self.seen.reading) = (na.clone(), nb.clone(), None);
         let live = self.live.as_ref().filter(|v| v.error.is_none());
         if !matches && live.is_none() {
             ui.colored_label(crate::theme::warn(), i18n::tr("回路図と違う差し方なので、電源を入れてから読みます (差したとおりの回路を計算します)"));
@@ -55,6 +57,7 @@ impl BreadboardView {
         ui.label(i18n::trf!("赤: {}　黒: {}", name(&red, &na), name(&black, &nb)));
         match (v_of(&na), v_of(&nb)) {
             (Some(a), Some(b)) => {
+                self.seen.reading = Some(Reading::Volts(a - b));
                 ui.label(egui::RichText::new(format!("{} V", sim_core::format_value(a - b))).size(22.0).strong().color(crate::theme::ok()));
             }
             _ if na.is_none() || nb.is_none() => {
@@ -70,9 +73,11 @@ impl BreadboardView {
     pub(super) fn meter_other_range(&mut self, ui: &mut egui::Ui, sch: &SchEditor, board: &RunBoard, red: Option<Probe>, black: Option<Probe>) {
         let have_red = red.is_some();
         let (Some((red, na)), Some((black, nb))) = (red, black) else {
+            self.seen.reading = None;
             ui.label(egui::RichText::new(if !have_red { i18n::tr("赤い棒を当てる穴をクリックします") } else { i18n::tr("黒い棒を当てる穴をクリックします") }).color(NOTE));
             return;
         };
+        (self.seen.red, self.seen.black, self.seen.reading) = (na.clone(), nb.clone(), None);
         let name = |h: &str, n: &Option<String>| format!("{} ({})", h, n.clone().unwrap_or_else(|| i18n::tr("どこにもつながっていない").to_string()));
         ui.label(i18n::trf!("赤: {}　黒: {}", name(&red, &na), name(&black, &nb)));
         let range = self.meter_range;
@@ -106,6 +111,14 @@ impl BreadboardView {
             self.meter_cache = Some((key, reading));
         }
         let Some((_, reading)) = &self.meter_cache else { return };
+        self.seen.reading = match reading {
+            Ok(r) if r == "SAME" => Some(Reading::SameNet),
+            Ok(r) if r.starts_with("FUSE") => Some(Reading::Fuse),
+            Ok(r) if r == "OL" => Some(Reading::Ohms(None)),
+            Ok(r) if range == MeterRange::Ohms => sim_core::parse_value(r.trim_end_matches('Ω')).map(|v| Reading::Ohms(Some(v))),
+            Ok(r) => sim_core::parse_value(r.trim_end_matches('A')).map(Reading::Amps),
+            Err(_) => None,
+        };
         match reading {
             Err(e) => {
                 ui.colored_label(crate::theme::error(), i18n::tr_dyn(e));
@@ -142,6 +155,7 @@ impl BreadboardView {
 
     /// The scope's screen for the probe on the board: the running circuit's trace, else the schematic's transient run.
     pub(super) fn scope_panel(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor, probe: Option<Probe>) {
+        self.seen.scope = None;
         let Some((hole, net)) = probe else {
             ui.label(egui::RichText::new(i18n::tr("探り針を当てる穴をクリックします")).color(NOTE));
             return;
@@ -154,6 +168,10 @@ impl BreadboardView {
         if let Some(lv) = self.live.as_mut().filter(|v| v.error.is_none()) {
             lv.set_probe(Some(net.clone()));
             let (t, v) = lv.trace();
+            if !v.is_empty() {
+                let (lo, hi) = v.iter().fold((f64::MAX, f64::MIN), |(a, b), x| (a.min(*x), b.max(*x)));
+                self.seen.scope = Some((net.clone(), lo, hi));
+            }
             ui.label(egui::RichText::new(i18n::tr("動いている波形 (画面の直近 3 秒)")).color(NOTE));
             if t.len() > 1 {
                 scope_plot(ui, &t, &v);

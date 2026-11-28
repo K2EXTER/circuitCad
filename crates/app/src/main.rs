@@ -22,6 +22,7 @@ mod ds_reading;
 mod bench_tab;
 mod breadboard;
 mod power_on_guide;
+mod proto_lessons;
 mod measure_guide;
 mod multiboard;
 mod samples;
@@ -92,6 +93,8 @@ struct App {
     /// The guide window of the bench step ("組み立てて、性能を測る").
     measure: measure_guide::MeasureGuide,
     bench: bench_guide::BenchGuide,
+    /// The running prototype lesson (`proto_lessons.rs`), if any.
+    proto: Option<proto_lessons::ActiveProto>,
     power_on: power_on_guide::PowerOnGuide,
     /// The bench tab ("実機"): its steps and the parts ticked as fitted.
     bench_tab: bench_tab::BenchTab,
@@ -268,7 +271,7 @@ impl App {
 
 impl Default for App {
     fn default() -> Self {
-        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), link_selection: true, last_focus: Default::default(), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), power_on: Default::default(), bench_tab: Default::default(), breadboard: Default::default(), auto_shot: None, project: None, system: project::System::default(), system_dirty: false, boards: multiboard::BoardsWindow::default(), histories: Default::default(), closing_ok: false, recovery: None, last_autosave: std::time::Instant::now(), autosaved_at: None, palette: Default::default(), palette_recent: vec![], prefs: prefs::Prefs::default(), settings_open: false, settings_tab: Default::default() }
+        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), link_selection: true, last_focus: Default::default(), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), proto: None, power_on: Default::default(), bench_tab: Default::default(), breadboard: Default::default(), auto_shot: None, project: None, system: project::System::default(), system_dirty: false, boards: multiboard::BoardsWindow::default(), histories: Default::default(), closing_ok: false, recovery: None, last_autosave: std::time::Instant::now(), autosaved_at: None, palette: Default::default(), palette_recent: vec![], prefs: prefs::Prefs::default(), settings_open: false, settings_tab: Default::default() }
     }
 }
 
@@ -432,8 +435,14 @@ impl eframe::App for App {
                 learn::Action::Board(n) => self.start_board_lesson(n),
                 learn::Action::Measure => self.measure.open = true,
                 learn::Action::Hands(id) => self.bench.show_guide(id),
+                learn::Action::Proto(id) => {
+                    if let Some(i) = proto_lessons::find(id) {
+                        self.start_proto_lesson(i);
+                    }
+                }
             }
         }
+        self.proto_lesson_frame(ui.ctx());
         // the hands-on checklists: every box ticked records the item
         self.boards_window(ui.ctx());
         if let Some(id) = self.bench.show(ui.ctx(), &self.progress) {

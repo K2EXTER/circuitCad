@@ -1577,7 +1577,7 @@ fn value_hints_use_the_unit_of_the_part_and_say_when_a_range_is_wanted() {
 }
 
 /// What the learner does on the step a question is asked on: (lesson, step, part, new value).
-const PREDICTION_ACTIONS: [(&str, usize, &str, &str); 10] = [
+const PREDICTION_ACTIONS: [(&str, usize, &str, &str); 18] = [
     ("divider", 1, "R2", "30k"),
     ("led", 1, "R1", "100"),
     ("zener", 1, "R2", "100"),
@@ -1588,6 +1588,14 @@ const PREDICTION_ACTIONS: [(&str, usize, &str, &str); 10] = [
     ("noise", 1, "R1", "10k"),
     ("rc_lowpass", 1, "C1", "1.59u"),
     ("rlc", 1, "R1", "100"),
+    ("basics_current", 1, "R1", "3.3k"),
+    ("basics_current", 2, "R3", "1k"),
+    ("basics_open", 1, "R2", "1G"),
+    ("basics_open", 2, "R3", "1k"),
+    ("kirchhoff", 1, "R3", "1k"),
+    ("kirchhoff", 2, "V1", "12"),
+    ("thevenin", 1, "RL", "1G"),
+    ("thevenin", 2, "RL", "0.001"),
 ];
 
 /// The analysis a question's number comes from (the DC operating point unless the lesson is about another one).
@@ -3075,4 +3083,96 @@ fn the_ring_oscillator_lesson_slows_with_load_and_speeds_with_drive() {
     e.update_lesson();
     assert_eq!(progress(&e), 3);
     assert!(freq(&e) > f1 * 2.0, "faster with the stronger drive: {} vs {f1}", freq(&e));
+}
+
+/// Walks a foundation lesson: the start, then each (part, value) change with a fresh DC run; after each, `check` sees the editor.
+fn walk_foundation(id: &str, changes: &[&[(&str, &str)]], check: impl Fn(usize, &SchEditor)) {
+    let idx = lesson_ids().iter().position(|l| *l == id).unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0, "{id}");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{id}: {}", e.status);
+    check(0, &e);
+    for (k, change) in changes.iter().enumerate() {
+        for (refdes, v) in change.iter() {
+            set_value(&mut e, refdes, v);
+        }
+        e.run_dc();
+        e.update_lesson();
+        assert_eq!(progress(&e), k + 2, "{id}: step {}", k + 1);
+        check(k + 1, &e);
+    }
+}
+
+fn dc_v(e: &SchEditor, n: &str) -> f64 {
+    e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap()
+}
+
+fn dc_ma(e: &SchEditor, refdes: &str) -> f64 {
+    e.dc.as_ref().unwrap().outcome.as_ref().unwrap().element(refdes).unwrap().current.abs() * 1e3
+}
+
+#[test]
+fn the_foundation_lessons_tick_and_their_numbers_hold() {
+    // the current is the same before and after R1, follows R1, and a new branch leaves it alone
+    walk_foundation("basics_current", &[&[("R1", "3.3k")], &[("R1", "1k"), ("R3", "1k")]], |k, e| match k {
+        0 => assert!((dc_ma(e, "R1") - 2.5).abs() < 0.01 && (dc_ma(e, "R2") - 2.5).abs() < 0.01 && (dc_ma(e, "R3") - 0.5).abs() < 0.01),
+        1 => assert!((dc_ma(e, "R2") - 1.163).abs() < 0.01 && (dc_ma(e, "R1") - dc_ma(e, "R2")).abs() < 1e-6),
+        _ => assert!((dc_ma(e, "R2") - 2.5).abs() < 0.01 && (dc_v(e, "IN") - 5.0).abs() < 1e-6 && (dc_ma(e, "V1") - 7.5).abs() < 0.01),
+    });
+    // a broken part has the whole battery across it; a branch far away changes the current through R1
+    walk_foundation("basics_open", &[&[("R2", "1G")], &[("R2", "1k"), ("R3", "1k")]], |k, e| match k {
+        0 => assert!((dc_v(e, "MID") - 2.5).abs() < 0.01),
+        1 => assert!((dc_v(e, "MID") - 5.0).abs() < 0.01 && dc_ma(e, "R1") < 1e-3),
+        _ => assert!((dc_ma(e, "R1") - 3.333).abs() < 0.01 && (dc_v(e, "MID") - 1.667).abs() < 0.01),
+    });
+    // the currents at A add up, and the drops around the loop add up to the battery
+    walk_foundation("kirchhoff", &[&[("R3", "1k")], &[("V1", "12")]], |k, e| {
+        let (i1, i2, i3) = (dc_ma(e, "R1"), dc_ma(e, "R2"), dc_ma(e, "R3"));
+        assert!((i1 - (i2 + i3)).abs() < 1e-6, "step {k}: {i1} != {i2} + {i3}");
+        let v1 = if k == 2 { 12.0 } else { 9.0 };
+        assert!(((dc_v(e, "IN") - dc_v(e, "A")) + dc_v(e, "A") - v1).abs() < 1e-6);
+        match k {
+            0 => assert!((i1 - 5.4).abs() < 0.01 && (dc_v(e, "A") - 3.6).abs() < 0.01),
+            1 => assert!((i1 - 6.0).abs() < 0.01),
+            _ => assert!((i1 - 8.0).abs() < 0.01),
+        }
+    });
+    // the open voltage and the short current give the equivalent, and the equivalent gives the same voltage on the same load
+    walk_foundation("thevenin", &[&[("RL", "1G")], &[("RL", "0.001")], &[("RL", "1k"), ("VTH", "5"), ("RTH", "500")]], |k, e| match k {
+        0 => assert!((dc_v(e, "A") - 3.333).abs() < 0.01),
+        1 => assert!((dc_v(e, "A") - 5.0).abs() < 0.01),
+        2 => assert!((dc_ma(e, "RL") - 10.0).abs() < 0.05),
+        _ => assert!((dc_v(e, "A") - dc_v(e, "OUT2")).abs() < 1e-3),
+    });
+}
+
+/// The last step of the Thevenin lesson waits until the two circuits really agree, and says so.
+#[test]
+fn the_thevenin_lesson_waits_for_the_equivalent_to_match() {
+    let idx = lesson_ids().iter().position(|l| *l == "thevenin").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    for v in [("RL", "1G"), ("RL", "0.001")] {
+        e.run_dc();
+        e.update_lesson();
+        set_value(&mut e, v.0, v.1);
+    }
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    // the values are in range but the second load is not the same: not yet
+    for (r, v) in [("RL", "1k"), ("VTH", "5"), ("RTH", "500"), ("RL2", "2k")] {
+        set_value(&mut e, r, v);
+    }
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    set_value(&mut e, "RL2", "1k");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 4);
 }

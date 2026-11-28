@@ -250,6 +250,7 @@ fn lesson_list(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next
                         Kind::Measure => Action::Measure,
                         Kind::Hands => Action::Hands(item.id),
                         Kind::Board(n) => Action::Board(n),
+                        Kind::Proto(id) => Action::Proto(id),
                         _ => Action::Measure,
                     });
                 }

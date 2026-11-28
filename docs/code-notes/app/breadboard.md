@@ -5,6 +5,7 @@
 | ファイル | 中身 | コード |
 |---|---|---|
 | [proto/breadboard.md](proto/breadboard.md) | ブレッドボード: 穴とつながりのデータ・自動で差す・差し方どおりの回路・照合・画面 (動かす・テスター・オシロ)・電源を入れる・動かしながら見る (LED・スイッチ・つまみ・ブザーの音・焦げる) | `breadboard/mod.rs` `panel.rs` `canvas.rs` `draw.rs` `power.rs` `instruments.rs` `live.rs` `sound.rs`、`sch-core/breadboard.rs` |
+| [proto/lessons.md](proto/lessons.md) | 試作のレッスン (試作のタブの状態で手順を判定する 7 本、パス「試作の道」) | `proto_lessons.rs`、`breadboard/lesson_state.rs` |
 | [proto/sketch.md](proto/sketch.md) | Arduino のスケッチ (B6 ⑤): Nano の部品・スケッチの欄・動かし方・サンプル | `breadboard/sketch_ui.rs`、`sim-core/sketch/` |
 | [proto/strip-common.md](proto/strip-common.md) | ストリップ基板・ユニバーサル基板の共通: 切り替えと絵・裏で並べる・未接続の線と回路図の小窓・取り付け方 (ソケット・変換基板・モジュール)・手で直す (動かす・元に戻す・回路図の変更に合わせる・囲んで回す)・区画 (つなぎ方の決まり・区画の案)・印刷用の図 | `breadboard/strip_view.rs`、`sch-core/strip_edit.rs` `mount.rs` `section_plan.rs` `strip_print.rs` |
 | [proto/stripboard.md](proto/stripboard.md) | ストリップ基板の並べ方: 帯と段・帯の行の相乗り・ケルビン接続・区画の間のつなぎ・大きさの移り変わり | `sch-core/stripboard/` |

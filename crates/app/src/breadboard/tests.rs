@@ -1188,3 +1188,221 @@ fn a_sketch_change_is_undone_and_redone() {
     app.breadboard.sketch_undo(&mut app.sch, "U1", true);
     assert_eq!(crate::breadboard::sketch_ui::sketch_of(&app.sch, "U1"), second);
 }
+
+// ------------------------------------------------------------------ the prototype lessons (proto_lessons.rs), walked in the real tab
+
+/// The app with a prototype lesson started, and a function that draws one frame.
+fn proto_app(id: &str) -> (App, impl FnMut(&mut App)) {
+    let mut app = App::default();
+    app.start_proto_lesson(crate::proto_lessons::find(id).unwrap());
+    let ctx = egui::Context::default();
+    let mut f = eframe::Frame::_new_kittest();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+    let run = move |app: &mut App| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| eframe::App::ui(app, ui, &mut f));
+        out.textures_delta.clear();
+    };
+    (app, run)
+}
+
+fn steps_done(app: &App) -> usize {
+    app.proto.as_ref().map_or(0, |a| a.done.iter().filter(|d| **d).count())
+}
+
+/// The layout the tab shows now.
+fn shown(app: &App) -> Layout {
+    app.sch.breadboard.clone().unwrap_or_else(|| auto_layout(&app.sch.sch))
+}
+
+fn lead(app: &App, refdes: &str, pin: usize) -> Hole {
+    shown(app).parts.iter().find(|p| p.refdes == refdes).unwrap().leads[pin].1
+}
+
+/// Draws enough frames for a step whose state is reached to be ticked (`STEADY_FRAMES`, and one more: a reading counts from the frame
+/// after the one its panel was drawn in).
+fn frames(app: &mut App, run: &mut impl FnMut(&mut App)) {
+    for _ in 0..crate::proto_lessons::STEADY_FRAMES + 2 {
+        run(app);
+    }
+}
+
+/// Runs the circuit on for `seconds` (frames of 15 ms).
+fn run_for(app: &mut App, run: &mut impl FnMut(&mut App), seconds: f64) {
+    for _ in 0..(seconds / 0.015) as usize {
+        if let Some(lv) = app.breadboard.live.as_mut() {
+            lv.advance(0.015);
+        }
+        run(app);
+    }
+}
+
+/// Holds the first switch down for a while, then lets it go for a while.
+fn press_and_release(app: &mut App, run: &mut impl FnMut(&mut App), held: f64) {
+    let i = app.breadboard.live.as_ref().unwrap().switch_index("SW1").unwrap();
+    app.breadboard.live.as_mut().unwrap().press(i);
+    run_for(app, run, held);
+    app.breadboard.live.as_mut().unwrap().release();
+    run_for(app, run, held);
+}
+
+#[test]
+fn every_prototype_lesson_opens_on_the_breadboard_and_runs() {
+    for l in crate::proto_lessons::LESSONS {
+        let (mut app, mut run) = proto_app(l.id);
+        assert!(app.mode == Mode::Proto, "{}", l.id);
+        app.breadboard.powered = true;
+        frames(&mut app, &mut run);
+        frames(&mut app, &mut run);
+        let live = app.breadboard.live.as_ref().unwrap_or_else(|| panic!("{}: not running", l.id));
+        assert!(live.error.is_none(), "{}: {:?}", l.id, live.error);
+        assert!(steps_done(&app) < l.steps.len(), "{}: switching on alone does not finish it", l.id);
+    }
+}
+
+#[test]
+fn the_breadboard_lesson_ticks_as_the_led_is_moved_and_put_back() {
+    let (mut app, mut run) = proto_app("proto_breadboard");
+    frames(&mut app, &mut run);
+    assert_eq!(steps_done(&app), 0);
+    app.breadboard.powered = true;
+    frames(&mut app, &mut run);
+    assert_eq!(steps_done(&app), 1, "lit");
+    let before = shown(&app);
+    app.sch.breadboard = Some(moved(&before, "D1", 1, 0).unwrap());
+    frames(&mut app, &mut run);
+    assert_eq!(steps_done(&app), 2, "plugged in a different column");
+    app.sch.breadboard = Some(before);
+    frames(&mut app, &mut run);
+    assert_eq!(steps_done(&app), 3, "back as the schematic joins it");
+    assert!(app.progress.is_done("proto_breadboard"));
+}
+
+#[test]
+fn the_meter_lesson_reads_volts_blows_the_fuse_reads_amps_in_series_and_ohms() {
+    let (mut app, mut run) = proto_app("proto_meter");
+    app.breadboard.powered = true;
+    app.breadboard.tool = Tool::Meter;
+    app.breadboard.meter_range = MeterRange::Volts;
+    frames(&mut app, &mut run);
+    assert_eq!(steps_done(&app), 1);
+    // volts: MID (R1's lower lead) against GND
+    let gnd = Hole::Rail { rail: Rail::TopMinus, col: 10 };
+    (app.breadboard.red, app.breadboard.black) = (Some(lead(&app, "R1", 1)), Some(gnd));
+    frames(&mut app, &mut run);
+    assert_eq!(steps_done(&app), 2, "{:?}", app.breadboard.seen);
+    // amps across the supply: the fuse
+    app.breadboard.meter_range = MeterRange::Amps;
+    (app.breadboard.red, app.breadboard.black) = (Some(Hole::Rail { rail: Rail::TopPlus, col: 10 }), Some(gnd));
+    frames(&mut app, &mut run);
+    assert_eq!(steps_done(&app), 3, "{:?}", app.breadboard.seen);
+    // R3 one column over: the meter between R3's lower lead and the LED's upper lead reads the LED's current
+    let before = shown(&app);
+    app.sch.breadboard = Some(moved(&before, "R3", 1, 0).unwrap());
+    frames(&mut app, &mut run);
+    (app.breadboard.red, app.breadboard.black) = (Some(lead(&app, "R3", 1)), Some(lead(&app, "D1", 0)));
+    frames(&mut app, &mut run);
+    assert_eq!(steps_done(&app), 4, "{:?}", app.breadboard.seen);
+    // ohms with the power off across R1 (IN and MID)
+    app.sch.breadboard = Some(before);
+    app.breadboard.powered = false;
+    app.breadboard.meter_range = MeterRange::Ohms;
+    (app.breadboard.red, app.breadboard.black) = (Some(lead(&app, "R1", 0)), Some(lead(&app, "R1", 1)));
+    frames(&mut app, &mut run);
+    assert_eq!(steps_done(&app), 5, "{:?}", app.breadboard.seen);
+    // R1 alone: the way round through R2 and back through the LED does not conduct the meter's small current backwards (as the lesson says)
+    assert!(matches!(app.breadboard.seen.reading, Some(Reading::Ohms(Some(r))) if (r - 1000.0).abs() < 5.0), "{:?}", app.breadboard.seen.reading);
+}
+
+#[test]
+fn the_blink_and_scope_lessons_see_the_led_blink_and_its_square_wave() {
+    let (mut app, mut run) = proto_app("proto_blink");
+    app.breadboard.powered = true;
+    frames(&mut app, &mut run);
+    run_for(&mut app, &mut run, 1.2);
+    assert_eq!(steps_done(&app), 1, "seen lit and dark");
+    let u1 = app.sch.sch.components.iter().find(|c| c.refdes.starts_with('U')).unwrap().refdes.clone();
+    let fast = crate::breadboard::sketch_ui::sketch_of(&app.sch, &u1).replace("delay(500)", "delay(100)");
+    app.sch.sketches.insert(u1, fast);
+    frames(&mut app, &mut run);
+    assert_eq!(steps_done(&app), 2);
+
+    let (mut app, mut run) = proto_app("proto_scope");
+    app.breadboard.powered = true;
+    app.breadboard.tool = Tool::Scope;
+    frames(&mut app, &mut run);
+    assert_eq!(steps_done(&app), 1);
+    // the probe on R1's lead on D13's strip (the one that swings 0 - 5 V): a square wave
+    for pin in [0, 1] {
+        if steps_done(&app) == 1 {
+            app.breadboard.scope = Some(lead(&app, "R1", pin));
+            run_for(&mut app, &mut run, 1.2);
+        }
+    }
+    assert_eq!(steps_done(&app), 2, "{:?}", app.breadboard.seen.scope);
+    app.breadboard.scope = Some(lead(&app, "D1", 1));
+    run_for(&mut app, &mut run, 0.3);
+    assert_eq!(steps_done(&app), 3, "{:?}", app.breadboard.seen.scope);
+}
+
+#[test]
+fn the_button_lesson_counts_presses_and_wants_the_blocks_turned_round() {
+    let (mut app, mut run) = proto_app("proto_button");
+    app.breadboard.powered = true;
+    frames(&mut app, &mut run);
+    run_for(&mut app, &mut run, 0.2);
+    press_and_release(&mut app, &mut run, 0.15);
+    assert_eq!(steps_done(&app), 1, "lit while held");
+    press_and_release(&mut app, &mut run, 0.15);
+    assert_eq!(steps_done(&app), 2, "presses: 2");
+    // the blocks turned round: HIGH and LOW swapped, so the LED is lit while the button is up
+    let text = app.sch.sketches.get("U1").unwrap().replace("LED_BUILTIN, HIGH", "LED_BUILTIN, @").replace("LED_BUILTIN, LOW", "LED_BUILTIN, HIGH").replace("LED_BUILTIN, @", "LED_BUILTIN, LOW");
+    app.sch.sketches.insert("U1".into(), text);
+    frames(&mut app, &mut run);
+    run_for(&mut app, &mut run, 0.3);
+    assert_eq!(steps_done(&app), 3);
+}
+
+#[test]
+fn the_pot_lesson_reads_the_serial_and_the_knob_turned_end_to_end() {
+    let (mut app, mut run) = proto_app("proto_pot");
+    app.breadboard.powered = true;
+    frames(&mut app, &mut run);
+    run_for(&mut app, &mut run, 0.6);
+    assert_eq!(steps_done(&app), 1, "numbers on the serial monitor");
+    for v in [0.02, 0.98] {
+        let lv = app.breadboard.live.as_mut().unwrap();
+        let k = lv.knob_index("VR1").unwrap();
+        lv.set_knob(k, v);
+        run_for(&mut app, &mut run, 0.15);
+    }
+    assert_eq!(steps_done(&app), 2);
+}
+
+#[test]
+fn the_code_lesson_wants_code_and_a_led_that_toggles() {
+    let (mut app, mut run) = proto_app("proto_code");
+    frames(&mut app, &mut run);
+    assert_eq!(steps_done(&app), 0, "the sample opens as blocks");
+    app.sch.sketch_blocks.remove("U1");
+    frames(&mut app, &mut run);
+    assert_eq!(steps_done(&app), 1);
+    let toggle = "int last = HIGH;\nint on = 0;\n\nvoid setup() {\n  pinMode(LED_BUILTIN, OUTPUT);\n  pinMode(2, INPUT_PULLUP);\n}\n\nvoid loop() {\n  int now = digitalRead(2);\n  if (now == LOW && last == HIGH) {\n    on = !on;\n    digitalWrite(LED_BUILTIN, on);\n  }\n  last = now;\n  delay(10);\n}\n";
+    app.sch.sketches.insert("U1".into(), toggle.into());
+    app.breadboard.powered = true;
+    frames(&mut app, &mut run);
+    run_for(&mut app, &mut run, 0.2);
+    for _ in 0..2 {
+        press_and_release(&mut app, &mut run, 0.15);
+    }
+    assert_eq!(steps_done(&app), 2, "{:?}", app.proto.as_ref().map(|a| &a.memo));
+    // the sample's own sketch (lit only while held) never leaves the LED on after a release
+    let (mut app, mut run) = proto_app("proto_code");
+    app.sch.sketch_blocks.remove("U1");
+    app.breadboard.powered = true;
+    frames(&mut app, &mut run);
+    run_for(&mut app, &mut run, 0.2);
+    for _ in 0..2 {
+        press_and_release(&mut app, &mut run, 0.15);
+    }
+    assert_eq!(steps_done(&app), 1);
+}

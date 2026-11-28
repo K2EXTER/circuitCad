@@ -63,7 +63,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `glossary.rs` | 用語集(`TERMS` に語を足す) |
 | `notes_ui.rs` | 付箋 (レビューのコメント、U6): 図の上の番号の印と一覧・返事・解決済みの窓。回路図と基板が共有 (`design_spec::Note`) |
 | `multiboard.rs` | 複数の基板 (E5): プロジェクトの基板の切り替え・足す・外す、「基板どうしのつなぎ」の窓(`project.rs` の `System`、形式 2) |
-| `learn/`(`paths` パスの中身 / `window` 窓とウェルカムカード)`measure_guide.rs` `bench_guide.rs` `help.rs` `project.rs` | 学習パス / 組み立てて測る窓 / 実機作業の窓 / 操作ガイド(操作の説明はここ) / `.ccproj` |
+| `learn/`(`paths` パスの中身 / `window` 窓とウェルカムカード)`proto_lessons.rs`(試作のレッスン: 試作のタブの状態で手順を判定。状態は `breadboard/lesson_state.rs`)`measure_guide.rs` `bench_guide.rs` `help.rs` `project.rs` | 学習パス / 試作のレッスン / 組み立てて測る窓 / 実機作業の窓 / 操作ガイド(操作の説明はここ) / `.ccproj` |
 | `breadboard/` | 試作のタブ(`Mode::Proto`。回路図をブレッドボードに差す穴の絵・ドラッグで差し替え・回路図との照合・電源を入れて動かす `live.rs`・Arduino のスケッチ `sketch_ui.rs` (色分け・整形 `code_edit.rs`・ブロックで書く `blocks_ui.rs`、ブロックとコードの行き来は `sim-core/sketch/blocks.rs`)(実行は `sim-core/sketch/`)・ストリップ基板とユニバーサル基板の並べ方 `strip_view.rs`・組む順と各段の通電の窓 `build_steps.rs`(並べ方と照合は `sch-core/stripboard/`)。データと自動の並べ方は `sch-core/breadboard.rs`。`docs/code-notes/app/breadboard.md` が目次、話題ごとに `app/proto/`) |
 | `bench_tab.rs` | 実機のタブ(`Mode::Bench`。組み立て → 電源投入 → 測る → 合否 → 修理 の手順と、光る基板の配置図。`docs/code-notes/app/bench-tab.md`) |
 | `theme.rs` `widgets.rs` | 色・余白・ボタン・窓の位置の決まり(`docs/code-notes/app/ui-rules.md`) |

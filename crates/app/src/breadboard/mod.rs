@@ -31,6 +31,8 @@ pub use strip_view::{BoardKind, StripTool};
 pub use mate_ui::mount_choice_ui;
 #[cfg(test)]
 pub use sketch_ui::BLINK;
+mod lesson_state;
+pub use lesson_state::{LessonState, Reading};
 pub(crate) mod sound;
 use live::Live;
 mod canvas;
@@ -119,6 +121,8 @@ pub struct BreadboardView {
     /// board both show it, so it was worked out twice a frame.
     checked: Option<(u64, Layout, Vec<Problem>)>,
     pub scope: Option<Hole>,
+    /// What the meter and the scope showed last (for the prototype lessons).
+    seen: lesson_state::Seen,
     /// The supply is switched on: LEDs light, parts past their ratings burn.
     pub powered: bool,
     /// The DC point was worked out once for the meter or the power switch (not again every frame when it fails).

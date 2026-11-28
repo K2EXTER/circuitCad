@@ -79,6 +79,10 @@ fn every_lesson_of_a_path_exists_and_ids_are_unique_in_a_path() {
                 assert!(known.contains(&id), "{} refers to the missing lesson {id}", item.title);
                 assert_eq!(item.id, id);
             }
+            if let Kind::Proto(id) = item.kind {
+                assert!(crate::proto_lessons::find(id).is_some(), "{} refers to the missing prototype lesson {id}", item.title);
+                assert_eq!(item.id, id);
+            }
             if item.kind == Kind::Hands {
                 assert!(crate::bench_guide::guide(item.id).is_some(), "{} has no hands-on guide", item.title);
             }
@@ -113,7 +117,7 @@ fn the_lessons_that_had_no_path_are_in_one() {
 #[test]
 fn items_with_a_build_button_have_a_challenge() {
     let mut with = 0;
-    for item in items(&PATHS[0]).filter(|i| i.build) {
+    for item in items(&POWER_PATH).filter(|i| i.build) {
         with += 1;
         assert!(crate::schematic::challenge_of_lesson(item.id).is_some() || crate::schematic::challenge_exists(item.id), "{} has no challenge", item.title);
     }
@@ -205,19 +209,25 @@ fn a_new_learner_starts_on_the_first_lesson_about_voltage_and_current() {
     progress.mark("intro_ohm");
     assert_eq!(next_item(first_path(), &progress).unwrap().id, "intro_read");
     progress.mark("intro_read");
-    assert!(recommended(first_path(), &progress).iter().any(|i| i.id == "resistor"));
+    // the foundation path goes on to the lessons about what learners most often get wrong, then the laws
+    assert_eq!(first_path().id, "foundation");
+    assert_eq!(next_item(first_path(), &progress).unwrap().id, "basics_current");
+    for id in ["basics_current", "basics_open", "kirchhoff"] {
+        progress.mark(id);
+    }
+    assert_eq!(next_item(first_path(), &progress).unwrap().id, "thevenin");
 }
 
 #[test]
 fn the_power_supply_path_walks_from_basics_to_building() {
-    let p = &PATHS[0];
+    let p = &POWER_PATH;
     assert_eq!(p.stages.len(), 4);
     let mut progress = Progress::default();
     let (done, available, all) = summary(p, &progress);
     assert_eq!(done, 0);
     assert!(available >= 12 && all >= available);
     // a tree: the two roots (the divider and the LED) can both be started; what finishing one opens depends on the branch
-    let ready = |p: &Progress| recommended(&PATHS[0], p).iter().map(|i| i.id).collect::<Vec<_>>();
+    let ready = |p: &Progress| recommended(&POWER_PATH, p).iter().map(|i| i.id).collect::<Vec<_>>();
     assert_eq!(ready(&progress), ["divider", "led"]);
     assert_eq!(next_item(p, &progress).unwrap().id, "divider");
     progress.mark("divider");

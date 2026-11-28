@@ -14,7 +14,7 @@ pub fn boards(sch: &Schematic) -> Vec<String> {
     sch.components.iter().filter(|c| model_board(c).is_some()).map(|c| c.refdes.clone()).collect()
 }
 
-fn model_board(c: &sch_core::Component) -> Option<sim_core::sketch::Board> {
+pub(super) fn model_board(c: &sch_core::Component) -> Option<sim_core::sketch::Board> {
     c.custom.as_ref().and_then(|s| s.sim.as_ref()).and_then(|m| sim_core::sketch::Board::from_model(&m.name))
 }
 

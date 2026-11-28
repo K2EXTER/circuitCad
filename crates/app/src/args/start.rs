@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// `--lesson`, `--board-lesson`, `--repair`, `--challenge`, `--settings`, `--new-part`.
+/// `--lesson` (a schematic or a prototype lesson), `--board-lesson`, `--repair`, `--challenge`, `--settings`, `--new-part`.
 pub(super) fn lessons(app: &mut App, a: &Args) {
     if let Some(id) = a.val("--lesson")
         && let Some(n) = schematic::lesson_ids().iter().position(|l| *l == id)
@@ -16,6 +16,12 @@ pub(super) fn lessons(app: &mut App, a: &Args) {
         if a.has("--dc") {
             app.sch.analyze_dc();
         }
+    }
+    // `--lesson proto_meter`: a prototype lesson (the prototype tab with its steps window); `--proto-power` switches it on
+    if let Some(id) = a.val("--lesson")
+        && let Some(n) = crate::proto_lessons::find(id)
+    {
+        app.start_proto_lesson(n);
     }
     // --board-lesson [0..7]: 0 = schematic to order files, 1 = copper width and voltage drop ...
     if a.has("--board-lesson") {

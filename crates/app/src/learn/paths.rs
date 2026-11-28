@@ -51,7 +51,85 @@ pub(super) const I_POLES: Item = lesson("poles", "極と零 (RLC の共振を式
 pub(super) const I_NOISE: Item = lesson("noise", "ノイズ解析 (増幅回路の雑音はどこから来る)", "抵抗の熱雑音とトランジスタのショット雑音を、部品ごとに分けて見る。信号源の抵抗を小さくすると減る", None);
 pub(super) const I_PHASE_MARGIN: Item = lesson("phase_margin", "位相余裕 (容量の負荷でオペアンプが不安定になる)", "ゲインが 0dB になる周波数で、180° に対する余裕。出力の容量負荷が、余裕を食う", None);
 
-pub const PATHS: &[LearningPath] = &[POWER_PATH, ARDUINO_PATH, MEGA_PATH, BOARD_PATH, SWITCH_PATH, BATTERY_PATH, SIGNAL_PATH, PARTS_PATH, REPAIR_PATH];
+pub(super) const I_INTRO_OHM: Item = lesson("intro_ohm", "はじめに 1: 電圧・電流・抵抗 (オームの法則)", "電圧を上げると電流が増え、抵抗を大きくすると電流が減る。I = V ÷ R", Some("電池と抵抗 1 本で、テスタの電圧レンジ・電流レンジを使い、計算と測定を比べます (電流は電池 1.5V 以下で)"));
+pub(super) const I_INTRO_READ: Item = lesson("intro_read", "はじめに 2: 回路図の読み方と、値の書き方", "ラベルは線の代わり、GND は 0V の基準、値は 4.7k・100n・1Meg のように書く (M は 1/1000 なので注意)", Some("手元の抵抗のカラーコードと、値の表記 (4k7、472 など) を読みます"));
+
+pub const PATHS: &[LearningPath] = &[FOUNDATION_PATH, PROTO_PATH, POWER_PATH, ARDUINO_PATH, MEGA_PATH, BOARD_PATH, SWITCH_PATH, BATTERY_PATH, SIGNAL_PATH, PARTS_PATH, REPAIR_PATH];
+
+pub(super) const fn proto(id: &'static str, title: &'static str, about: &'static str, real: Option<&'static str>) -> Item {
+    Item { id, title, about, kind: Kind::Proto(id), build: false, requires: None, real }
+}
+
+/// Building on the breadboard: plugging parts in, the meter and the scope, then an Arduino sketch from blocks to code (the prototype
+/// lessons of `proto_lessons.rs`, judged in the prototype tab; the order of the Arduino starter kits: LED, button, potentiometer, PWM).
+pub(super) const PROTO_PATH: LearningPath = LearningPath {
+    id: "proto",
+    title: "試作の道: ブレッドボードと Arduino",
+    goal: "試作のタブで、ブレッドボードに部品を差して電源を入れ、テスターとオシロで測る練習をします。そのあと、Arduino のスケッチを回路と一緒に動かし、ボタン・ボリューム・PWM を、ブロックとコードの両方で書きます。最後は、ブロックを使わずにコードだけで書く課題です",
+    stages: &[
+        Stage {
+            name: "1. ブレッドボードとテスター",
+            about: "穴のつながり方と、テスターのレンジ (電圧は並列・電流は直列・抵抗は電源を切って)",
+            items: &[
+                Item { requires: Some(&["intro_ohm"]), ..proto("proto_breadboard", "ブレッドボードのしくみ (差し方と照合)", "縦の 5 つの穴と電源の列。足を違う列に差すと動かない。回路図との照合の赤い丸", Some("実物のブレッドボードに LED と抵抗を差し、穴のつながりをテスターの導通 (抵抗のレンジ) で確かめます")) },
+                Item { requires: Some(&["proto_breadboard"]), ..proto("proto_meter", "テスターの使い方 (電圧・電流・抵抗)", "電圧は 2 点の間に、電流は線を外して間に、抵抗は電源を切って。電流のレンジで電源に当てるとヒューズが切れる", Some("同じ回路を組み、電圧・電流・抵抗を測って、シミュレーションの値と比べます (電流のレンジは必ず直列に)")) },
+            ],
+        },
+        Stage {
+            name: "2. Arduino を動かす",
+            about: "スケッチを回路と一緒に動かし、オシロで波を見て、ボタンをブロックで読みます",
+            items: &[
+                Item { requires: Some(&["proto_breadboard"]), ..proto("proto_blink", "Arduino で LED を点滅させる (スケッチを動かす)", "setup と loop、digitalWrite と delay。数字を変えると点滅の速さが変わる", Some("Arduino IDE で同じスケッチを書き込み、delay を変えて速さを比べます")) },
+                Item { requires: Some(&["proto_blink", "proto_meter"]), ..proto("proto_scope", "オシロスコープの使い方 (電圧の時間の変化を見る)", "点滅するピンは 0V と 5V を行き来する方形波、電源の列は平らな直流", Some("オシロの探り針を D13 に当て、時間軸を変えて 1 周期 (1 秒) を画面に収めます")) },
+                Item { requires: Some(&["proto_blink"]), ..proto("proto_button", "押しボタンとブロック (入力・プルアップ・シリアル)", "INPUT_PULLUP で押していない間は HIGH、押すと LOW。押した回数をシリアルモニタに。ブロックを書き換えて逆にする", Some("押しボタンを D2 と GND の間につなぎ、シリアルモニタで押した回数を見ます")) },
+            ],
+        },
+        Stage {
+            name: "3. アナログ入力と PWM",
+            about: "ボリュームの電圧を数として読み、PWM で LED の明るさを変えます",
+            items: &[
+                Item { requires: Some(&["proto_button"]), ..proto("proto_pot", "ボリュームを読んで LED の明るさを変える (アナログ入力と PWM)", "analogRead は 0〜1023、analogWrite (PWM) は 0〜255 の割合。つまみで明るさが変わる", Some("ボリュームを回しながら、A0 の電圧をテスターで、シリアルモニタの数と比べます")) },
+                Item { requires: Some(&["proto_pot"]), ..I_PWM },
+            ],
+        },
+        Stage {
+            name: "4. 自分で書く",
+            about: "ブロックを使わず、コードだけで書きます (ブロックで覚えたことは、自動ではコードに移りません)",
+            items: &[Item { requires: Some(&["proto_button"]), ..proto("proto_code", "仕上げ: コードだけで書く (押すたびに LED を入れ替える)", "前の読みを覚える変数で「押された瞬間」を見つけ、LED の状態を入れ替える (トグル)", Some("同じスケッチを実物の Arduino に書き込み、ボタンのチャタリングで 2 回入れ替わることがないか試します")) }],
+        },
+    ],
+};
+
+/// The path every other one builds on: the three quantities, the ideas learners hold most often about a circuit (asked as guesses before each
+/// step), and the two laws every course teaches next. First in `PATHS`, and the one a new learner is offered.
+pub(super) const FOUNDATION_PATH: LearningPath = LearningPath {
+    id: "foundation",
+    title: "土台: 電圧・電流と回路の法則",
+    goal: "どのパスより先に通る土台です。電圧・電流・抵抗の関係から始めて、「電流は部品で使われて減る」「電池は決まった電流を出す」「電流が流れていなければ電圧も無い」のような、多くの人が持っている思い込みを、答えを予想してからシミュレーションで確かめて直します。最後に、どの教科書にも出てくるキルヒホッフの法則とテブナンの定理を、数字で確かめます",
+    stages: &[
+        Stage {
+            name: "1. 電圧・電流・抵抗",
+            about: "オームの法則と、回路図の読み方・値の書き方",
+            items: &[Item { requires: Some(&[]), ..I_INTRO_OHM }, Item { requires: Some(&["intro_ohm"]), ..I_INTRO_READ }],
+        },
+        Stage {
+            name: "2. 回路のふるまい (思い込みを確かめる)",
+            about: "手順の前に答えを予想し、シミュレーションの結果と比べます。外れたら、そこが直すべき思い込みです",
+            items: &[
+                Item { requires: Some(&["intro_read"]), ..lesson("basics_current", "はじめに 3: 電流は減らない、電池は電圧を保つ", "直列の道の電流はどこでも同じ。1 か所が流れにくくなると全体が減る。電池が保つのは電圧で、道を足すと電流が増える", Some("電流計を道のあちこちに入れて、どこでも同じ値になることを確かめます (電流計は必ず直列に)")) },
+                Item { requires: Some(&["basics_current"]), ..lesson("basics_open", "はじめに 4: 切れた所にも電圧がある、遠くの変化も効く", "電流が流れなくても電圧はある。切れた所に電池の電圧がまるごとかかる。離れた所に道を足しても、手前の電流が変わる", Some("抵抗を 1 本抜いて、抜いた所と、残った抵抗の両端の電圧をテスタで測ります")) },
+            ],
+        },
+        Stage {
+            name: "3. 回路の法則",
+            about: "電流則・電圧則と、回路を電池 1 つと抵抗 1 本にまとめる考え方。どの教科書にも出てくる 2 つです",
+            items: &[
+                Item { requires: Some(&["basics_open"]), ..lesson("kirchhoff", "キルヒホッフの法則 (電流の和・電圧の和)", "分かれ道に入る電流 = 出る電流。1 周の電圧の和 = 0。並列の部分を 1 本にまとめて、全体の電流を求める", Some("3 本の道の電流と、各部品の電圧を測って、2 つの法則を確かめます")) },
+                Item { requires: Some(&["kirchhoff"]), ..lesson("thevenin", "テブナンの定理 (電池 1 つと抵抗 1 本にまとめる)", "開放電圧と短絡電流から、等価な電池の電圧と抵抗を求める。外から見れば、回路は電池 1 つと抵抗 1 本", Some("負荷を外した電圧と、抵抗で制限された回路の短絡電流を測り、等価な抵抗を計算します")) },
+            ],
+        },
+    ],
+};
 
 pub(super) const REPAIR_PATH: LearningPath = LearningPath {
     id: "repair",
@@ -153,7 +231,7 @@ pub(super) const fn plan(id: &'static str, title: &'static str, about: &'static 
 pub(super) const ARDUINO_PATH: LearningPath = LearningPath {
     id: "arduino_board",
     title: "Arduino 互換ボードを作ろう",
-    goal: "ATmega328P に水晶・リセット・電源まわりをつけた、Arduino 互換のボードを、原理から理解して、回路図・基板・実機まで自分で作ります。マイコンの中身はシミュレーションできないので、周りの回路 (電源・水晶・リセット・LED) を確かめます。先に電源の学習パスの「電圧を分ける」「LED と電流制限抵抗」を済ませておくと進めやすいです",
+    goal: "ATmega328P に水晶・リセット・電源まわりをつけた、Arduino 互換のボードを、原理から理解して、回路図・基板・実機まで自分で作ります。ここではマイコンのまわりの回路 (電源・水晶・リセット・LED) を確かめます (スケッチを回路と一緒に動かすのは「試作の道」で練習します)。先に電源の学習パスの「電圧を分ける」「LED と電流制限抵抗」を済ませておくと進めやすいです",
     stages: &[
         Stage {
             name: "1. 土台: 読む・浮かせない・安定させる",
@@ -359,8 +437,8 @@ pub(super) const PARTS_PATH: LearningPath = LearningPath {
             name: "0. はじめに: 電圧・電流と、回路図の読み方",
             about: "電圧・電流・抵抗の関係 (オームの法則) と、回路図の線・ラベル・GND、部品の値の書き方 (k / M / µ)。部品を 1 つずつ学ぶ前の、最初の 2 本です",
             items: &[
-                Item { requires: Some(&[]), ..lesson("intro_ohm", "はじめに 1: 電圧・電流・抵抗 (オームの法則)", "電圧を上げると電流が増え、抵抗を大きくすると電流が減る。I = V ÷ R", Some("電池と抵抗 1 本で、テスタの電圧レンジ・電流レンジを使い、計算と測定を比べます (電流は電池 1.5V 以下で)")) },
-                Item { requires: Some(&["intro_ohm"]), ..lesson("intro_read", "はじめに 2: 回路図の読み方と、値の書き方", "ラベルは線の代わり、GND は 0V の基準、値は 4.7k・100n・1Meg のように書く (M は 1/1000 なので注意)", Some("手元の抵抗のカラーコードと、値の表記 (4k7、472 など) を読みます")) },
+                Item { requires: Some(&[]), ..I_INTRO_OHM },
+                Item { requires: Some(&["intro_ohm"]), ..I_INTRO_READ },
             ],
         },
         Stage {
