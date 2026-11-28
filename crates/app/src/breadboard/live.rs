@@ -839,9 +839,19 @@ mod tests {
         };
         // the pull-up is on before the first read: no press counted at the start
         assert!(led(&mut live) < 1e-4, "dark until pressed");
+        // the block it runs is lit up: the delay at the end of the loop while the button is up, the delay inside the
+        // "while pressed" while it is held
+        let (_, lines) = sim_core::sketch::blocks::from_code_with_lines(&text).unwrap();
+        let block_now = |live: &Live| {
+            let at = live.mcus[0].machine.as_ref().unwrap().line();
+            at.and_then(|l| lines.iter().position(|&x| x == l))
+        };
+        assert_eq!(block_now(&live), Some(lines.len() - 1), "the loop's last delay");
         for n in 1..=2 {
             live.press(k);
             assert!(led(&mut live) > 2e-3, "lit while held");
+            // setup 3, the if, its 4 blocks, the while: its delay is the 10th
+            assert_eq!(block_now(&live), Some(9), "the delay in the while");
             live.release();
             assert!(led(&mut live) < 1e-4, "dark when let go");
             let serial = &live.mcus[0].machine.as_ref().unwrap().serial;

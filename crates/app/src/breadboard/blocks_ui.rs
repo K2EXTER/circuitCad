@@ -65,6 +65,9 @@ struct Cx {
     ghost_h: f32,
     /// The block being moved (drawn faded in its place while it is dragged).
     moving: Option<(ListPath, usize)>,
+    /// The block the sketch runs now, by its place in the order the blocks are drawn (`order` counts them as they are).
+    running: Option<usize>,
+    order: usize,
 }
 
 impl Cx {
@@ -137,17 +140,19 @@ fn palette(board: Board, first_var: Option<&str>) -> Vec<Block> {
 
 /// The block editor of a sketch: the list to drag from, the variables, the start and the loop. True when the blocks changed (the
 /// caller writes them as code).
-pub fn edit_blocks(ui: &mut egui::Ui, s: &mut BlockSketch, board: Board, salt: &str) -> bool {
+/// `lines`: each block's line in the sketch, in the order they are drawn (`blocks::from_code_with_lines`); `running`: the line the
+/// sketch runs at now (its block is lit up).
+pub fn edit_blocks(ui: &mut egui::Ui, s: &mut BlockSketch, board: Board, salt: &str, lines: &[u32], running: Option<u32>) -> bool {
     // top to bottom, as wide as it is given (the rows of blocks wrap inside it)
     let width = ui.available_width();
     ui.allocate_ui_with_layout(egui::vec2(width, 0.0), egui::Layout::top_down(egui::Align::Min), |ui| {
         ui.set_width(width);
-        edit_blocks_in(ui, s, board, salt)
+        edit_blocks_in(ui, s, board, salt, lines, running)
     })
     .inner
 }
 
-fn edit_blocks_in(ui: &mut egui::Ui, s: &mut BlockSketch, board: Board, salt: &str) -> bool {
+fn edit_blocks_in(ui: &mut egui::Ui, s: &mut BlockSketch, board: Board, salt: &str, lines: &[u32], running: Option<u32>) -> bool {
     let before = s.clone();
     let mut cx = Cx {
         board,
@@ -160,6 +165,9 @@ fn edit_blocks_in(ui: &mut egui::Ui, s: &mut BlockSketch, board: Board, salt: &s
         ghost: None,
         ghost_h: 0.0,
         moving: None,
+        // the block the sketch runs now: its place in the order they are drawn
+        running: running.and_then(|l| lines.iter().position(|&x| x == l)),
+        order: 0,
     };
     let ghost_id = cx.base.with("ghost");
     if cx.dragging {
@@ -432,6 +440,8 @@ fn block_ui(ui: &mut egui::Ui, b: &mut Block, path: &ListPath, i: usize, cx: &mu
     let ground_id = cx.base.with(("ground", path, i));
     let ground = ui.data(|d| d.get_temp::<egui::Rect>(ground_id)).map(|r| ui.interact(r, ground_id, egui::Sense::click_and_drag()));
     let moved = cx.moving.as_ref().is_some_and(|(l, k)| l == path && *k == i);
+    let lit = cx.running == Some(cx.order);
+    cx.order += 1;
     // a dark edge: a block inside one of its own colour (a repeat in an if) still shows where it is
     let edge = egui::Stroke::new(1.0, Color32::from_black_alpha(110));
     let r = egui::Frame::NONE.fill(color).stroke(edge).corner_radius(5.0).inner_margin(egui::Margin::symmetric(6, 3)).show(ui, |ui| {
@@ -479,6 +489,19 @@ fn block_ui(ui: &mut egui::Ui, b: &mut Block, path: &ListPath, i: usize, cx: &mu
         }
     });
     ui.data_mut(|d| d.insert_temp(ground_id, r.response.rect));
+    if lit {
+        // the block the sketch is at now (the delay it waits in): a bright edge
+        ui.painter().rect_stroke(r.response.rect.expand(1.5), 6.0, egui::Stroke::new(3.0, crate::theme::HIGHLIGHT), egui::StrokeKind::Outside);
+        // brought into sight when the sketch moves on to it out of sight (not every frame: the blocks may be scrolled by hand)
+        let seen_id = cx.base.with("lit");
+        let before: Option<usize> = ui.data(|d| d.get_temp::<Option<usize>>(seen_id)).flatten();
+        if before != cx.running {
+            ui.data_mut(|d| d.insert_temp(seen_id, cx.running));
+            if !ui.clip_rect().contains_rect(r.response.rect) {
+                ui.scroll_to_rect(r.response.rect, None);
+            }
+        }
+    }
     if let Some(g) = ground {
         drag_from(ui, &g, title, color, Drag::Move(path.clone(), i));
         g.context_menu(|ui| block_menu(ui, is_if, has_else, &mut menu));
@@ -1007,7 +1030,7 @@ mod tests {
     fn frame(ctx: &egui::Context, s: &mut BlockSketch, events: Vec<egui::Event>) -> Vec<(String, egui::Pos2)> {
         let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 900.0));
         let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
-            edit_blocks(ui, s, Board::Nano, "t");
+            edit_blocks(ui, s, Board::Nano, "t", &[], None);
         });
         out.textures_delta.clear();
         out.shapes

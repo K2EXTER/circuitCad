@@ -191,9 +191,19 @@ pub fn expr(e: &BExpr) -> String {
 
 /// A sketch read into blocks, or the first line that is no block and why.
 pub fn from_code(src: &str) -> Result<BlockSketch, NotBlocks> {
+    from_code_with_lines(src).map(|(s, _)| s)
+}
+
+/// A sketch read into blocks, with the line (from 1) each block starts on in the text: the blocks in the order they are drawn
+/// (the start, then the loop; each block before the blocks inside it, an if's own before its else's). The line the sketch runs now
+/// (`Machine::line`) names the block to light up.
+pub fn from_code_with_lines(src: &str) -> Result<(BlockSketch, Vec<u32>), NotBlocks> {
+    let mut lines = vec![];
     let err = |(line, message): (u32, String)| NotBlocks { line, message };
     let prog: Program = parse(lex(src).map_err(err)?).map_err(err)?;
     let mut s = BlockSketch::default();
+    // the lines of setup's blocks and of loop's (whichever the text has first, setup's are drawn first)
+    let mut lines_of: [Vec<u32>; 2] = [vec![], vec![]];
     for g in &prog.globals {
         let Stmt::Decl { ty, name, len, init, line } = g else { continue };
         if len.is_some() {
@@ -214,45 +224,56 @@ pub fn from_code(src: &str) -> Result<BlockSketch, NotBlocks> {
         if !f.params.is_empty() || f.ret != Ty::Void {
             return Err(no(f.line, format!("{}() は void {}() と書きます", f.name, f.name)));
         }
-        *body = blocks(&f.body)?;
+        *body = blocks(&f.body, &mut lines_of[usize::from(f.name == "loop")])?;
     }
-    Ok(s)
+    let [setup_lines, loop_lines] = &mut lines_of;
+    lines.append(setup_lines);
+    lines.append(loop_lines);
+    Ok((s, lines))
 }
 
 fn no(line: u32, message: String) -> NotBlocks {
     NotBlocks { line, message }
 }
 
-fn blocks(body: &[Stmt]) -> Result<Vec<Block>, NotBlocks> {
+fn blocks(body: &[Stmt], lines: &mut Vec<u32>) -> Result<Vec<Block>, NotBlocks> {
     let mut v = vec![];
     for s in body {
         match s {
             // `{ … }` alone and an empty `;`: their statements in place
-            Stmt::Block(inner) => v.extend(blocks(inner)?),
-            _ => v.push(block(s)?),
+            Stmt::Block(inner) => v.extend(blocks(inner, lines)?),
+            _ => v.push(block(s, lines)?),
         }
     }
     Ok(v)
 }
 
 /// The statements of a body (`{ … }` or one statement).
-fn body_of(s: &Stmt) -> Result<Vec<Block>, NotBlocks> {
+fn body_of(s: &Stmt, lines: &mut Vec<u32>) -> Result<Vec<Block>, NotBlocks> {
     match s {
-        Stmt::Block(v) => blocks(v),
-        other => Ok(vec![block(other)?]),
+        Stmt::Block(v) => blocks(v, lines),
+        other => Ok(vec![block(other, lines)?]),
     }
 }
 
-fn block(s: &Stmt) -> Result<Block, NotBlocks> {
+/// A statement as a block; its line goes in `lines` before the lines of the blocks inside it.
+fn block(s: &Stmt, lines: &mut Vec<u32>) -> Result<Block, NotBlocks> {
+    if let Stmt::Expr(_, l) | Stmt::If(.., l) | Stmt::While(_, _, l) | Stmt::For(.., l) = s {
+        lines.push(*l);
+    }
     Ok(match s {
         Stmt::Expr(e, line) => call_block(e, *line)?,
-        Stmt::If(c, then, els, line) => Block::If {
-            cond: bexpr(c, *line)?,
-            then: body_of(then)?,
-            els: els.as_ref().map(|e| body_of(e)).transpose()?,
-        },
-        Stmt::While(c, body, line) => Block::While { cond: bexpr(c, *line)?, body: body_of(body)? },
-        Stmt::For(init, cond, step, body, line) => repeat(init.as_deref(), cond.as_ref(), step.as_ref(), body, *line)?,
+        Stmt::If(c, then, els, line) => {
+            let cond = bexpr(c, *line)?;
+            let then = body_of(then, lines)?;
+            let els = els.as_ref().map(|e| body_of(e, lines)).transpose()?;
+            Block::If { cond, then, els }
+        }
+        Stmt::While(c, body, line) => {
+            let cond = bexpr(c, *line)?;
+            Block::While { cond, body: body_of(body, lines)? }
+        }
+        Stmt::For(init, cond, step, body, line) => repeat(init.as_deref(), cond.as_ref(), step.as_ref(), body, *line, lines)?,
         Stmt::Decl { name, line, .. } => {
             return Err(no(*line, format!("関数の中の変数 {name} はブロックにありません (上の「変数」で作り、「〜にする」ブロックで値を入れます)")));
         }
@@ -264,7 +285,7 @@ fn block(s: &Stmt) -> Result<Block, NotBlocks> {
 }
 
 /// `for (int i = 0; i < n; i++)` (or `i += 1`, `++i`) as a repeat block; any other `for` is no block.
-fn repeat(init: Option<&Stmt>, cond: Option<&Expr>, step: Option<&Expr>, body: &Stmt, line: u32) -> Result<Block, NotBlocks> {
+fn repeat(init: Option<&Stmt>, cond: Option<&Expr>, step: Option<&Expr>, body: &Stmt, line: u32, lines: &mut Vec<u32>) -> Result<Block, NotBlocks> {
     let bad = || no(line, "この for はブロックにありません (「n 回くり返す」は for (int i = 0; i < n; i++) の形だけです)".into());
     let counter = match init {
         Some(Stmt::Block(v)) if v.len() == 1 => match &v[0] {
@@ -286,7 +307,7 @@ fn repeat(init: Option<&Stmt>, cond: Option<&Expr>, step: Option<&Expr>, body: &
     if !steps_by_one {
         return Err(bad());
     }
-    Ok(Block::Repeat { counter, times, body: body_of(body)? })
+    Ok(Block::Repeat { counter, times, body: body_of(body, lines)? })
 }
 
 /// A statement that is a call or an assignment.
@@ -503,6 +524,21 @@ void loop() {
         assert_eq!(s.setup, vec![Block::PinMode { pin: name("LED_BUILTIN"), mode: PinMode::Output }]);
         assert_eq!(s.looped.len(), 4);
         assert_eq!(s.looped[1], Block::Delay(int(500)));
+    }
+
+    /// Each block's line in the text, in the order the blocks are drawn (an if before the blocks inside it).
+    #[test]
+    fn each_block_knows_its_line() {
+        let (s, lines) = from_code_with_lines(&to_code(&every_block())).unwrap();
+        let code = to_code(&s);
+        let line_of = |text: &str| code.lines().position(|l| l.trim_start().starts_with(text)).unwrap() as u32 + 1;
+        assert_eq!(lines.len(), 3 + 11, "{lines:?}");
+        assert_eq!(lines[0], line_of("pinMode(13"));
+        assert_eq!(lines[3], line_of("if ("));
+        assert_eq!(lines[4], line_of("digitalWrite(LED_BUILTIN"));
+        assert_eq!(lines[6], line_of("digitalWrite(13, LOW)"), "the else's block after the if's own");
+        assert_eq!(lines[8], line_of("analogWrite"), "inside the repeat");
+        assert_eq!(*lines.last().unwrap(), line_of("Serial.println(count)"));
     }
 
     #[test]

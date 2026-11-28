@@ -240,6 +240,11 @@ impl Machine {
         Machine { sketch, pc: 0, stack: vec![], globals: vec![Val::I(0); g], locals: vec![], frames: vec![], wake: 0.0, drives: vec![Drive::Input; pins], serial: String::new(), error: None, seed: 0x2545_F491_4F6C_DD1D, unsettled: false }
     }
 
+    /// The line (from 1) of the sketch it is at: the `delay` it waits in, or the last it ran (none before it has run).
+    pub fn line(&self) -> Option<u32> {
+        self.sketch.code.lines.get(self.pc.checked_sub(1)?).copied()
+    }
+
     /// When the sketch is waiting in `delay` until (simulated seconds).
     pub fn waiting_until(&self) -> f64 {
         self.wake

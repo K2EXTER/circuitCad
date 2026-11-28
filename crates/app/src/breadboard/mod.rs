@@ -147,6 +147,9 @@ pub struct BreadboardView {
     serial_input: std::collections::HashMap<String, String>,
     /// The board whose sketch is open in its own window (a bigger editor with line numbers), if any.
     pub sketch_window: Option<String>,
+    /// Each board's sketch as it was before its last changes, for 元に戻す / やり直す (`sketch_ui::SketchHistory`; the schematic's
+    /// undo does not hold the sketches).
+    sketch_history: std::collections::HashMap<String, sketch_ui::SketchHistory>,
     /// The knobs turned (part → volts) and the temperature of the room (℃, None = the schematic's): kept when the run starts again.
     knob_values: std::collections::BTreeMap<String, f64>,
     /// A potentiometer being turned on the board: its knob, where the pointer went down and the knob's position then.

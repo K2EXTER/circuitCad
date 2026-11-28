@@ -71,6 +71,18 @@ pub fn sketches_key(sch: &SchEditor) -> u64 {
     h.finish()
 }
 
+/// A board's sketch as it was before its changes: one step per change made with the mouse up and no box being typed in (a drag of
+/// a block, a number dragged, a name typed: each one step).
+#[derive(Default)]
+pub struct SketchHistory {
+    committed: Option<String>,
+    undo: Vec<String>,
+    redo: Vec<String>,
+}
+
+/// The most steps kept for a sketch.
+const SKETCH_UNDO_MAX: usize = 100;
+
 /// A sketch being built by arduino-cli for the real chip on another thread: the chip's program when it is done (or why not).
 pub type RealBuild = std::sync::Arc<std::sync::Mutex<Option<Result<avr_sim::Image, String>>>>;
 
@@ -83,6 +95,80 @@ pub fn text_key(text: &str, board: sim_core::sketch::Board) -> u64 {
 }
 
 impl BreadboardView {
+    /// Takes the board's sketch as it is now into its history when a change has settled (the mouse up, no box typed in).
+    fn track_sketch(&mut self, ctx: &egui::Context, refdes: &str, text: &str) {
+        let h = self.sketch_history.entry(refdes.to_string()).or_default();
+        let Some(before) = h.committed.as_ref() else {
+            h.committed = Some(text.to_string());
+            return;
+        };
+        let settled = !ctx.input(|i| i.pointer.any_down()) && !ctx.egui_wants_keyboard_input();
+        if before != text && settled {
+            h.undo.push(std::mem::replace(h.committed.as_mut().unwrap(), text.to_string()));
+            if h.undo.len() > SKETCH_UNDO_MAX {
+                h.undo.remove(0);
+            }
+            h.redo.clear();
+        }
+    }
+
+    /// 元に戻す (`back`) or やり直す the last change of a board's sketch.
+    pub(super) fn sketch_undo(&mut self, sch: &mut SchEditor, refdes: &str, back: bool) {
+        let now = sketch_of(sch, refdes);
+        let h = self.sketch_history.entry(refdes.to_string()).or_default();
+        // a change not yet taken (made this frame) is a step of its own
+        if h.committed.as_ref().is_some_and(|c| *c != now) {
+            h.undo.push(h.committed.take().unwrap());
+            h.redo.clear();
+        }
+        let (from, to) = if back { (&mut h.undo, &mut h.redo) } else { (&mut h.redo, &mut h.undo) };
+        let Some(text) = from.pop() else { return };
+        to.push(now);
+        h.committed = Some(text.clone());
+        sch.sketches.insert(refdes.to_string(), text);
+        sch.status = i18n::tr(if back { "スケッチを元に戻しました" } else { "スケッチをやり直しました" }).to_string();
+    }
+
+    /// The 元に戻す and やり直す buttons of a board's sketch: Some(true) to undo, Some(false) to redo.
+    fn sketch_undo_buttons(&self, ui: &mut egui::Ui, sch: &SchEditor, refdes: &str) -> Option<bool> {
+        let now = sketch_of(sch, refdes);
+        let (can_back, can_redo) = self.sketch_history.get(refdes).map_or((false, false), |h| (!h.undo.is_empty() || h.committed.as_ref().is_some_and(|c| *c != now), !h.redo.is_empty()));
+        let mut act = None;
+        ui.horizontal(|ui| {
+            if crate::icons::icon_button_key(ui, crate::icons::Icon::Undo, "元に戻す", "Ctrl+Z", false, can_back, "スケッチの直前の変更 (ブロックを置いた・動かした・消した・値を変えた) を取り消します (Ctrl+Z)").clicked() {
+                act = Some(true);
+            }
+            if crate::icons::icon_button_key(ui, crate::icons::Icon::Redo, "やり直す", "Ctrl+Y", false, can_redo, "取り消した変更をもう一度します (Ctrl+Y)").clicked() {
+                act = Some(false);
+            }
+        });
+        act
+    }
+
+    /// The keys of 元に戻す (Ctrl+Z) and やり直す (Ctrl+Y, Ctrl+Shift+Z) while the pointer is over the blocks (`area`) and nothing is
+    /// being typed (a box being typed in has its own). Taken here: the stripboard's own Ctrl+Z does not undo its layout too.
+    fn sketch_undo_keys(ui: &mut egui::Ui, area: egui::Rect) -> Option<bool> {
+        if !ui.rect_contains_pointer(area) || ui.ctx().egui_wants_keyboard_input() {
+            return None;
+        }
+        let shift = egui::Modifiers::COMMAND | egui::Modifiers::SHIFT;
+        ui.input_mut(|i| {
+            if i.consume_key(shift, egui::Key::Z) || i.consume_key(egui::Modifiers::COMMAND, egui::Key::Y) {
+                Some(false)
+            } else if i.consume_key(egui::Modifiers::COMMAND, egui::Key::Z) {
+                Some(true)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// The line the board's sketch runs at now, while the power is on and circuitCad reads it (the real chip's is not known).
+    fn running_line(&self, refdes: &str) -> Option<u32> {
+        let m = self.live.as_ref()?.mcus.iter().find(|m| m.refdes == refdes)?;
+        m.machine.as_ref().filter(|x| x.error.is_none())?.line()
+    }
+
     /// The build of a sketch for the real chip: started on another thread the first time it is asked for (None while it goes on).
     pub(super) fn real_build(&mut self, text: &str, board: sim_core::sketch::Board) -> Option<Result<avr_sim::Image, String>> {
         let slot = self.real_builds.entry(text_key(text, board)).or_insert_with(|| {
@@ -174,16 +260,22 @@ impl BreadboardView {
             let real = sch.sketch_real.contains(&refdes);
             // written as code or as blocks (the blocks are the code read back: a sketch they cannot show stays code)
             let blocks = mode_bar(ui, sch, &refdes, &text);
-            if let Some(mut bs) = blocks {
-                let changed = egui::ScrollArea::vertical()
+            if let Some((mut bs, lines)) = blocks {
+                let running = self.running_line(&refdes);
+                let mut act = self.sketch_undo_buttons(ui, sch, &refdes);
+                let shown = egui::ScrollArea::vertical()
                     .id_salt(("blocks_box", &refdes))
                     .max_height(BLOCKS_PANEL_HEIGHT)
-                    .show(ui, |ui| super::blocks_ui::edit_blocks(ui, &mut bs, board, &refdes))
-                    .inner;
-                if changed {
+                    .show(ui, |ui| super::blocks_ui::edit_blocks(ui, &mut bs, board, &refdes, &lines, running));
+                if shown.inner {
                     text = sim_core::sketch::blocks::to_code(&bs);
                     sch.sketches.insert(refdes.clone(), text.clone());
                 }
+                act = act.or_else(|| Self::sketch_undo_keys(ui, shown.inner_rect));
+                if let Some(back) = act {
+                    self.sketch_undo(sch, &refdes, back);
+                }
+                text = sketch_of(sch, &refdes);
             } else {
                 let marked = self.mistake_line(&text, board, real);
                 // as wide as the panel is, not wider; as tall as SKETCH_ROWS lines at most (a long sketch scrolls inside: the serial
@@ -213,6 +305,7 @@ impl BreadboardView {
             let real = sch.sketch_real.contains(&refdes);
             ui.horizontal_wrapped(|ui| self.compile_status(ui, &text, board, real));
             self.serial_ui(ui, &refdes, &text, SERIAL_PANEL_HEIGHT);
+            self.track_sketch(ui.ctx(), &refdes, &text);
         }
         self.sketch_window_ui(ui.ctx(), sch);
     }
@@ -355,15 +448,26 @@ impl BreadboardView {
                 let running = self.live.as_ref().is_some_and(|lv| lv.mcus.iter().any(|m| m.refdes == refdes));
                 let below = if running { 230.0 } else { 0.0 };
                 let blocks = mode_bar(ui, sch, &refdes, &text);
+                let blocks = if blocks.is_some() {
+                    let area = ui.max_rect();
+                    if let Some(back) = self.sketch_undo_buttons(ui, sch, &refdes).or_else(|| Self::sketch_undo_keys(ui, area)) {
+                        self.sketch_undo(sch, &refdes, back);
+                    }
+                    text = sketch_of(sch, &refdes);
+                    sim_core::sketch::blocks::from_code_with_lines(&text).ok()
+                } else {
+                    None
+                };
+                let now_at = self.running_line(&refdes);
                 let size = egui::vec2(ui.available_width(), (ui.available_height() - below).max(120.0));
-                if let Some(mut bs) = blocks {
+                if let Some((mut bs, lines)) = blocks {
                     // the blocks on the left, the code they make on the right (a change of either is in the other)
                     let w = (size.x - 8.0) / 2.0;
                     ui.allocate_ui(size, |ui| {
                         ui.horizontal_top(|ui| {
                             let changed = ui
                                 .allocate_ui_with_layout(egui::vec2(w, size.y), egui::Layout::top_down(egui::Align::Min), |ui| {
-                                    egui::ScrollArea::vertical().id_salt(("blocks_window", &refdes)).max_height(size.y).show(ui, |ui| super::blocks_ui::edit_blocks(ui, &mut bs, board, &format!("{refdes}_window"))).inner
+                                    egui::ScrollArea::vertical().id_salt(("blocks_window", &refdes)).max_height(size.y).show(ui, |ui| super::blocks_ui::edit_blocks(ui, &mut bs, board, &format!("{refdes}_window"), &lines, now_at)).inner
                                 })
                                 .inner;
                             if changed {
@@ -394,9 +498,9 @@ impl BreadboardView {
 
 /// The choice of writing a board's sketch as code or as blocks (saved in `sketch_blocks`): the blocks to show when they are
 /// chosen and the sketch reads as blocks. A sketch they cannot show (a function of its own, an array…) says why, and stays code.
-fn mode_bar(ui: &mut egui::Ui, sch: &mut SchEditor, refdes: &str, text: &str) -> Option<sim_core::sketch::blocks::BlockSketch> {
+fn mode_bar(ui: &mut egui::Ui, sch: &mut SchEditor, refdes: &str, text: &str) -> Option<(sim_core::sketch::blocks::BlockSketch, Vec<u32>)> {
     let on = sch.sketch_blocks.contains(refdes);
-    let read = sim_core::sketch::blocks::from_code(text);
+    let read = sim_core::sketch::blocks::from_code_with_lines(text);
     let why = read.as_ref().err().map(|e| i18n::trf!("いまのスケッチはブロックで表せません ({e})。コードで直すか、見本に戻すとブロックにできます"));
     let items = [("コード", None), ("ブロック", if on { None } else { why.as_deref() })];
     let tips = [
@@ -420,13 +524,13 @@ fn mode_bar(ui: &mut egui::Ui, sch: &mut SchEditor, refdes: &str, text: &str) ->
         return None;
     }
     match read {
-        Ok(bs) => {
+        Ok((bs, lines)) => {
             // comments are not blocks: they go when the blocks are first changed
             let comments = text.lines().any(|l| (l.contains("//") || l.contains("/*")) && l.trim() != sim_core::sketch::blocks::HEADER);
             if comments {
                 ui.label(egui::RichText::new(i18n::tr("ブロックを変えると、コードのコメント (// の行) は消えます")).small().color(NOTE));
             }
-            Some(bs)
+            Some((bs, lines))
         }
         Err(e) => {
             ui.colored_label(crate::theme::warn(), i18n::trf!("ブロックで表せないので、コードで出しています ({e})"));

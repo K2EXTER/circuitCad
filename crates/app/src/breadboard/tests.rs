@@ -1165,3 +1165,26 @@ fn breadboard_parts_are_picked_with_a_box_and_moved_together() {
         assert!(x.leads.iter().zip(&y.leads).all(|(a, b)| b.1.col() == a.1.col() + 1), "{} moved with the rest", x.refdes);
     }
 }
+
+/// A change of the blocks is undone and redone (the schematic's undo does not hold the sketches: the proto tab keeps their steps).
+#[test]
+fn a_sketch_change_is_undone_and_redone() {
+    let (mut app, mut run) = power_on_app("arduino_blocks.schjson");
+    run(&mut app);
+    let first = crate::breadboard::sketch_ui::sketch_of(&app.sch, "U1");
+    // a block thrown away (as the editor writes it: the blocks as code)
+    let mut bs = sim_core::sketch::blocks::from_code(&first).unwrap();
+    bs.looped.pop();
+    let second = sim_core::sketch::blocks::to_code(&bs);
+    app.sch.sketches.insert("U1".into(), second.clone());
+    run(&mut app);
+    app.breadboard.sketch_undo(&mut app.sch, "U1", true);
+    assert_eq!(crate::breadboard::sketch_ui::sketch_of(&app.sch, "U1"), first);
+    run(&mut app);
+    app.breadboard.sketch_undo(&mut app.sch, "U1", false);
+    assert_eq!(crate::breadboard::sketch_ui::sketch_of(&app.sch, "U1"), second);
+    // a change made this very frame is a step too
+    app.sch.sketches.insert("U1".into(), first.clone());
+    app.breadboard.sketch_undo(&mut app.sch, "U1", true);
+    assert_eq!(crate::breadboard::sketch_ui::sketch_of(&app.sch, "U1"), second);
+}
