@@ -156,7 +156,7 @@ impl BreadboardView {
                     ui.set_width(ui.available_width());
                     ui.horizontal_top(|ui| {
                         let clicked = ui.add_sized([44.0, 18.0], egui::Button::selectable(picked, egui::RichText::new(&p.refdes).strong())).on_hover_text(i18n::tr("選ぶと、ブレッドボードの上でこの部品が光ります")).clicked();
-                        let text = p.leads.iter().map(|(pin, h)| format!("{pin}:{}", h.name())).collect::<Vec<_>>().join("  ");
+                        let text = p.leads.iter().map(|(pin, h)| format!("{pin}:{}", super::hole_text(*h))).collect::<Vec<_>>().join("  ");
                         ui.add(egui::Label::new(text).wrap());
                         clicked
                     })
@@ -175,7 +175,7 @@ impl BreadboardView {
                 ui.add_space(6.0);
                 ui.label(egui::RichText::new(i18n::tr("ブレッドボードの外 (電源・電池・信号源)")).strong()).on_hover_text(i18n::tr("実験用の電源・電池・発振器などは、ブレッドボードの外に置いて、線でつなぎます"));
                 for o in &l.off_board {
-                    ui.label(format!("{}  {}", o.refdes, o.pins.iter().map(|(pin, net, h)| format!("{pin} ({net}) → {}", h.name())).collect::<Vec<_>>().join("、")));
+                    ui.label(format!("{}  {}", o.refdes, o.pins.iter().map(|(pin, net, h)| format!("{pin} ({net}) → {}", super::hole_text(*h))).collect::<Vec<_>>().join(i18n::tr("、"))));
                 }
             }
         });

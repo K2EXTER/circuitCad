@@ -5,7 +5,7 @@ use super::*;
 impl BreadboardView {
     /// The meter's reading: the DC voltage of the red probe's net against the black's.
     pub(super) fn meter_ui(&mut self, ui: &mut egui::Ui, sch: &SchEditor, l: &Layout, matches: bool) {
-        let probe = |h: Option<Hole>| h.map(|h| (h.name(), net_at(&sch.sch, l, h)));
+        let probe = |h: Option<Hole>| h.map(|h| (super::hole_text(h), net_at(&sch.sch, l, h)));
         let (red, black) = (probe(self.red), probe(self.black));
         self.meter_panel(ui, sch, &RunBoard::Bread(l.clone()), red, black, matches);
     }
@@ -136,7 +136,7 @@ impl BreadboardView {
 
     /// The scope: the transient waveform of the probe's net.
     pub(super) fn scope_ui(&mut self, ui: &mut egui::Ui, sch: &mut SchEditor, l: &Layout) {
-        let probe = self.scope.map(|h| (h.name(), net_at(&sch.sch, l, h)));
+        let probe = self.scope.map(|h| (super::hole_text(h), net_at(&sch.sch, l, h)));
         self.scope_panel(ui, sch, probe);
     }
 

@@ -440,7 +440,7 @@ impl BreadboardView {
                 });
             } else if let Some(h) = hover {
                 let here: Vec<String> = l.parts.iter().flat_map(|p| p.leads.iter().filter(|(_, lh)| lh.node() == h.node()).map(move |(pin, _)| format!("{}.{pin}", p.refdes))).collect();
-                let tip = if here.is_empty() { h.name() } else { format!("{}: {}", h.name(), here.join(", ")) };
+                let tip = if here.is_empty() { super::hole_text(h) } else { format!("{}: {}", super::hole_text(h), here.join(", ")) };
                 response.clone().on_hover_text(tip);
             }
         }

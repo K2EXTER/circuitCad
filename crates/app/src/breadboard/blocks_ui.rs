@@ -202,12 +202,12 @@ fn edit_blocks_in(ui: &mut egui::Ui, s: &mut BlockSketch, board: Board, salt: &s
     if !cx.dragging {
         ui.data_mut(|d| d.insert_temp(ghost_id.with("h"), GHOST_H));
     }
-    // let go: where it was dragged to (back onto the list at the top: thrown away)
-    if cx.dragging && ui.input(|i| i.pointer.any_released()) {
-        let pointer = ui.ctx().pointer_interact_pos();
+    // let go: where it was dragged to (back onto the list at the top: thrown away). Only the editor it was let go over takes it:
+    // the same sketch can be open twice (the panel and its own window), and the other one would throw it away.
+    if cx.dragging && (over_palette || cx.target.is_some()) && ui.input(|i| i.pointer.any_released()) {
         if let Some(p) = egui::DragAndDrop::take_payload::<Drag>(ui.ctx()) {
             let p = (*p).clone();
-            if pointer.is_some_and(|q| palette_rect.contains(q)) {
+            if over_palette {
                 if let Drag::Move(l, i) = p {
                     cx.acts.push(Act::Remove(l, i));
                 }
@@ -1118,6 +1118,41 @@ mod tests {
         frame(&ctx, &mut s, vec![]);
         assert_eq!(s.setup, vec![Block::Delay(BExpr::Int(3))], "{s:?}");
         assert_eq!(s.looped, vec![Block::Delay(BExpr::Int(4))]);
+    }
+
+    /// The same sketch open twice (the panel, drawn first, and its own window): a block let go over the window goes there; the
+    /// panel's editor, which it was not let go over, leaves it (it took it and threw it away, so nothing was ever dropped).
+    #[test]
+    fn a_block_dropped_in_the_window_is_not_taken_by_the_panel() {
+        let ctx = egui::Context::default();
+        let mut s = BlockSketch { vars: vec![], setup: vec![], looped: vec![Block::Delay(BExpr::Int(3))] };
+        let twin = |s: &mut BlockSketch, events: Vec<egui::Event>| -> Vec<(String, egui::Pos2)> {
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 900.0));
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
+                ui.columns(2, |c| {
+                    let mut panel = s.clone();
+                    edit_blocks(&mut c[0], &mut panel, Board::Nano, "panel", &[], None);
+                    edit_blocks(&mut c[1], s, Board::Nano, "window", &[], None);
+                });
+            });
+            out.textures_delta.clear();
+            out.shapes.iter().filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => Some((t.galley.text().to_string(), t.pos + t.galley.rect.center().to_vec2())),
+                _ => None,
+            }).collect()
+        };
+        let texts = twin(&mut s, vec![]);
+        let right = |t: &str| texts.iter().find(|(x, p)| x == t && p.x > 400.0).unwrap_or_else(|| panic!("no {t}")).1;
+        let (a, b) = (right("待つ"), right("(ここにブロックを置きます)"));
+        let button = |pos: egui::Pos2, pressed: bool| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        twin(&mut s, vec![egui::Event::PointerMoved(a)]);
+        twin(&mut s, vec![button(a, true)]);
+        for k in 1..=6 {
+            twin(&mut s, vec![egui::Event::PointerMoved(a + (b - a) * (k as f32 / 6.0))]);
+        }
+        twin(&mut s, vec![button(b, false)]);
+        twin(&mut s, vec![]);
+        assert_eq!(s.setup, vec![Block::Delay(BExpr::Int(500))], "{s:?}");
     }
 
     #[test]

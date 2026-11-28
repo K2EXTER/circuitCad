@@ -184,7 +184,7 @@ impl BoardEditor {
                 && let Some((zone, shape, vert, at)) = self.zone_edge_at(w) {
                     self.insert_zone_vertex(zone, shape, vert, at);
                 }
-            let layer = self.side.label();
+            let layer = i18n::tr_dyn(&self.side.label());
             self.status = format!("X {:.2}  Y {:.2} mm   [{layer}]", p.x, p.y);
         }
         if resp.drag_stopped() {

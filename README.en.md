@@ -24,7 +24,7 @@ Project page (features, analyses, known issues and roadmap): <https://k2exter.gi
 
 A screen recording (about 80 s, Japanese UI) with one sample, a potentiometer that dims an LED: the DC operating point and the knob turned with the results following, the breadboard switched on and its knob turned, the board imported, routed and checked, the 3D view, then the Bench tab (assembly and first power-on).
 
-![A screen recording (about 80 s): DC results on the schematic, the breadboard running, the board imported, auto-routed and checked by DRC, the 3D view, and the Bench tab's assembly and first power-on. The UI is in Japanese.](docs/images/demo-live.gif)
+![A screen recording (about 110 s): DC results on the schematic, the breadboard running, the board imported, auto-routed and checked by DRC, the 3D view, the Bench tab's assembly and first power-on, and an Arduino sketch written with blocks, run on the breadboard with its button held](docs/images/demo-live-en.gif)
 
 ## Who it is for
 - People who are new to electronics and find tools like KiCad or LTspice intimidating.

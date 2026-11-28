@@ -268,7 +268,7 @@ impl BreadboardView {
                     .max_height(BLOCKS_PANEL_HEIGHT)
                     .show(ui, |ui| super::blocks_ui::edit_blocks(ui, &mut bs, board, &refdes, &lines, running));
                 if shown.inner {
-                    text = sim_core::sketch::blocks::to_code(&bs);
+                    text = blocks_code(&bs);
                     sch.sketches.insert(refdes.clone(), text.clone());
                 }
                 act = act.or_else(|| Self::sketch_undo_keys(ui, shown.inner_rect));
@@ -471,7 +471,7 @@ impl BreadboardView {
                                 })
                                 .inner;
                             if changed {
-                                text = sim_core::sketch::blocks::to_code(&bs);
+                                text = blocks_code(&bs);
                                 sch.sketches.insert(refdes.clone(), text.clone());
                             }
                             let edit = ui.allocate_ui_with_layout(egui::vec2(w, size.y), egui::Layout::top_down(egui::Align::Min), |ui| super::code_edit::numbered_box(ui, &mut text, marked)).inner;
@@ -526,7 +526,7 @@ fn mode_bar(ui: &mut egui::Ui, sch: &mut SchEditor, refdes: &str, text: &str) ->
     match read {
         Ok((bs, lines)) => {
             // comments are not blocks: they go when the blocks are first changed
-            let comments = text.lines().any(|l| (l.contains("//") || l.contains("/*")) && l.trim() != sim_core::sketch::blocks::HEADER);
+            let comments = text.lines().any(|l| (l.contains("//") || l.contains("/*")) && !is_header(l.trim()));
             if comments {
                 ui.label(egui::RichText::new(i18n::tr("ブロックを変えると、コードのコメント (// の行) は消えます")).small().color(NOTE));
             }
@@ -587,4 +587,19 @@ fn terminal(ui: &mut egui::Ui, refdes: &str, serial: &str, baud: u32, height: f3
         });
     });
     clear
+}
+
+/// The blocks as code, its first line (the "made from blocks" comment) in the UI language.
+fn blocks_code(bs: &sim_core::sketch::blocks::BlockSketch) -> String {
+    let code = sim_core::sketch::blocks::to_code(bs);
+    let header = sim_core::sketch::blocks::HEADER;
+    match code.strip_prefix(header) {
+        Some(rest) if !i18n::is_ja() => format!("{}{rest}", i18n::tr(header)),
+        _ => code,
+    }
+}
+
+/// The "made from blocks" comment, in any language (a sketch written in English blocks read in Japanese keeps its comment).
+fn is_header(line: &str) -> bool {
+    line == sim_core::sketch::blocks::HEADER || line == "// Sketch made from blocks"
 }

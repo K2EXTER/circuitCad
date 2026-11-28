@@ -151,6 +151,19 @@ public static class Rec {
         MoveTo(x2, y2, ms);
         mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero); down = 0; Thread.Sleep(150);
     }
+    // press at (x,y) and keep it down for ms (a push button held), then release
+    public static void Hold(int x, int y, int ms) {
+        MoveTo(x, y, 350); Thread.Sleep(120);
+        down = 1; mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero); Thread.Sleep(ms);
+        mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero); down = 0; Thread.Sleep(150);
+    }
+    // a drag that rests over the place before letting go (a drop target shows where it goes first)
+    public static void DragRest(int x1, int y1, int x2, int y2, int ms, int rest) {
+        MoveTo(x1, y1, 300); Thread.Sleep(100);
+        down = 1; mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero); Thread.Sleep(80);
+        MoveTo(x2, y2, ms); Thread.Sleep(rest);
+        mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero); down = 0; Thread.Sleep(150);
+    }
     public static void Wheel(int x, int y, int notches) {
         MoveTo(x, y, 250);
         for (int i = 0; i < Math.Abs(notches); i++) { mouse_event(0x0800, 0, 0, notches > 0 ? 120 : -120, UIntPtr.Zero); Thread.Sleep(60); }
@@ -189,6 +202,8 @@ function Click($x, $y) { [Rec]::Click($x, $y) }
 function RightClick($x, $y) { [Rec]::RightClick($x, $y) }
 function DoubleClick($x, $y) { [Rec]::DoubleClick($x, $y) }
 function Drag($x1, $y1, $x2, $y2, $ms = 900) { [Rec]::Drag($x1, $y1, $x2, $y2, $ms) }
+function Hold($x, $y, $ms = 1500) { [Rec]::Hold($x, $y, $ms) }
+function DragRest($x1, $y1, $x2, $y2, $ms = 1200, $rest = 500) { [Rec]::DragRest($x1, $y1, $x2, $y2, $ms, $rest) }
 function Wheel($x, $y, $n) { [Rec]::Wheel($x, $y, $n) }
 function MouseTo($x, $y, $ms = 500) { [Rec]::MoveTo($x, $y, $ms) }
 function Typing($s, $delay = 110) { [Rec]::Type($s, $delay) }

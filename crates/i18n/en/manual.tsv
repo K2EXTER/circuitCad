@@ -48,3 +48,6 @@ PWM 出力	PWM output
 ふつう	Normal
 あと	Headroom
 ここ	here
+# 並べるときの区切り (breadboard/panel.rs)
+、	, 
+// ブロックで作ったスケッチ	// Sketch made from blocks

@@ -388,6 +388,14 @@ fn short(s: &str, n: usize) -> String {
     if s.chars().count() <= n { s.to_string() } else { format!("{}…", s.chars().take(n).collect::<String>()) }
 }
 
+/// A hole's name as shown: the rail names ("上+") read in the UI language ("T+").
+pub(crate) fn hole_text(h: Hole) -> String {
+    match h {
+        Hole::Rail { rail, col } => format!("{}{}", i18n::tr(sch_core::breadboard::rail_name(rail)), col + 1),
+        _ => h.name(),
+    }
+}
+
 #[cfg(test)]
 mod tests;
 
