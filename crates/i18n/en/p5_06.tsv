@@ -1,0 +1,255 @@
+# crates/cli/src/timelogcmd.rs
+列 {name} がありません (列: {})	Column {name} not found (columns: {})
+# crates/cli/src/board/output.rs
+side={s}: top か bottom	side={s}: top or bottom
+# crates/datasheet/src/absmax.rs
+熱特性	
+熱に関する情報	
+# crates/datasheet/src/companions.rs
+未満	
+# crates/datasheet/src/land.rs
+{n} (最小) と (L − G) / 2	{n} (minimum) and (L − G) / 2
+{n} (最小) と L / 4 (推定)	{n} (minimum) and L / 4 (estimated)
+# crates/datasheet/src/lead_pins.rs
+BD135・BD139・BD140	BD135, BD139, BD140
+# crates/datasheet/src/lineup.rs
+漏れ	
+直流抵抗	
+# crates/datasheet/src/pin_diagram.rs
+上面図	
+図	
+# crates/datasheet/src/spec_table.rs
+代表値	
+単位	
+記号	
+# crates/datasheet/src/suggest.rs
+演算増幅器	
+コンバータ	
+降圧	
+マルチプレクサ	
+# crates/datasheet/src/thermal.rs
+{} [{head} の列]	{} [{head} column]
+軽減	
+低減	
+減じ	
+{text} / 注: {}	{text} / Note: {}
+# crates/part-lib/src/bundle.rs
+STEP のデータが base64 ではありません (ファイルが壊れています)	The STEP data is not base64 (the file is damaged)
+部品のまとめのファイルではありません (format が「{}」)	This is not a part bundle file (format is "{}")
+部品のファイルとして読めません: {e}	Can't read this as a part file: {e}
+# crates/part-lib/src/coil.rs
+インダクタンスの許容差{}は入れていません。定格電流と飽和電流は、過渡解析のあと「部品の定格」で電流と比べます。	Inductance tolerance{} is not included. Rated current and saturation current are compared with the current under "Part ratings" after a transient analysis.
+、周波数による損失 (コアの損失)	, frequency-dependent loss (core loss)
+{} MHz (コアの損失 {}Ω を並列に)	{} MHz (core loss {}Ω in parallel)
+{} {} のデータシート ({}) のインダクタンス・DCR・飽和電流・自己共振周波数{}	Inductance, DCR, saturation current and self-resonant frequency{@4} from the {@1} {@2} datasheet ({@3})
+・Q	, Q
+# crates/part-lib/src/elcap.rs
+本体 φ{} × {} mm (台座 {} mm 角、ケース記号 {})	Body φ{} × {} mm (base {} mm square, case code {})
+1 番ピンが + (本体の上面の黒い印の側が −)	Pin 1 is + (the side with the black mark on top of the body is −)
+ランドはメーカーの推奨 (ランドの間 {} mm・長さ {} mm・幅 {} mm)。	Lands follow the maker's recommendation (gap between lands {} mm, length {} mm, width {} mm).
+本体 φ{} × {} mm、リード φ{} mm・間隔 {} mm	Body φ{} × {} mm, leads φ{} mm, spacing {} mm
+1 番ピン (四角いパッド) が +	Pin 1 (square pad) is +
+穴径 {drill:.1} mm・パッド径 {pad:.1} mm はリード径からの目安 (部品作成フォームのリード部品と同じ考え方。メーカーの推奨ランドではない)。	Hole {drill:.1} mm and pad {pad:.1} mm are estimates from the lead diameter (same approach as lead parts in the part creation form; not the maker's recommended land).
+{maker} {series} アルミ電解コンデンサ {cap} µF ±{tol} % {v} V ({tmax} ℃・{hours} 時間、{feature})。{mount}。{basis}、許容リップル電流 {ripple_ma} mA rms ({rf}・{rt} ℃{k120_text})。極性があります: {plus}。逆につなぐと壊れます。{mount_b}{order}{source} で確かめた ({checked})	{maker} {series} aluminum electrolytic capacitor {cap} µF ±{tol} % {v} V ({tmax} ℃, {hours} hours, {feature}). {mount}. {basis}, allowed ripple current {ripple_ma} mA rms ({rf}, {rt} ℃{k120_text}). Polarized: {plus}. It breaks if connected backwards. {mount_b}{order}Checked against {source} ({checked})
+# crates/part-lib/src/kicad.rs
+{} ユニットの部品を、ユニット A〜{} として取り込みました (電源のピンはユニット A)。回路図で「次のユニットを置く」で置けます。	Imported a part with {} units as units A to {} (power pins are in unit A). Place them in the schematic with "Place next unit".
+# crates/part-lib/src/lib.rs
+フィルムコンデンサ	Film capacitor
+sim.units は {} 個 (ユニットの数) にしてください (今は {} 個)	Set sim.units to {} entries (the number of units) (currently {})
+sim.units のユニット {} のピンの数 {} が sim.pins の数 {} と違います	sim.units unit {} has {} pins, which differs from the sim.pins count {}
+sim.units のユニット {} の {p} が記号のピンにありません	sim.units unit {}: {p} is not a pin of the symbol
+# crates/part-lib/src/passive.rs
+飽和の曲線 {} 点	Saturation curve, {} points
+コアの損失 {}Ω	Core loss {}Ω
+データシートの Q {} ({} MHz) から求めた	calculated from the datasheet Q {} ({} MHz)
+入れた	entered
+コアの損失は、両端の間の抵抗 {}Ω ({from}) で表します: コイルにかかる電圧の 2 乗に比例して熱になります。実物のコアの損失は周波数と磁束の振れでも変わるので (スタインメッツの式)、Q を測った周波数から離れるほど目安になります。	Core loss is represented by a resistor of {}Ω between the two ends ({from}): it turns into heat in proportion to the square of the voltage across the coil. Real core loss also changes with frequency and flux swing (Steinmetz equation), so the farther from the frequency where Q was measured, the rougher the estimate.
+磁気飽和は、データシートの「インダクタンス - 電流」の曲線の {} 点のとおりに下がります (点の間は直線、{}A より大きい電流では最後の点の割合のまま)。温度による変化は扱いません。	Magnetic saturation follows the {} points of the datasheet's "inductance vs. current" curve (straight lines between points; above {}A it stays at the last point's ratio). Temperature changes are not modeled.
+# crates/part-lib/src/placed.rs
+モデル (新しく付いた)	Model (newly added)
+書き込みの方法	Programming method
+推奨の周辺部品	Recommended companion parts
+部品番号の頭	Refdes prefix
+# crates/part-lib/src/series.rs
+{} {} {} {} ±{}%。{} W ({} ℃まで。それより高い周囲温度では直線で下げ、{} ℃で 0)、この値で使える電圧 {} V ({})、温度係数 {} ppm/K、使える温度 {}〜{} ℃。{}{}。{}	{} {} {} {} ±{}%. {} W (up to {} ℃; at higher ambient temperatures it is derated linearly to 0 at {} ℃), usable voltage at this value {} V ({}), temperature coefficient {} ppm/K, operating temperature {} to {} ℃. {}{}. {}
+√(電力×抵抗値) と素子の最高電圧 {} V の小さいほう	the smaller of √(power × resistance) and the element's maximum voltage {} V
+√(電力×抵抗値)	√(power × resistance)
+{} 個の値 ({}〜{})	{} values ({} to {})
+# crates/part-lib/src/fit/buck.rs
+{} の表の typ から作った、実際にスイッチを入り切りする動作モデルです (基準電圧 {} V、オン抵抗 {} と {}、電流制限 ピーク {} A・谷 {} A、最小オン時間 {} ns・最小オフ時間 {} ns)。デューティ比、コイルのリップル電流、出力のリップル、スイッチの導通損失が波形に出ます。	A behavioral model built from the typ values in the {} table that actually switches on and off (reference voltage {} V, on-resistance {} and {}, current limit peak {} A / valley {} A, minimum on-time {} ns, minimum off-time {} ns). Duty cycle, inductor ripple current, output ripple and switch conduction loss appear in the waveforms.
+表に無い値は図から: {}。	Values not in the table were taken from graphs: {}.
+制御はピーク電流モードです。内部の補償 (誤差アンプ {} µA/V・{} と {}・電流の指令 {} A/V・スロープ補償 1 周期 {} A) はデータシートに無いので、データシートのループの図 (出力 {} V・実効の出力容量 {} µF で帯域 {}{}) に合わせて決めました。ほかの出力電圧やコンデンサでは、帯域は出力電圧と容量に反比例して変わります。	Control is peak current mode. The internal compensation (error amp {} µA/V, {} and {}, current command {} A/V, slope compensation {} A per cycle) is not in the datasheet, so it was set to match the datasheet's loop graph (output {} V, effective output capacitance {} µF, bandwidth {}{}). With other output voltages or capacitors, the bandwidth changes in inverse proportion to output voltage and capacitance.
+・位相余裕 {} 度	, phase margin {} degrees
+軽い負荷では PFM (コイルの電流が逆になると下側のスイッチを切り、ピークは少なくとも {} A、要らない周期は飛ばす) で、周波数が下がります	At light load it uses PFM (turns off the low-side switch when the inductor current reverses, peak at least {} A, skips unneeded cycles), so the frequency drops
+軽い負荷でも周波数を保つ連続モード (FCCM) です	It uses forced continuous mode (FCCM), keeping the frequency even at light load
+上側のスイッチのゲートの電荷 ({} nC、データシートに無いので仮の値) を入るたびに BST から取り、内部の 5 V を通して VIN から補います。	Each time the high-side switch turns on, its gate charge ({} nC, a provisional value since the datasheet doesn't give it) is taken from BST and replenished from VIN through the internal 5 V.
+扱わないもの: スイッチの切り替わりの時間と切り替え損失、下側のゲートを動かす電流、デッドタイム、周波数の拡散 (spread spectrum)、最小オン時間・オフ時間での周波数の折り返し (その代わり、そこでデューティが止まります)、過熱保護、出力の短絡でのヒカップ、温度による変化。	Not modeled: switch transition time and switching loss, low-side gate drive current, dead time, spread spectrum, frequency foldback at the minimum on/off time (instead, the duty stops there), thermal shutdown, hiccup on an output short, temperature changes.
+BST と SW の間に 0.1 µF のコンデンサを付けないと、上側のスイッチが入らず出力が出ません (実物と同じ)。	Without a 0.1 µF capacitor between BST and SW, the high-side switch doesn't turn on and there is no output (same as the real part).
+時間刻みは 1 周期の 1/50 以下 (500 kHz なら 40 ns) にしてください。粗いと、スイッチの切り替わりの位置がずれて出力の平均がずれます。計算に時間がかかるので、見る時間はソフトスタートが終わるまで (数 ms) から始めましょう。	Set the time step to 1/50 of a cycle or less (40 ns at 500 kHz). If it's coarse, the switching points shift and the average output is off. It takes a while to compute, so start with a time span that ends when soft-start finishes (a few ms).
+上側のオン抵抗	High-side on-resistance
+下側のオン抵抗	Low-side on-resistance
+上側の電流制限	High-side current limit
+下側の電流制限	Low-side current limit
+周波数 (RT 開放)	Frequency (RT open)
+最小オン時間	Minimum on-time
+最小オフ時間	Minimum off-time
+誤差アンプの gm	Error amp gm
+電流の指令の傾き	Current command slope
+ループの図の出力電圧	Loop graph output voltage
+ループの図の出力容量	Loop graph output capacitance
+ループの図の帯域	Loop graph bandwidth
+UVLO は「立ち上がり 立ち下がり」の順で、立ち下がりを低くしてください	Enter UVLO as "rising falling", with falling lower
+EN のしきい値は立ち下がりを立ち上がりより低く、電流は 0 以上にしてください	Make the EN falling threshold lower than the rising one, and the current 0 or more
+SS ピンの電流か、内部のソフトスタートの時間のどちらかを入れてください	Enter either the SS pin current or the internal soft-start time
+RT の点は (kΩ, kHz) を 2 つ以上、どちらも正の数で (RT ピンが無ければ空)	Enter RT points as 2 or more (kΩ, kHz) pairs, both positive (leave empty if there's no RT pin)
+最小オン時間・オフ時間が 1 周期の半分より長くなっています。単位 (秒) を確かめてください	The minimum on/off time is longer than half a cycle. Check the unit (seconds)
+# crates/part-lib/src/fit/comparator.rs
+出力はオープンコレクタです。High にするにはプルアップ抵抗が要ります (IN− が IN+ より高いとき Low)。入力の同相範囲は 0 V〜(電源 − {} V) で、超えたときの動きは扱いません。ヒステリシスはありません (要るなら外の抵抗で正帰還をかけます)。{}、電源電圧による応答時間の変化、チャネルどうしの影響も扱いません (2 つ目以降のチャネルは、同じモデルをチャネル (ユニット) ごとに置きます)。	The output is open collector. It needs a pull-up resistor to go High (Low when IN− is higher than IN+). The input common-mode range is 0 V to (supply − {} V); behavior beyond it is not modeled. There is no hysteresis (add positive feedback with external resistors if needed). {}, change of response time with supply voltage, and interaction between channels are also not modeled (for the 2nd and later channels, place the same model for each channel (unit)).
+オフセット以外の温度による変化	Temperature changes other than offset
+温度による変化	Temperature changes
+データシートの typ	datasheet typ
+入力オフセットの温度ドリフト (±{} µV/℃、{from}): 向きが部品ごとに違うので、ふだんの解析では 0 です。ばらつき・最悪ケースの解析で ±{} µV/℃ の間で動き、温度を 27 ℃ から変えたときに効きます。	Input offset temperature drift (±{} µV/℃, {from}): the direction differs from part to part, so it is 0 in normal analyses. In tolerance and worst-case analyses it varies within ±{} µV/℃, and takes effect when the temperature is changed from 27 ℃.
+オーバードライブ	Overdrive
+# crates/part-lib/src/fit/mod.rs
+temp.points: 2 つ以上の点を、温度の低い順に	temp.points: 2 or more points, in order of increasing temperature
+{}〜{} ℃ で 25 ℃ から {:+.2}〜{:+.2} %	{} to {} ℃: {:+.2} to {:+.2} % from 25 ℃
+{}: {e} (kind は diode / bjt / mos / darlington / photodiode / optocoupler / opamp / comparator / regulator / shunt / reference / setldo / ntc / crystal / tvs / relay。形は crates/part-lib/fits/ の例を見てください)	{}: {e} (kind is diode / bjt / mos / darlington / photodiode / optocoupler / opamp / comparator / regulator / shunt / reference / setldo / ntc / crystal / tvs / relay. See the examples in crates/part-lib/fits/ for the format)
+# crates/part-lib/src/fit/opamp.rs
+入力オフセットの温度ドリフト (データシートの typ ±{} µV/℃): 向きが部品ごとに違うので、ふだんの解析では 0 です。ばらつき・最悪ケースの解析で ±{} µV/℃ の間で動き、温度を 27 ℃ から変えたときに効きます。	Input offset temperature drift (datasheet typ ±{} µV/℃): the direction differs from part to part, so it is 0 in normal analyses. In tolerance and worst-case analyses it varies within ±{} µV/℃, and takes effect when the temperature is changed from 27 ℃.
+扱わないもの: 入力できる電圧の範囲 (超えたときの動き)、CMRR と PSRR、1/f 雑音 (低い周波数でも 1 kHz と同じ雑音)、{}、電源電圧による GBW の変化、{}チャネルどうしの影響 (デュアル・クワッドは、同じモデルをチャネル (ユニット) ごとに置きます)。	Not modeled: input voltage range (behavior beyond it), CMRR and PSRR, 1/f noise (low frequencies get the same noise as 1 kHz), {}, change of GBW with supply voltage, {}interaction between channels (for dual and quad parts, place the same model for each channel (unit)).
+# crates/part-lib/src/fit/reference.rs
+データシートの typ の値から作った等価モデルです (メーカーのモデルではありません)。出典: {}。	An equivalent model built from the datasheet's typ values (not the maker's model). Source: {}.
+再現しているもの: 出力 {} V、ライン・レギュレーション {} ppm/V、ロード・レギュレーション (吐き出し {} ppm/mA・吸い込み {} ppm/mA)、電源電流 {} µA、ドロップアウト ({} V + {} Ω × 電流)、短絡電流 (吐き出し {} mA・吸い込み {} mA)、PSRR ({})、出力雑音 {} nV/√Hz (平ら)。	Reproduced: output {} V, line regulation {} ppm/V, load regulation (source {} ppm/mA, sink {} ppm/mA), supply current {} µA, dropout ({} V + {} Ω × current), short-circuit current (source {} mA, sink {} mA), PSRR ({}), output noise {} nV/√Hz (flat).
+データシートのグラフに合わせた: {}	Matched to the datasheet graphs: {}
+{} で {:.0} dB	at {}: {:.0} dB
+{:.0} dB、どの周波数でも同じとした	{:.0} dB, assumed the same at all frequencies
+NR (TRIM/NR) ピン: 内部のバンドギャップ {} V から {} を通って増幅器の入力、そこから {} でピン (データシートのブロック図)。ピンに 1 µF を付けると {:.0} Hz の低域通過になり、雑音は {} 倍に下がります。抵抗でピンに電流を流すと出力を微調整できます。	NR (TRIM/NR) pin: from the internal bandgap {} V through {} to the amplifier input, and from there through {} to the pin (datasheet block diagram). 1 µF on the pin makes a {:.0} Hz low-pass filter, lowering the noise by a factor of {}. Driving current into the pin through a resistor fine-tunes the output.
+TEMP ピン: 25 ℃ で {} mV、{} mV/℃、出力抵抗 {} (データシートの式)。	TEMP pin: {} mV at 25 ℃, {} mV/℃, output resistance {} (datasheet formula).
+出力電圧の部品ごとの違い ({}〜{} V、データシートの初期精度){}は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。	Part-to-part variation of the output voltage ({} to {} V, datasheet initial accuracy){}is used only in tolerance and worst-case analyses (normal analyses use typ).
+と電源電流 (typ〜max {} µA) 	 and supply current (typ to max {} µA)
+温度による出力電圧の変化 ({}): {}〜{} ℃ で 25 ℃ から {:+.0}〜{:+.0} ppm (ボックス法で {:.1} ppm/℃)。温度を設定した解析・温度スイープ・自己発熱で効きます (27 ℃ でデータシートの 25 ℃ の値)。	Temperature change of the output voltage ({}): over {} to {} ℃, {:+.0} to {:+.0} ppm from 25 ℃ (box method: {:.1} ppm/℃). Takes effect in analyses with a set temperature, temperature sweeps and self-heating (27 ℃ uses the datasheet's 25 ℃ value).
+扱わないもの: {}熱ヒステリシスと長期のドリフト、0.1〜10 Hz の 1/f 雑音、起動の時間、負荷や入力が急に変わったときの応答、出力の容量による安定性、出力電圧以外の温度による変化。	Not modeled: {}thermal hysteresis and long-term drift, 0.1 to 10 Hz 1/f noise, startup time, response to sudden load or input changes, stability with output capacitance, temperature changes other than the output voltage.
+温度による変化、	temperature changes,
+短絡電流 (吐き出し)	Short-circuit current (source)
+短絡電流 (吸い込み)	Short-circuit current (sink)
+PSRR は (周波数 Hz, dB) の点を 1 つ以上、どちらも正の数で	Enter PSRR as 1 or more (frequency Hz, dB) points, both positive
+ドロップアウト・電源電流・ライン・レギュレーションは 0 以上にしてください	Dropout, supply current and line regulation must be 0 or more
+出力電圧の min・max の間に typ が入っていません	typ is not between the output voltage min and max
+NR ピン: バンドギャップの電圧は 0 より大きく出力以下、抵抗は正、残る雑音の割合は 0〜1 にしてください	NR pin: the bandgap voltage must be greater than 0 and no more than the output, the resistance positive, and the remaining noise ratio 0 to 1
+TEMP ピンの出力抵抗は 0 より大きくしてください	The TEMP pin output resistance must be greater than 0
+# crates/part-lib/src/fit/regulator.rs
+再現しているもの: {out}、ライン・レギュレーション、ロード・レギュレーション、ドロップアウト、{}電流制限 (入出力の差で変わる)、リップル除去 {} dB ({} Hz{at10}。{})、出力雑音 {} nV/√Hz (平ら)。	Reproduced: {out}, line regulation, load regulation, dropout, {}current limit (varies with the input-output difference), ripple rejection {} dB ({} Hz{at10}. {}), output noise {} nV/√Hz (flat).
+高い周波数では、データシートのグラフに合わせて下がる: {}	falls at higher frequencies to match the datasheet graph: {}
+{} kHz で {:.0} dB	at {} kHz: {:.0} dB
+どの周波数でも同じとした	assumed the same at all frequencies
+温度による{}の変化 ({}): {}。温度を設定した解析・温度スイープ・自己発熱で効きます (27 ℃ でデータシートの 25 ℃ の値)。	Temperature change of {} ({}): {}. Takes effect in analyses with a set temperature, temperature sweeps and self-heating (27 ℃ uses the datasheet's 25 ℃ value).
+扱わないもの: {}{}熱による停止、負荷や入力が急に変わったときの応答、出力の容量による安定性、出力に電流を押し込まれたとき (実物は吸い込めないが、このモデルは出力抵抗を通して吸い込む){}。	Not modeled: {}{}thermal shutdown, response to sudden load or input changes, stability with output capacitance, current forced into the output (the real part can't sink it, but this model sinks it through its output resistance){}.
+出力電圧以外の温度による変化、	temperature changes other than the output voltage,
+温度による変化と	temperature changes and
+基準電圧の部品ごとの違い ({:.3}〜{:.3} V、データシートの min と max) と REF の入力電流の違い ({}〜{} µA、typ と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。	Part-to-part variation of the reference voltage ({:.3} to {:.3} V, datasheet min and max) and of the REF input current ({} to {} µA, typ and max) is used only in tolerance and worst-case analyses (normal analyses use typ).
+温度による基準電圧の変化 ({}): {}。温度を設定した解析・温度スイープ・自己発熱で効きます (27 ℃ でデータシートの 25 ℃ の値)。	Temperature change of the reference voltage ({}): {}. Takes effect in analyses with a set temperature, temperature sweeps and self-heating (27 ℃ uses the datasheet's 25 ℃ value).
+扱わないもの: {}最小カソード電流 ({} mA) より下で安定しなくなること (このモデルは小さな電流でも安定します)、周波数特性と容量負荷での発振、耐圧・最大電流を超えたときの破壊。	Not modeled: {}instability below the minimum cathode current ({} mA) (this model is stable even at small currents), frequency response and oscillation with capacitive loads, damage beyond the breakdown voltage or maximum current.
+# crates/part-lib/src/fit/setldo.rs
+再現しているもの: SET ピンの電流 {} µA (出力 = 電流 × RSET、起動は RSET と CSET の時定数)、出力のオフセット (VOUT − VSET) 0 V、ロード・レギュレーション {} mΩ、ドロップアウト ({} V + {} Ω × 電流)、内部の電流制限 ({} V の差で {} A、{} V で {} A。差が大きいと下げる)、電源電流 ({} mA + 出力電流の {} %、停止中 {} µA)、最小の入力 {} V、PSRR ({})、雑音 (増幅器 {} nV/√Hz、SET の電流 {} pA/√Hz。どちらも平らとした)。	Reproduced: SET pin current {} µA (output = current × RSET, startup with the RSET and CSET time constant), output offset (VOUT − VSET) 0 V, load regulation {} mΩ, dropout ({} V + {} Ω × current), internal current limit (at {} V difference: {} A, at {} V: {} A; lowered when the difference is large), supply current ({} mA + {} % of the output current, {} µA when shut down), minimum input {} V, PSRR ({}), noise (amplifier {} nV/√Hz, SET current {} pA/√Hz; both assumed flat).
+EN/UV ({} V で入る。ヒステリシスは扱わない)	EN/UV (turns on at {} V; hysteresis not modeled)
+PG (PGFB が {} mV より下の間は低く引く{})	PG (pulled low while PGFB is below {} mV{})
+。その間は SET に {} mA 多く流して速く起動する	; meanwhile {} mA extra flows into SET for a fast startup
+ILIM (出力電流の 1/{} を流し出す。GND との抵抗で {} V になると電流を制限: {} mA·kΩ ÷ 抵抗)	ILIM (sources 1/{} of the output current; limits the current when the resistor to GND reaches {} V: {} mA·kΩ ÷ resistance)
+ピン: {}。	Pins: {}.
+SET の電流 {}〜{} µA	SET current {} to {} µA
+オフセット {}〜{} mV	offset {} to {} mV
+部品ごとの違い ({}、データシートの min と max) は、ばらつき・最悪ケースの解析でだけ入ります (ふだんの解析は typ)。	Part-to-part variation ({}, datasheet min and max) is used only in tolerance and worst-case analyses (normal analyses use typ).
+SET の電流 ({}。出力も同じ割合で動く。{})	SET current ({}; the output moves by the same ratio; {})
+電源電流 ({}。{})	supply current ({}; {})
+温度による変化: {}。27 ℃ では表の typ のままです。	Temperature changes: {}. At 27 ℃ the table's typ values are used as is.
+扱わないもの: {}熱による停止、1/f 雑音、逆の電圧の保護、出力のコンデンサによる安定性と負荷の急変の応答、EN/UV と PGFB のヒステリシス、ドロップアウトや電流制限の間も速い起動が続くこと (実物は止める)。	Not modeled: {}thermal shutdown, 1/f noise, reverse voltage protection, stability and load transient response with the output capacitor, EN/UV and PGFB hysteresis, the fast startup continuing during dropout or current limit (the real part stops it).
+ほかの温度による変化 (ドロップアウト・電流制限など) と	other temperature changes (dropout, current limit, etc.) and
+内部の電流制限は 0 より大きい電流にしてください	The internal current limit must be a current greater than 0
+SET ピンの電流の min・max の間に typ が入っていません	typ is not between the SET pin current min and max
+オフセットの min・max は 0 をはさむ値にしてください	The offset min and max must be on either side of 0
+ドロップアウト・電源電流は 0 以上にしてください	Dropout and supply current must be 0 or more
+ILIM ピンの比としきい値は 0 より大きくしてください	The ILIM pin ratio and threshold must be greater than 0
+PG のしきい値と引く抵抗は 0 より大きく、速い起動の電流は 0 以上にしてください	The PG threshold and pull-down resistance must be greater than 0, and the fast startup current 0 or more
+# crates/part-lib/src/fit/simple.rs
+B{}/{} (表から)	B{}/{} (from the table)
+コイルの定格電圧と抵抗は 0 より大きい値にしてください	The coil rated voltage and resistance must be greater than 0
+復帰電圧 (これより下がると離れる) は 0 より大きく、動作電圧 (これを超えると動く) より小さいはずです	The release voltage (below this it releases) should be greater than 0 and less than the operate voltage (above this it operates)
+動作電圧 {} V が定格電圧 {} V を超えています (ふつう定格の 70〜80 %)。% で書かれた値は定格電圧を掛けて V にしてください	The operate voltage {} V exceeds the rated voltage {} V (usually 70–80 % of rated). Multiply values given in % by the rated voltage to get V
+接点の抵抗は Ω で入れてください (100 mΩ なら 100m)	Enter the contact resistance in Ω (100m for 100 mΩ)
+接点の抵抗が無いので 100 mΩ にしました (信号用・電力用のリレーの初期の最大値によくある値)	No contact resistance was given, so 100 mΩ was used (a common initial maximum for signal and power relays)
+コイルの電流	Coil current
+コイルの電力	Coil power
+COM–NO (メーク接点)	COM–NO (make contact)
+COM–NO と COM–NC (切り替え接点)	COM–NO and COM–NC (changeover contact)
+コイル {} Ω (定格 {} V で {} mA)。コイルの電圧が {} V (動作電圧) を超えると {contacts} が切り替わり、{} V (復帰電圧) より下がると戻ります。その間は前の状態のままです。閉じた接点は {} Ω、開いた接点は 1000 MΩ。	Coil {} Ω (rated {} V: {} mA). When the coil voltage exceeds {} V (operate voltage), {contacts} switch, and when it drops below {} V (release voltage), they return. In between, the previous state is kept. Closed contacts are {} Ω, open contacts 1000 MΩ.
+接点が動くのは、コイルの電圧が動作・復帰電圧に届いてから {} ms・{} ms あと (表の最大値) です。	The contacts move {} ms / {} ms (table maximum) after the coil voltage reaches the operate / release voltage.
+動作時間・復帰時間は入っていません (接点はすぐ動きます)。	Operate and release times are not entered (the contacts move instantly).
+動作・復帰電圧は表の最大・最小 (保証の値) で、実物はその間のどこかで動きます。	The operate and release voltages are the table's max and min (guaranteed values); the real part operates somewhere in between.
+コイルのインダクタンスが無いので、切ったときの逆起電力は出ません。トランジスタで駆動するときの保護のダイオードは、このモデルで要らないように見えても付けます。	The coil inductance is not included, so there is no back EMF when it is switched off. When driving it with a transistor, still add the protection diode even if this model seems not to need it.
+扱わないもの: 接点のはね、コイルの抵抗の温度変化、接点の定格 (電流・電圧) を超えたときの溶着。	Not modeled: contact bounce, temperature change of the coil resistance, contact welding beyond the contact ratings (current, voltage).
+# crates/pcb-core/src/assembly.rs
+ピンヘッダ {size} (電源 {volts}V)	Pin header {size} (supply {volts}V)
+# crates/pcb-core/src/case.rs
+基板に取り付け穴がありません。角の近くに M3 の穴 (3.2 mm) を置ける空いた所も見つかりませんでした。部品を内側に寄せるか、ケースに溝を付けて基板を差し込む形にしましょう	The board has no mounting holes, and no free space was found near the corners for an M3 hole (3.2 mm). Move parts inward, or use a case with grooves the board slides into
+基板に取り付け穴がありません。ねじで留めるなら、部品・パッド・配線から離れた角の近くに M3 の穴 (3.2 mm) を置けます: {}。穴を足すと、その下にねじ柱が立ちます	The board has no mounting holes. To fix it with screws, you can place M3 holes (3.2 mm) near corners, away from parts, pads and tracks: {}. Adding a hole puts a screw post under it
+ふたの柱が表の部品 {name} に当たります。柱を細くするか、穴か部品を動かしましょう	A lid post hits the top-side part {name}. Make the post thinner, or move the hole or the part
+基板を壁に寄せる (寄せ方「コネクタの壁へ」)	push the board against a wall (placement "Toward connector wall")
+基板を寄せる壁を変える	change the wall the board is pushed against
+壁から離れたコネクタがあります: {}。プラグが奥まで届かないことがあるので、{how}か、内寸の小さいケースにするか、コネクタを基板の縁に寄せましょう	Some connectors are away from the wall: {}. The plug may not go in all the way, so {how}, use a case with a smaller inside, or move the connectors to the board edge
+# crates/pcb-core/src/case_shape.rs
+壁・底・ふたの厚さは 0.3 mm より厚くしてください	Make the wall, bottom and lid thicker than 0.3 mm
+# crates/pcb-core/src/dxf_in.rs
+ほかに閉じた輪が {other} 個あります (切り欠きや斜めの長穴など)。外形には、いちばん大きい輪だけを使い、これらは取り込んでいません。	There are {other} more closed loops (cutouts, slanted slots, etc.). Only the largest loop is used for the board outline; these were not imported.
+# crates/pcb-core/src/fab.rs
+原寸で印刷して、実物の部品を当ててみましょう	Print at full size and hold the real parts against it
+ネットクラスの立ち上がり時間 {} ns	Net class rise time {} ns
+立ち上がり時間の目安 {} ns (速いマイコンのピン。ネットの設定の窓の「ルール」で、ドライバのデータシートの値に変えられます)	Estimated rise time {} ns (a fast MCU pin. You can change it to the driver's datasheet value under "Rules" in the net settings window)
+伝送線路として振る舞う長さの配線があります: {}	Some tracks are long enough to act as transmission lines: {}
+例: {} の {} から {} までは {:.0} mm で、信号が届くまで約 {:.0} ps かかります。{}の 1/6 ({:.0} ps、配線で約 {:.0} mm) を超えると、端で跳ね返った信号が重なり、波形が行き過ぎたり揺れたり (リンギング) します。クロックでは 2 回数えることもあります。配線を短くするか、ドライバのそばに 22〜47 Ω ほどの直列の抵抗 (ダンピング抵抗) を入れましょう	Example: on {}, from {} to {} is {:.0} mm, and the signal takes about {:.0} ps to arrive. Beyond 1/6 of {} ({:.0} ps, about {:.0} mm of track), signals reflected at the ends overlap and the waveform overshoots or rings (ringing). A clock may even be counted twice. Shorten the track, or add a series resistor of about 22–47 Ω (damping resistor) near the driver
+初めての基板でいちばん多い失敗は、フットプリントが実物の部品と合わないこと (足の間隔・ピンの並び・穴の太さ) です。表の面のパッドと穴を原寸の図 (目盛りつき) にして、「実際のサイズ」(100 %) で印刷し、目盛りの 50 mm を定規で確かめてから、実物の部品を紙の上に置いて足とパッドが合うか見ます。足のある部品は、紙を発泡スチロールに載せて穴に差します	The most common mistake on a first board is a footprint that doesn't match the real part (lead spacing, pin order, hole size). Make a full-size drawing (with a scale) of the top-side pads and holes, print it at "Actual size" (100 %), check the 50 mm scale with a ruler, then put the real parts on the paper and see whether the leads match the pads. For leaded parts, lay the paper on styrofoam and push the leads into the holes
+# crates/pcb-core/src/print_check.rs
+1. 印刷の設定を「実際のサイズ」(100 %、ページに合わせない) にして印刷し、下の目盛りの 50 mm を定規で測ります (ずれていたら設定を見直す)。	1. Set printing to "Actual size" (100 %, not fit to page), print, and measure the 50 mm scale at the bottom with a ruler (if it's off, check the settings).
+2. 実物の部品を紙の上に置き、足が黒いパッドに乗るか見ます。足のある部品は、紙を発泡スチロールなどに載せ、穴の位置に足を差します。	2. Place the real parts on the paper and check that the leads sit on the black pads. For leaded parts, lay the paper on styrofoam or similar and push the leads in at the hole positions.
+3. 足の間隔・ピンの並び・向き (1 番ピン) が合わない部品は、フットプリントを直してから発注します。	3. For parts whose lead spacing, pin order or orientation (pin 1) doesn't match, fix the footprint before ordering.
+基板に外形がないので、原寸の図を作れません。先に外形を決めてください	The board has no outline, so a full-size drawing can't be made. Set the outline first
+基板に部品がないので、当てて確かめるものがありません。先に回路図から部品を取り込んでください	The board has no parts, so there is nothing to check against. Import parts from the schematic first
+裏面 (下から見た図)	Bottom (seen from below)
+<title>{} 原寸の確かめ ({what})</title>	<title>{} full-size check ({what})</title>
+原寸の確かめ: {}{what}	Full-size check: {}{what}
+{} の	{},
+この目盛りが定規で 50 mm なら原寸です	If this scale measures 50 mm with a ruler, it is full size
+# crates/pcb-core/src/shape_script.rs
+直径 (mm。6.3 × 11 なら 6.3)	Diameter (mm; 6.3 for 6.3 × 11)
+黒い樹脂の高さ (mm)	Height of the black resin (mm)
+樹脂から上に出るピンの長さ (mm)	Pin length above the resin (mm)
+基板の裏から下に出るピンの長さ (mm)	Pin length below the bottom of the board (mm)
+ピンの太さ (角、mm)	Pin thickness (square, mm)
+奥行き (口から後ろの端まで、mm)	Depth (from the opening to the back end, mm)
+幅 (mm)	Width (mm)
+口の向き (+x なら 1、−x なら −1、+y なら 2、−y なら −2)	Opening direction (1 for +x, −1 for −x, 2 for +y, −2 for −y)
+ホルダの長さ (電池の向き、mm)	Holder length (along the battery, mm)
+ホルダの幅 (mm)	Holder width (mm)
+ホルダの高さ (mm)	Holder height (mm)
+電池の直径 (mm。単 3 は 14.5)	Battery diameter (mm; 14.5 for AA)
+電池の長さ (mm。単 3 は 50.5)	Battery length (mm; 50.5 for AA)
+クリップの高さ (基板の面から、mm)	Clip height (from the board surface, mm)
+クリップの幅 (mm)	Clip width (mm)
+ヒューズの長さ (mm)	Fuse length (mm)
+電解コンデンサ (縦置き)	Electrolytic capacitor (vertical)
+ピンヘッダ (2.54 mm)	Pin header (2.54 mm)
+USB-A のメス (横向き)	USB-A receptacle (horizontal)
+USB-C のメス (横向き)	USB-C receptacle (horizontal)
+単 3 電池のホルダ (1 本)	AA battery holder (1 cell)
+5 × 20 mm ヒューズのクリップ	5 × 20 mm fuse clip
+寸法が合いません: 直径は足の間隔より大きく、高さは 2 mm 以上にしてください	Dimensions don't fit: the diameter must be larger than the lead spacing, and the height 2 mm or more
+ピンヘッダの形は、穴のあるパッドに作ります	The pin header shape is made on pads with holes
+寸法が合いません: 電池はホルダより細く短く、ホルダの高さは電池の直径の 6 割以上にしてください	Dimensions don't fit: the battery must be thinner and shorter than the holder, and the holder height at least 60 % of the battery diameter
+クリップの高さは 6.5 mm 以上にしてください (5 mm のヒューズが浮く高さ)	Make the clip height 6.5 mm or more (the height at which a 5 mm fuse sits clear)
+open は 1 (+x)・−1 (−x)・2 (+y)・−2 (−y) のどれかにしてください	Set open to one of 1 (+x), −1 (−x), 2 (+y), −2 (−y)
+SolidCraft が見つかりません (SOLIDCRAFT_DIR か PATH に solidcraft.exe のあるフォルダを)	SolidCraft not found (add the folder containing solidcraft.exe to SOLIDCRAFT_DIR or PATH)
+SolidCraft が見つかりません (SOLIDCRAFT_DIR か PATH に solidcraft-cli.exe のあるフォルダを)	SolidCraft not found (add the folder containing solidcraft-cli.exe to SOLIDCRAFT_DIR or PATH)
+SolidCraft が絵を作れませんでした: {}	SolidCraft couldn't make the picture: {}
+# crates/pcb-core/src/shops.rs
+ピンヘッダ {}	Pin header {}
+# crates/pcb-core/src/stack.rs
+{} の基板に {} のパッドが無いか、もう一方に {} のパッドがありません。回路図から基板に取り込んでから置いてください	The {} board has no pad {}, or the other one has no pad {}. Import from the schematic to the board before placing

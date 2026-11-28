@@ -1,0 +1,367 @@
+# crates/app/src/board_editor/panel.rs
+board_sec_仕上	
+付箋…	Notes…
+基板の上のコメント (付箋) の一覧を開きます。まだの付箋 {open_notes} 枚。置くのは、選択ツールで基板の空いた所を右クリックして「ここに付箋を置く」	Opens the list of comments (notes) on the board. Open notes: {open_notes}. To place one, right-click an empty spot on the board with the Select tool and choose "Place a note here"
+board_sec_作業	
+「パッドに垂直に出入り」を入れると変えられます	Turn on "Enter pads straight" to change this
+選んでいるベタのネットから引きます	Routes from the net of the selected copper pour
+選択をやめます (Esc キーか、何も無い所の右クリックでも同じです)	Clears the selection (same as Esc or right-clicking an empty spot)
+# crates/app/src/board_editor/requirements.rs
+個	
+回路図の「設計の要件」の表の行が、基板に取り込まれているか。届いていない行だけ下に出します	Whether the rows of the schematic's "Design requirements" table have reached the board. Only rows that have not are listed below
+# crates/app/src/board_editor/shoving.rs
+ネット短絡:	
+# crates/app/src/board_editor/smoothing.rs
+「角を丸める」を入れると変えられます	Turn on "Round corners" to change this
+# crates/app/src/board_editor/thermalmap.rs
+「落ち着いた温度を表示」を外すと、時間を動かせます	Turn off "Show the settled temperature" to move through time
+# crates/app/src/board_editor/width.rs
+いまは反映していません	Not applied now
+# crates/app/src/board_editor/view3d/window.rs
+基板・部品・銅・シルクを STEP にして、SolidCraft のアプリで開きます。寸法を測る・断面を見る・ケースの設計を続ける、などができます	Saves the board, parts, copper and silkscreen as STEP and opens it in the SolidCraft app. There you can measure, view cross sections, continue designing a case, and more
+いま絵を作っています	A picture is being made now
+きれいな絵を保存 (レンダリング)…	Save a nice picture (render)…
+SolidCraft が光の当たり方を計算した写真のような絵を作り、PNG に保存します (数秒〜1 分。作っている間も操作できます)	SolidCraft calculates the lighting to make a photo-like picture and saves it as PNG (a few seconds to 1 minute. You can keep working meanwhile)
+SolidCraft (別のアプリ) が入っていれば使えます	Available if SolidCraft (a separate app) is installed
+ケースを作る (SolidCraft)…	Make a case (SolidCraft)…
+この内寸・柱・壁の穴・ふたの柱から、箱とふたの立体を SolidCraft で作り、STEP に保存します (壁・底・ふた 2 mm、外の角を 3 mm で丸める)。作ったケースは基板のまわりに置き、部品とぶつからないかを調べます。3D プリンタやケースの CAD に渡せます	Makes the box and lid solids in SolidCraft from this inner size, the posts, the wall holes and the lid posts, and saves them as STEP (walls, bottom and lid 2 mm, outer corners rounded at 3 mm). The case is placed around the board and checked for collisions with parts. You can pass it to a 3D printer or case CAD
+SolidCraft が見つかりません。入れてから (または SOLIDCRAFT_DIR を設定して) もう一度押してください	SolidCraft was not found. Install it (or set SOLIDCRAFT_DIR) and press again
+ケースを作って保存しました: {}。基板のまわりに置きました	Made and saved the case: {}. Placed it around the board
+ケースを作れませんでした: {e}	Could not make the case: {e}
+ふたの柱 {} 本 (高さ {:.1} mm、基板を上から押さえる)	{} lid posts (height {:.1} mm, hold the board down from above)
+取り付け穴のまわりを、ふたから基板の表の面まで押さえる柱です (橙の破線)。高さは「表」の高さ。図面ではふたを内側から見た形で描きます	Posts that press around the mounting holes from the lid down to the board's top face (orange dashed lines). The height is the "top" height. The drawing shows the lid as seen from inside
+提案の穴 {} つを基板に足す	Add {} suggested holes to the board
+角の近くで、部品・パッド・配線から離れた所に M3 の取り付け穴 (3.2 mm) を足します (灰色の円)。足すと、その下にねじ柱が立ちます。元に戻せます	Adds M3 mounting holes (3.2 mm) near the corners, away from parts, pads and tracks (gray circles). A screw post stands under each one. You can undo this
+部品は 3D で描く形 (箱・丸い部品は 24 角柱・メーカーの形はその三角形) で調べます。0.05 mm より浅い接触は数えません。足が床に当たるときは、柱を高くするかケースを下げます	Parts are checked with their 3D shapes (boxes, 24-sided prisms for round parts, the triangles of maker shapes). Contact shallower than 0.05 mm is not counted. If leads hit the floor, make the posts taller or lower the case
+SolidCraft で開きました: {}	Opened in SolidCraft: {}
+SolidCraft で開けません: {e}	Cannot open in SolidCraft: {e}
+SolidCraft が絵を作っています…	SolidCraft is making the picture…
+止まりました	Stopped
+きれいな絵を保存しました: {}	Saved the picture: {}
+絵を作れませんでした: {e}	Could not make the picture: {e}
+取り付け穴 (M3、3.2 mm) を足しました。その下にねじ柱が立ちます	Added mounting holes (M3, 3.2 mm). A screw post stands under each one
+真ん中	Center
+コネクタの壁へ	Toward connector wall
+壁を選ぶ	Pick a wall
+置き方: {label}	Placement: {label}
+基板をケースの底の真ん中に置きます	Places the board in the middle of the case floor
+縁のコネクタ (USB・DC ジャック・端子台) が出る壁に、縁の隙間 0.5 mm まで寄せます。プラグが奥まで届くように。両側の壁にコネクタがある向きは真ん中のまま	Moves the board toward the wall where the edge connectors (USB, DC jack, terminal block) come out, up to a 0.5 mm edge gap, so plugs go all the way in. In a direction with connectors on both walls, it stays centered
+手前	Front
+奥	Back
+# crates/app/src/breadboard/blocks_ui.rs
+ピンの使い方:	Pin mode:
+出力:	Output:
+PWM 出力:	PWM output:
+待つ:	Wait:
+シリアルを始める:	Start serial:
+シリアルに送る:	Send to serial:
+変数:	Variable:
+くり返す:	Repeat:
+ピンを出力 (LED などを動かす)・入力 (スイッチなどを読む)・引き上げつきの入力 (押していない間 HIGH) のどれで使うか決めます (pinMode)。ふつうは「最初に 1 回」に置きます	Sets whether a pin is an output (drives an LED etc.), an input (reads a switch etc.) or an input with pull-up (HIGH while not pressed) (pinMode). Usually goes in "Once at start"
+ピンから HIGH (5 V) か LOW (0 V) を出します (digitalWrite)。先にそのピンを「出力」にしておきます	Outputs HIGH (5 V) or LOW (0 V) from a pin (digitalWrite). Set the pin to "Output" first
+ピンから 0〜255 の割合で速く点けたり消したりするパルスを出します (analogWrite)。LED の明るさやモーターの速さを変えられます。~ の付いたピンだけで使えます	Outputs pulses from a pin that switch on and off quickly, at a ratio of 0-255 (analogWrite). Changes an LED's brightness or a motor's speed. Works only on pins marked ~
+決めた時間だけ止まって待ちます (delay)。1000 ミリ秒で 1 秒です	Stops and waits for the set time (delay). 1000 milliseconds is 1 second
+シリアル (パソコンとの通信) を始めます (Serial.begin)。送る前に「最初に 1 回」に置きます	Starts serial (communication with the PC) (Serial.begin). Put it in "Once at start" before sending
+文字や値をシリアルモニタに送ります (Serial.print / println)。「改行」で 1 行ずつに分かれます	Sends text or values to the Serial Monitor (Serial.print / println). "New line" splits them into lines
+変数に値を入れます (x = …)	Puts a value into a variable (x = …)
+変数の値を増やします (x += …)。マイナスの数なら減ります	Increases a variable's value (x += …). A negative number decreases it
+条件が成り立つときだけ、中のブロックを動かします (if)。右クリックで「そうでなければ」を付けられます	Runs the blocks inside only when the condition is true (if). Right-click to add "Otherwise"
+中のブロックを決めた回数くり返します (for)	Repeats the blocks inside a set number of times (for)
+条件が成り立つ間、中のブロックをくり返します (while)	Repeats the blocks inside while the condition is true (while)
+最初に 1 回 (setup)	Once at start (setup)
+電源を入れたとき (リセットしたとき) に 1 回だけ、上から順に動きます	Runs once, top to bottom, when the power is turned on (or on reset)
+ずっとくり返す (loop)	Repeat forever (loop)
+「最初に 1 回」のあと、上から下までを何度もくり返します	After "Once at start", runs from top to bottom over and over
+ブロック	Blocks
+ここで離すと、そのブロックを消します	Drop here to delete the block
+名前をドラッグして下に置きます (クリックで「ずっとくり返す」の最後に)	Drag a name and drop it below (click to add it at the end of "Repeat forever")
+もし〜でなければ	If … otherwise
+n 回くり返す	Repeat n times
+〜の間くり返す	Repeat while
+変数を〜にする	Set variable to
+変数を増やす	Change variable by
+先に「＋ 変数を作る」で変数を作ります	First make a variable with "+ Make a variable"
+変数	Variables
+値をしまっておく入れ物です。名前を付けて作り、「変数」のブロックで値を入れたり増やしたりします。値の ▼ から読めます	A container that keeps a value. Make one with a name, then set or increase its value with the "Variable" blocks. Read it from a value's ▼
+＋ 変数を作る	+ Make a variable
+新しい変数 (整数、最初は 0) を作ります。名前は英字・数字・_ で付けます	Makes a new variable (integer, starts at 0). Use letters, digits and _ for the name
+小数	Decimal
+整数	Integer
+0.5 のような小数も入る変数 (float)	A variable that can also hold decimals like 0.5 (float)
+1・2・-3 のような整数の変数 (int)	A variable for integers like 1, 2, -3 (int)
+変数の名前 (英字・数字・_。数字で始めない)。変えると、使っているブロックの名前も変わります	Variable name (letters, digits, _; not starting with a digit). Changing it also changes the name in the blocks that use it
+最初の値	Initial value
+この変数を消します (使っているブロックは誤りになります)	Deletes this variable (blocks that use it become errors)
+(ここにブロックを置きます)	(Put blocks here)
+このブロックの写しをすぐ下に置きます	Puts a copy of this block right below it
+このブロックを中のブロックごと消します (上のブロックの一覧へドラッグしても消せます)	Deletes this block with the blocks inside it (you can also drag it to the block list above)
+「そうでなければ」を外す	Remove "Otherwise"
+「そうでなければ」を付ける	Add "Otherwise"
+入力 (引き上げ)	Input (pull-up)
+ミリ秒	ms
+改行	New line
+送ったあとに改行します (Serial.println)。外すと、次に送るものが同じ行に続きます (Serial.print)	Adds a new line after sending (Serial.println). When off, the next thing sent continues on the same line (Serial.print)
+だけ増やす	more
+回	times
+(数える変数 {counter})	(counter variable {counter})
+くり返した回数 (0 から) が入る変数です。中のブロックの値の ▼ から読めます	A variable holding the number of repeats so far (from 0). Read it from the ▼ of a value in the blocks inside
+の間	is true
+true (成り立つ)	true (holds)
+false (成り立たない)	false (does not hold)
+ほかの値に替える	Replace with another value
+送る文字	Text to send
+の入力	input
+の読み (0〜1023)	reading (0-1023)
+動き始めてからのミリ秒	ms since start
+乱数	Random
+の手前	(exclusive)
+ここに入れる値を替えます (数・変数・ピンの読み・計算・比べる)	Changes the value put here (number, variable, pin reading, calculation, comparison)
+の余り	mod
+ボードのピンを選びます	Pick a pin of the board
+数	Number
+整数 (ドラッグか、クリックして打ちます)	Integer (drag, or click and type)
+0.5 のような小数	A decimal like 0.5
+そのまま送る文字	Text sent as is
+HIGH / LOW・変数	HIGH / LOW, variable
+HIGH (5 V、成り立つ)・LOW (0 V)・変数を選びます	Pick HIGH (5 V, true), LOW (0 V) or a variable
+変数に入れたピンの番号	A pin number stored in a variable
+デジタル入力を読む	Read digital input
+ピンが HIGH (1) か LOW (0) かを読みます (digitalRead)	Reads whether a pin is HIGH (1) or LOW (0) (digitalRead)
+アナログを読む	Read analog
+ピンの電圧を 0〜1023 で読みます (analogRead。5 V で 1023)	Reads a pin's voltage as 0-1023 (analogRead; 1023 at 5 V)
+動き始めてからの時間	Time since start
+動き始めてからのミリ秒 (millis)	Milliseconds since start (millis)
+決めた範囲の数をでたらめに 1 つ (random)	One random number in a set range (random)
+計算 (+ − × ÷)	Calculate (+ − × ÷)
+いまの値を左にして計算します	Calculates with the current value on the left
+比べる (= < >)	Compare (= < >)
+いまの値を左にして比べます (成り立つと 1)	Compares with the current value on the left (1 if true)
+2 つの条件を合わせます	Combines two conditions
+〜でない	Not
+条件を逆にします	Inverts the condition
+範囲を変える (map)	Change range (map)
+0〜1023 の読みを 0〜255 にするように、値の範囲を変えます	Changes a value's range, for example a 0-1023 reading to 0-255
+外す (中の最初の値を残す)	Remove (keep the first value inside)
+この読み・計算を外して、中の最初の値だけを残します	Removes this reading or calculation and keeps only the first value inside
+# crates/app/src/breadboard/build_steps.rs
+電源がありません (回路図に電源も、コネクタに来る 5V・3V3 のような名前の電源の線もありません)	No supply (the schematic has no supply, and no supply line with a name like 5V or 3V3 coming in through a connector)
+ほぼ 0	Almost 0
+組む順と通電 (区画ごと)	Build order and power-up (by section)
+区画を 1 つずつ組んで、そのたびに電源を入れて確かめる順と、各段で正常なら流れる電流・電流制限・測る電圧を、窓に出します	Shows in a window the order for building one section at a time and powering up to check each time, with the normal current, current limit and voltages to measure at each step
+組む順と通電	Build order and power-up
+区画を 1 つずつ組んで、そのたびに電源を入れて確かめます。おかしな所があっても、いま付けた区画の数個の部品を見れば済みます。電源の入口の区画から順に並べ、区画の中は背の低い部品から (コネクタ・リレーは最後)。電源を入れる前に、テスターの抵抗レンジで電源の線と GND がショートしていないことを確かめ、電流を制限できる電源で入れます。	Build one section at a time and power up to check each time. If something is wrong, you only need to look at the few parts of the section you just added. Sections are ordered from the supply input, and within a section from the lowest parts (connectors and relays last). Before powering up, check with the multimeter's resistance range that the supply line and GND are not shorted, and use a supply that can limit the current.
+組む順と、各段で流れる電流を計算しています…	Calculating the build order and the current at each step…
+印刷用の組み立て表を保存 (SVG)	Save a printable assembly sheet (SVG)
+基板の表の絵 (実寸) と、段ごとに付ける線と部品の順に □ (付けたら印)、電流制限・正常な電流・測る電圧と、測った値を書く欄を並べた表を、SVG で保存します。ブラウザで開いて印刷し、組みながら印を付けます	Saves as SVG a picture of the board's top (actual size) and a table with, for each step, the wires and parts to add in order with □ (tick when added), the current limit, normal current, voltages to measure and boxes to write the measured values. Open it in a browser, print it, and tick as you build
+{stem}_組む順.svg	{stem}_build_order.svg
+組み立て表を保存しました: {}	Saved the assembly sheet: {}
+組み立て表を保存できませんでした: {}。保存先のフォルダに書き込めるか確認してください	Could not save the assembly sheet: {}. Check that you can write to the destination folder
+{} {} (部品 {} 個・表の線 {} 本)	{} {} ({} parts, {} top wires)
+選ぶと、基板の上でこの段の部品が光り、まだ付けない段の部品が薄くなります。もう一度押すと戻ります	When selected, this step's parts light up on the board and parts of later steps are dimmed. Press again to go back
+表の線 {} 本	{} top wires
+{} (ソケット)	{} (socket)
+{} (ピンヘッダ)	{} (pin header)
+付ける順: {}	Order to add: {}
+{} (コネクタから入れる)	{} (fed through the connector)
+通電: {} {}V で ほぼ 0 (電流を流す部品のモデルが無い)。電流制限は {}	Power-up: almost 0 at {} {}V (no model for parts that draw current). Current limit {}
+通電: {} {}V で {}{}。電流制限は {}	Power-up: {@3}{@4} at {@1} {@2}V. Current limit {@5}
+この段までの部品だけを付けて電源を入れたとき、正常なら流れる電流です (抵抗などの許容差とデータシートの min / max の範囲)。電流が範囲を外れたら、この段で付けた部品の向き・値・はんだのブリッジを見ます。モデルの無い部品の電流は入っていません。点滅・発振する回路は、直流の動作点 (止まった状態) の値です。電源の電流制限は、この値にしておくと、ショートしても部品を壊しません	The current that flows normally when you power up with only the parts up to this step (range from resistor tolerances etc. and datasheet min / max). If the current is out of range, check the orientation, values and solder bridges of the parts added in this step. Current of parts without a model is not included. For blinking or oscillating circuits it is the DC operating point value (stopped state). Set the supply's current limit to this value so that a short does not damage parts
+測る (GND から): {}	Measure (from GND): {}
+この段で初めてつながるネットの電圧です (GND に黒い棒を当てて)。まだ付けていない段の部品は無いものとして計算しています	Voltages of the nets first connected in this step (black probe on GND). Parts of steps not yet added are treated as absent
+この段の通電は計算できませんでした: {}	Could not calculate the power-up for this step: {}
+表の線 {} – {} ({})	Top wire {} – {} ({})
+{} (コネクタから)	{} (through the connector)
+通電: {from} {}V、電流制限 {}。正常ならほぼ 0 A　測った電流: ________	Power-up: {from} {}V, current limit {}. Normally almost 0 A  Measured current: ________
+通電: {from} {}V、電流制限 {}。正常なら {} ({}〜{})　測った電流: ________	Power-up: {from} {}V, current limit {}. Normally {} ({} to {})  Measured current: ________
+{n} を GND から測る: 正常なら {}V　測った値: ________	Measure {n} from GND: normally {}V  Measured: ________
+この段の通電は計算できませんでした: {e}	Could not calculate the power-up for this step: {e}
+<text x="{M}" y="{:.1}" font-size="4.5">{} — 組む順と通電</text>	<text x="{M}" y="{:.1}" font-size="4.5">{} — Build order and power-up</text>
+区画を 1 つずつ組み、そのたびに電源を入れて確かめます。付けたら □ に印を付けます。	Build one section at a time and power up to check each time. Tick □ when added.
+電源を入れる前に、テスターの抵抗レンジで電源の線と GND がショートしていないことを確かめ、電流を制限できる電源で入れます。	Before powering up, check with the multimeter's resistance range that the supply line and GND are not shorted, and use a supply that can limit the current.
+# crates/app/src/breadboard/canvas.rs
+選択に戻りました	Back to Select
+ジャンパー線をやめました (もう一度右クリックで選択に戻ります)	Stopped the jumper wire (right-click again to go back to Select)
+{} 個を選択 ({})	{} selected ({})
+触れた物を含む範囲	Area including touched items
+完全に囲んだ範囲	Fully enclosed area
+黄: ポインタの下の穴とつながっている穴　赤い丸: 回路図と違う足　部品・線の端はドラッグで差し替え (R で回す・Delete で線を消す)　何も無い所から囲んで選ぶ (右ドラッグは触れた物も・Shift で足す)　右クリックで選択を外す	Yellow: holes connected to the hole under the pointer  Red circle: leads that differ from the schematic  Drag parts or wire ends to move them (R rotates, Delete removes a wire)  Drag from an empty spot to box-select (right-drag also takes touched items, Shift adds)  Right-click to clear the selection
+ジャンパー線: 穴をクリックして、つなぐ先の穴をクリック (右クリックか Esc でやめる。もう一度で選択に戻る)	Jumper wire: click a hole, then click the hole to connect to (right-click or Esc to stop; again to go back to Select)
+# crates/app/src/breadboard/instruments.rs
+電圧 V	Voltage V
+2 本の棒の間の直流の電圧を読みます。部品の両端に当てます (並列)。黒い棒はふつう GND に	Reads the DC voltage between the two probes. Touch both ends of a part (in parallel). The black probe usually goes on GND
+電流 A	Current A
+テスターに電流を通して読みます。回路の線を 1 か所外し、その両端に棒を当てます (直列)。電源の + と − に当てると、テスターがショートになってヒューズが切れます	Reads the current passing through the multimeter. Remove one wire in the circuit and touch the probes to both ends (in series). Touching the supply's + and − shorts it through the multimeter and blows the fuse
+抵抗 Ω	Resistance Ω
+電源を切って、2 本の棒の間の抵抗を読みます。テスターが小さな電流を流して測るので、電源が入っていると正しく読めません。部品を回路につないだままだと、まわりの部品も一緒に測ります	With the power off, reads the resistance between the two probes. The multimeter measures by passing a small current, so it can't read correctly with the power on. If the part is still in the circuit, the parts around it are measured too
+黒い棒を当てる穴をクリックします	Click the hole for the black probe
+電源が入っています。抵抗は電源を切ってから測ります (テスターが自分で流す小さな電流に、回路の電流が混ざって正しく読めません。実物では、テスターを傷めることもあります)	The power is on. Measure resistance with the power off (the circuit's current mixes with the multimeter's own small current, so it can't read correctly. On real hardware it can also damage the multimeter)
+電流は、電源を入れてから測ります (切っているあいだは 0 A)	Measure current with the power on (0 A while it is off)
+棒の片方が、どこにもつながっていない穴です	One probe is on a hole not connected to anything
+2 本の棒が同じ線 (ネット) に当たっています。電流計は直列に入れます: 測りたい線を 1 か所外し (ジャンパー線を抜く・部品の足を別の列へ)、空いた 2 つの穴に赤と黒を当てます	Both probes are on the same line (net). An ammeter goes in series: break the line you want to measure in one place (pull out a jumper wire, or move a part's lead to another column), then put red and black on the two open holes
+ヒューズが切れました	The fuse blew
+テスターの中を {}A 流れようとしました。電流のレンジのテスターは、中がほとんど 0 Ω の線です。電源の + と − (並列) に当てるとショートになります。電流は、線を外した所に直列に入れて測ります	{}A tried to flow through the multimeter. In the current range, a multimeter is almost a 0 Ω wire inside. Touching the supply's + and − (in parallel) makes a short. Measure current by putting it in series where a wire has been removed
+つながっていない (開いている) か、とても大きな抵抗です。コンデンサは直流を通さないので OL です	Not connected (open) or a very large resistance. A capacitor does not pass DC, so it reads OL
+回路につないだまま測ると、並んだ部品も一緒に測ります (並列なら小さく出ます)。部品だけの値は、片方の足を外して測ります。ダイオード・LED は向きと流す電流で読みが変わります	Measuring in circuit also measures the parts alongside (in parallel it reads lower). To get the part alone, lift one lead and measure. Diodes and LEDs read differently depending on direction and test current
+赤い棒から入って黒い棒へ抜ける向きが + です。テスターの 0.1Ω が入るので、ごく小さい抵抗の回路では少し減ります	Current going in at the red probe and out at the black probe is +. The multimeter adds 0.1Ω, so it reads slightly lower in very low-resistance circuits
+# crates/app/src/breadboard/mate_ui.rs
+つないだ基板のコネクタ	Connectors of mated boards
+プロジェクトで、この基板とコネクタでつないだ基板 (差し込む小基板など) です。両方のユニバーサル基板の並べ方で、つないだピンの穴が同じ並び (間隔・向き) になっているかを照合します。合っていないと、実物では差せません	Boards in the project connected to this board by connectors (such as a small plug-in board). Checks that, in both perfboard layouts, the holes of the connected pins have the same arrangement (spacing, orientation). If they don't match, the real boards won't plug together
+照合	Check
+この基板と相手の基板の並べ方で、つないだピンの穴の並びを比べます。相手の並べ方が保存されていなければ、相手を自動で並べた形と比べます (少し時間がかかります)	Compares the hole arrangement of the connected pins in this board's and the other board's layouts. If the other board has no saved layout, compares with an automatic layout of it (takes a little time)
+相手に合わせて並べ直す	Rearrange to match the other board
+この基板のコネクタを、相手の基板のコネクタと同じ穴の並びに置いて固定し、ほかの部品をそのまわりに並べ直します (部品を上にして差し込む向き)。元に戻すで戻せます	Places and locks this board's connector in the same hole arrangement as the other board's connector, then rearranges the other parts around it (oriented to plug in with parts facing up). You can undo this
+「{}」のコネクタに合わせて、コネクタを置いて固定し、ほかを並べ直しています…	Placing and locking the connector to match the "{}" connector, and rearranging the rest…
+この基板	This board
+「相手に合わせて並べ直す」で、この基板のコネクタを相手と同じ並びにできます	"Rearrange to match the other board" can give this board's connector the same arrangement as the other
+ソケット	Socket
+リード部品	Leaded part
+リード線	Lead wires
+変換基板	Adapter board
+裏のランド	Bottom lands
+自動 ({})	Auto ({})
+フットプリントから: そのまま差します	From the footprint: insert as is
+ソケットや変換基板を使わず、部品をそのまま基板にはんだ付けします	Solder the part directly to the board, without a socket or adapter board
+チップ部品の代わりに、同じ値のリード部品を買って差します (購入リストにも出ます)	Instead of the chip part, buy and insert a leaded part of the same value (it also appears in the shopping list)
+チップ部品の両端にリード線 (すずめっき線) をはんだ付けし、リード部品のように 2 つの穴に差します。部品表はチップ部品のままです	Solder lead wires (tinned wire) to both ends of the chip part and insert it in two holes like a leaded part. The BOM keeps the chip part
+チップ部品を裏 (はんだの面) で、隣り合う 2 つの穴のランドにまたがせて直接はんだ付けします (1206・0805)	Solder the chip part directly on the bottom (solder side), bridging the lands of two neighboring holes (1206, 0805)
+試作 (ブレッドボード・ストリップ基板・ユニバーサル基板) で、この部品をどう付けるか。自動はフットプリントから決めます (DIP の IC はソケット、SOP は変換基板、チップ部品は同じ値のリード部品)。組み立て表と買う物の一覧に出ます	How to mount this part on a prototype (breadboard, stripboard, perfboard). Auto decides from the footprint (socket for DIP ICs, adapter board for SOP, a leaded part of the same value for chip parts). Shown on the assembly sheet and the shopping list
+# crates/app/src/breadboard/mod.rs
+部品・線の端は穴ごとにドラッグで動かせます。何も無い所からドラッグで囲むと部品を選べ (右ドラッグは触れた物も、Shift で足す)、選んだ部品はまとめて動かせます。動かすたびに、左で回路図と照らし合わせます	Drag parts and wire ends hole by hole. Drag from an empty spot to box-select parts (right-drag also takes touched items, Shift adds) and move the selected parts together. Each move is checked against the schematic on the left
+# crates/app/src/breadboard/panel.rs
+はんだ不要の差し込み式の板。試しに組んで、電源を入れて動かせます	A plug-in board that needs no solder. Build a trial circuit, turn on the power and run it
+ストリップ基板	Stripboard
+銅の帯が並んだ穴あき基板。帯を切る所と、表を通す線の並べ方を出します	A holed board with rows of copper strips. Shows where to cut strips and how to lay out wires on top
+ユニバーサル基板	Perfboard
+穴だけの基板。裏で穴をつなぐすずめっき線と、表を通す線の並べ方を出します	A board with holes only. Shows the layout of tinned wires joining holes on the bottom and wires on top
+回路図を小窓で見る	Show schematic in a small window
+回路図を小さな窓に出します (動かせる・大きさを変えられる)。窓の中の部品をクリックすると、基板の上でその部品が光り、基板で選んだ部品は窓の中で囲まれます。差し方を回路図と見比べながら組めます	Shows the schematic in a small window (movable, resizable). Clicking a part in the window lights it up on the board, and a part selected on the board is outlined in the window. You can build while comparing with the schematic
+銅の帯が横に並んだ基板 (ストリップ基板) に組む並べ方です。IC の段の上と下に帯の組があり、1 本ずつ 1 つのネットです (左に名前)。2 本足の部品は、つなぐ 2 つの帯をまたいで縦に差します。IC は × の穴で帯を切って足ごとに分け、上半分の足は上の帯へ、下半分の足は下の帯へ色の線でつなぎます。同じネットの帯どうしは左の線でつなぎます。帯を切るのは、裏から穴の銅を削ります (ドリルの刃を手で回す・専用のカッター)	A layout for a board with horizontal copper strips (stripboard). There are groups of strips above and below the IC row, each strip one net (name on the left). Two-lead parts go in vertically across the two strips they connect. Strips are cut at the × holes to separate each IC lead; the upper leads connect to the upper strips and the lower leads to the lower strips with colored wires. Strips of the same net are joined by the wires on the left. To cut a strip, scrape the copper at the hole from the bottom (turn a drill bit by hand, or use a strip cutter)
+穴だけの基板 (ユニバーサル基板) に組む並べ方です。帯が無いので、部品はつなぐ相手の近くに置き (長いヘッダは上の縁に寝かせて)、ネットごとに灰色の線 (すずめっき線) を裏で縦・横にまっすぐはんだ付けします。ほかのネットの線とは触れません。裏で通れない所は、色の線 (表を通すビニール線) で飛び越えます	A layout for a board with holes only (perfboard). With no strips, parts are placed near what they connect to (long headers lying along the top edge), and for each net gray lines (tinned wire) are soldered straight, vertical or horizontal, on the bottom. They don't touch wires of other nets. Where the bottom has no path, a colored line (insulated wire on top) jumps over
+部品やジャンパー線をクリックで選び、ドラッグで差し替えます。選んだ部品は R で回り、選んだ線は Delete で消えます (回路図・基板の「選択」と同じ。ほかの道具からは Esc か右クリックで戻ります)	Click to select parts or jumper wires and drag to move them. R rotates the selected part, Delete removes the selected wire (same as "Select" in the schematic and board. From other tools, Esc or right-click comes back)
+穴をクリックして、つなぐ先の穴をクリックすると、線を差します (W)。右クリックか Esc でやめます	Click a hole, then the hole to connect to, to insert a wire (W). Right-click or Esc to stop
+1 回目のクリックで赤い棒、2 回目で黒い棒を穴に当てます。レンジは 電圧 (並列に当てる)・電流 (線を外して直列に入れる)・抵抗 (電源を切って測る) から選びます	The first click puts the red probe on a hole, the second the black probe. Choose the range: voltage (touch in parallel), current (remove a wire and put it in series) or resistance (measure with the power off)
+デジタル回路を回路図の上で動かす	Run the digital circuit on the schematic
+回路図のタブに移って、デジタル回路を動かしながら見ます。配線が High / Low の色になり、真理値表・ロジックアナライザ・フリップフロップの記憶・7 セグメントの表示・グリッチの印が出ます (ブレッドボードの絵より、信号の流れが追いやすい形)	Moves to the schematic tab to watch the digital circuit while it runs. Wires are colored High / Low, and a truth table, logic analyzer, flip-flop memory, 7-segment display and glitch marks are shown (easier to follow the signal flow than the breadboard picture)
+# crates/app/src/breadboard/power.rs
+周りの湿度	Ambient humidity
+湿度のセンサー (SHT31) が測る空気の湿度です。動かしたまま変えられます (温度は下の「周りの温度」)	The air humidity the humidity sensor (SHT31) measures. You can change it while running (temperature is "Ambient temperature" below)
+{} (SHT31) は I²C で読むセンサーです。読むには、スケッチの欄で「本物の命令で動かす」を選んでください	{} (SHT31) is a sensor read over I²C. To read it, choose "Run the real chip's instructions" in the sketch section
+{} (SHT31) の SDA・SCL が、マイコンの SDA・SCL (Nano は A4・A5、Mega は D20・D21) につながっていません	SDA and SCL of {} (SHT31) are not connected to the microcontroller's SDA and SCL (A4, A5 on the Nano; D20, D21 on the Mega)
+電源なし	No supply
+信号なし	No signal
+# crates/app/src/breadboard/sketch_ui.rs
+// LED_BUILTIN (D13) を 0.5 秒ごとに点けたり消したりします\nvoid setup() {\n  pinMode(LED_BUILTIN, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(LED_BUILTIN, HIGH);\n  delay(500);\n  digitalWrite(LED_BUILTIN, LOW);\n  delay(500);\n}\n	// Turns LED_BUILTIN (D13) on and off every 0.5 seconds\nvoid setup() {\n  pinMode(LED_BUILTIN, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(LED_BUILTIN, HIGH);\n  delay(500);\n  digitalWrite(LED_BUILTIN, LOW);\n  delay(500);\n}\n
+スケッチを元に戻しました	Undid the sketch change
+スケッチをやり直しました	Redid the sketch change
+スケッチの直前の変更 (ブロックを置いた・動かした・消した・値を変えた) を取り消します (Ctrl+Z)	Undoes the last change to the sketch (placing, moving or deleting a block, or changing a value) (Ctrl+Z)
+やり直す	Redo
+取り消した変更をもう一度します (Ctrl+Y)	Does the undone change again (Ctrl+Y)
+スケッチ ({refdes})	Sketch ({refdes})
+このマイコンで動かすプログラム (Arduino の C の小さな部分)。setup() は電源を入れたとき 1 回、loop() はそのあとずっと繰り返します。使えるもの: int・long・float・bool の変数と配列、if・for・while・関数、pinMode・digitalWrite・digitalRead・analogRead・analogWrite・delay・millis・Serial.print / println・map・constrain・random。電源を入れると、ブレッドボードの回路と一緒に動きます	The program this microcontroller runs (a small subset of Arduino C). setup() runs once at power-on, then loop() repeats forever. Available: int, long, float, bool variables and arrays, if, for, while, functions, pinMode, digitalWrite, digitalRead, analogRead, analogWrite, delay, millis, Serial.print / println, map, constrain, random. When the power is on, it runs together with the breadboard circuit
+いまのスケッチが見本のままです	The sketch is still the example
+点滅の見本に戻す	Reset to blink example
+スケッチを消して、LED ({led}) を点滅させる見本に戻します	Clears the sketch and goes back to the example that blinks the LED ({led})
+ほかの操作 (見本に戻す)	More actions (reset to example)
+整形	Format
+{ } の深さに合わせて行の頭の字下げをそろえます (2 文字ずつ)。言葉は変えません	Aligns the indentation at the start of lines to the { } depth (2 spaces per level). Does not change any words
+別窓で開く	Open in a separate window
+スケッチを大きな窓で書きます (行番号つき)。ブレッドボードを見ながら書けます	Write the sketch in a large window (with line numbers). You can write while looking at the breadboard
+スケッチを arduino-cli でコンパイルし、ボードのマイコン (Nano は ATmega328P、Mega は ATmega2560、ATtiny85) の本物の命令を 1 クロックずつ動かします (simavr)。ライブラリ・tone・割り込み・EEPROM など Arduino の C がそのまま動き、命令にかかる時間も本物どおりです。arduino-cli (Arduino IDE 2 に入っています) と、ボードの種類 (arduino:avr、ATtiny85 は ATTinyCore) が要ります。初めてのコンパイルは数十秒かかります。切ると、circuitCad の読み方 (Arduino の C の小さな部分) で動かします	Compiles the sketch with arduino-cli and runs the real instructions of the board's microcontroller (ATmega328P on the Nano, ATmega2560 on the Mega, ATtiny85) clock by clock (simavr). Arduino C such as libraries, tone, interrupts and EEPROM runs as is, and instruction timing matches the real chip. Needs arduino-cli (included with Arduino IDE 2) and the board package (arduino:avr; ATTinyCore for the ATtiny85). The first compile takes tens of seconds. When off, it runs with circuitCad's interpreter (a small subset of Arduino C)
+circuitCad がスケッチを読んで動かします (Arduino の C の小さな部分: 変数・if・for・関数・pinMode・digitalWrite・analogRead・delay・Serial.print など)。arduino-cli が無くても、すぐに動きます。ライブラリ・割り込み・命令にかかる時間は扱いません	circuitCad reads and runs the sketch (a small subset of Arduino C: variables, if, for, functions, pinMode, digitalWrite, analogRead, delay, Serial.print, etc.). Runs right away, even without arduino-cli. Libraries, interrupts and instruction timing are not handled
+circuitCad で読む	Run in circuitCad
+本物の命令で動かす	Run the real chip's instructions
+スケッチ:	Sketch:
+arduino-cli が見つかりません。{}	arduino-cli was not found. {}
+電源を入れるか「コンパイル」を押すと、arduino-cli がコンパイルします	arduino-cli compiles when you turn on the power or press "Compile"
+コンパイル	Compile
+いまのスケッチを arduino-cli でコンパイルします (電源を入れる前に、誤りが無いか確かめられます)	Compiles the current sketch with arduino-cli (lets you check for errors before turning on the power)
+コンパイルしています… (初めては数十秒かかります)	Compiling… (the first time takes tens of seconds)
+✔ コンパイルできました (プログラム {} バイト)。電源を入れると動きます	✔ Compiled (program {} bytes). It runs when you turn on the power
+✔ 読めました。電源を入れると動きます	✔ Read OK. It runs when you turn on the power
+{} 行目: {}	Line {}: {}
+止まりました: {} 行目: {}	Stopped: line {}: {}
+コンパイルが終わると動き出します (それまでピンは入力のまま)	It starts when the compile finishes (until then the pins stay inputs)
+止まりました: {}	Stopped: {}
+送る	Send
+打った文字に改行を付けて、マイコンのシリアル (Serial.read で読めます) に送ります。Enter でも送れます	Sends the typed text with a new line to the microcontroller's serial (readable with Serial.read). Enter also sends
+いまのスケッチはブロックで表せません ({e})。コードで直すか、見本に戻すとブロックにできます	The current sketch can't be shown as blocks ({e}). Fix it in code, or reset to the example, to use blocks
+コード	Code
+スケッチを文字 (Arduino の C) で書きます	Write the sketch as text (Arduino C)
+命令のブロックを積み重ねて書きます (Scratch のように)。打ち間違いが起きません。ブロックからコードが作られ、「コード」に切り替えると、そのまま続きを文字で書けます	Write by stacking instruction blocks (like Scratch). No typing mistakes. Code is made from the blocks; switch to "Code" to continue writing it as text
+ブロックを変えると、コードのコメント (// の行) は消えます	Changing blocks removes comments (// lines) from the code
+ブロックで表せないので、コードで出しています ({e})	Can't be shown as blocks, so showing code ({e})
+シリアルモニタ  {baud} bps	Serial Monitor  {baud} bps
+スケッチの Serial.print / println が送った文字です (速さはスケッチの Serial.begin のもの)。ホイールで前の行に戻れます。新しい行が来ると下に付いていきます	Text sent by the sketch's Serial.print / println (speed from the sketch's Serial.begin). Scroll with the wheel to see earlier lines. New lines are added at the bottom
+クリア	Clear
+ここまでの出力を消します (マイコンは送り続けます)	Clears the output so far (the microcontroller keeps sending)
+# crates/app/src/breadboard/strip_view.rs
+いちばん左の部品に、左の端をそろえます	Lines up left edges with the leftmost part
+いちばん右の部品に、右の端をそろえます	Lines up right edges with the rightmost part
+いちばん上の部品に、上の端をそろえます	Lines up top edges with the topmost part
+いちばん下の部品に、下の端をそろえます	Lines up bottom edges with the bottommost part
+横に並べる	Arrange in a row
+今の左からの順で、横一列に 2 穴ずつ空けて並べます (上の端をそろえます)	Arranges them in a horizontal row in their current left-to-right order, 2 holes apart (top edges aligned)
+縦に並べる	Arrange in a column
+今の上からの順で、縦一列に 2 穴ずつ空けて並べます (左の端をそろえます)	Arranges them in a vertical column in their current top-to-bottom order, 2 holes apart (left edges aligned)
+つながる相手の IC やヘッダの足の並びの順に、一列に並べます。ドライバ IC の出力の順にリレーを、ヘッダのピンの順に抵抗を、のように使います (相手の足が横に並んでいれば横一列、縦なら縦一列。列の真ん中は相手の足の真ん中の向かい)	Arranges them in a line in the order of the leads of the IC or header they connect to. Use it for relays in the order of a driver IC's outputs, or resistors in the order of a header's pins (a horizontal row if those leads are horizontal, a column if vertical; the middle of the line faces the middle of those leads)
+選んだ部品 (囲むか Shift + クリックで 2 個以上) を揃えて並べます。ユニバーサル基板では、揃えた部品はその穴に固定され、ほかの部品と線は自動で置き直されます。ストリップ基板では部品だけが動くので、帯の上のつながりが変わります (照合とラッツネストで確かめます)。元に戻すで戻せます	Aligns the selected parts (2 or more, by box or Shift + click). On perfboard, the aligned parts are locked to those holes and the other parts and wires are re-placed automatically. On stripboard only the parts move, so the connections on the strips change (check with the check and the ratsnest). You can undo this
+部品を置き直しました (固定した部品・置いた区画の箱はそのまま)。線は消えたので、黄色の線を見て手で引くか「自動配線」で引きます (元に戻すで戻せます)	Re-placed the parts (locked parts and placed section boxes stay). The wires were removed, so follow the yellow lines and draw them by hand or use "Autoroute" (you can undo this)
+固定した部品・置いた区画の箱はそのままで、ほかの部品を並べ直し、線を引き直しました (元に戻すで戻せます)	Rearranged the other parts and redrew the wires, keeping locked parts and placed section boxes (you can undo this)
+つながっていなかった {} 個のネットに線を引きました。前からある線はそのままです (元に戻すで戻せます)	Drew wires for {} unconnected nets. Existing wires stay (you can undo this)
+{} 個のネットに線を引きました。{} 個は通り道が無く引けませんでした (黄色の線)。部品を少し動かすか、表の線を手で引きます	Drew wires for {} nets. {} had no path and could not be drawn (yellow lines). Move parts a little, or draw top wires by hand
+固定した部品があるときは、区画の箱は置けません (部品の固定を外してから置きます)	Section boxes can't be placed while parts are locked (unlock the parts first)
+区画「{}」の箱を {} に置いて、ほかを並べ直しています…	Placing the box of section "{}" at {} and rearranging the rest…
+区画の案を出す	Suggest sections
+部品を役割で分けた案を出します: デジタル (信号の半分以上が SPI・I²C・D22 のようなデジタルの線の IC とヘッダ)・リレー (K1 …)・アナログ・電源 (レギュレータ)。抵抗やコンデンサは、いちばんつながっている組へ、電源だけにつながるものは回路図で近くに描いた IC の組へ入れます。役割が 1 つしか無い回路は、間をつなぐネットが少ない所で分けます (電源と GND のネットは数えません)。ネットの名前で役割を決めるので、案を見てから区画にします	Suggests groups of parts by role: digital (ICs and headers with more than half of their signals on digital lines such as SPI, I²C, D22), relays (K1 …), analog, and power (regulators). Resistors and capacitors go to the group they connect to most; those connected only to supplies go to the group of the IC drawn nearby in the schematic. A circuit with only one role is split where few nets connect the parts (supply and GND nets are not counted). Roles are decided from net names, so review the suggestion before making sections
+分けられる所が見つかりませんでした (部品が少ないか、部品どうしのつながりが多い回路です)	Found no place to split (the circuit has few parts, or many connections between parts)
+この案で区画にする	Make sections from this suggestion
+この組を、設計の要件の「近くに置く組」に「区画」の印を付けて入れます。あとで設計の要件の窓で直したり消したりできます	Adds these groups to "Groups to place close" in the design requirements, marked as "section". You can edit or delete them later in the design requirements window
+区画の案から	From the section suggestion
+{} 個の区画を設計の要件に入れました。並べ方は区画ごとに作り直されます	Added {} sections to the design requirements. The layout is remade section by section
+{} 個を揃えて固定し、ほかの部品を並べ直しています…	Aligning and locking {} parts, and rearranging the other parts…
+{} 個を揃えました。線は動かしていないので、つながりは照合とラッツネスト (黄色の破線) で確かめてください	Aligned {} parts. Wires were not moved, so check the connections with the check and the ratsnest (yellow dashed lines)
+まず手で置くとよい部品:	Parts best placed by hand first:
+全体の形を決める部品です。この部品を自分で置いて固定 (L) し、「自動配置」で残りを自動に任せると、全部自動より表の線が少なくなることが多いです (DMM の B 段: 81 本 → 72〜75 本)。ほかの部品は近くに寄せて線をまっすぐ引く自動の方が得意です	These parts set the overall shape. Placing and locking (L) them yourself and leaving the rest to "Autoplace" often gives fewer top wires than fully automatic (DMM stage B: 81 → 72-75 wires). For the other parts, the automatic placement is better at moving them close and drawing straight wires
+コネクタ・ヘッダ・モジュール: 基板の縁や、ケースの穴に合う所に置きます	Connectors, headers, modules: place them at the board edge or where they match the case holes
+つまみ・スイッチ: ケースの穴に合う所に置きます	Knobs and switches: place them where they match the case holes
+リレー: 大きくて重い部品です。並べてまとめ、小さい信号の部品から離します	Relays: big, heavy parts. Line them up together and keep them away from small-signal parts
+足の多い IC: まわりの部品の置き場所が、この IC の場所で決まります	ICs with many leads: the IC's position decides where the parts around it go
+決めない	Not set
+基板の大きさ	Board size
+使う基板の横 × 縦 (mm) を選ぶと、IC を横の幅に収まるだけ並べ、はみ出す分は下の段に折り返します。決めないときは IC を横一列に並べます。横長の基板は横に長く置いた向きで選びます	When you choose the width × height (mm) of your board, ICs are placed across as many as fit the width, and the rest wrap to the row below. If not set, ICs are placed in one horizontal row. Choose a long board in its landscape orientation
+横 (mm)	Width (mm)
+縦 (mm)	Height (mm)
+手で動かした並べ方はそのままです。新しい大きさで並べるには「自動で並べ直す」(ユニバーサル基板は「自動配置」) を押します	A layout moved by hand stays as is. To lay out for the new size, press "Rearrange automatically" ("Autoplace" for perfboard)
+四隅に取り付け穴 (M3)	Mounting holes in the corners (M3)
+基板の四隅にスペーサーの取り付け穴 (M3) をあけるとき、隅の 3 × 3 穴 (穴とスペーサーの場所) に部品・線を置かないで並べます。右の隅は基板の横、下の隅は縦を決めたときだけ分かるので、大きさも選んでください。禁止の所は灰色の丸で出ます	If you drill spacer mounting holes (M3) in the four corners of the board, the layout keeps parts and wires out of the 3 × 3 holes in each corner (where the hole and spacer go). The right corners are known only when the board width is set, and the bottom corners only when the height is set, so choose the size too. Forbidden spots are shown as gray circles
+手で動かした並べ方はそのままです。取り付け穴をよけて並べるには「自動で並べ直す」(ユニバーサル基板は「自動配置」) を押します	A layout moved by hand stays as is. To lay out avoiding the mounting holes, press "Rearrange automatically" ("Autoplace" for perfboard)
+チップ部品を裏に付ける (慣れた人向け)	Chip parts on the bottom (for experienced users)
+0805・1206 のチップ抵抗・チップコンデンサを、裏 (はんだの面) で隣り合う 2 つの穴にまたがせてはんだ付けする並べ方にします。ユニバーサル基板では、片方の端を、つなぐ IC の足の穴に一緒にはんだ付けできるので、プルアップやパスコンを足のすぐそばに置けて、表の部品と線が減り、基板が小さくなります。ストリップ基板では、つなぐ 2 つのネットの帯が上下に隣り合う所にまたがせます (そういう所が無いチップは表のまま。全部を表にした並べ方より小さくならないときは、全部を表にした並べ方にします)。小さいチップを手ではんだ付けするのに慣れた人向けです (初めてなら、同じ値のリード部品を表に付ける今の形で)。リード部品は裏に付けません	Lays out 0805 and 1206 chip resistors and capacitors soldered on the bottom (solder side), bridging two neighboring holes. On perfboard, one end can be soldered into the hole of the IC lead it connects to, so pull-ups and decoupling capacitors sit right by the lead, with fewer parts and wires on top and a smaller board. On stripboard, chips bridge spots where the strips of the two nets they connect are next to each other vertically (chips with no such spot stay on top; if the result isn't smaller than the all-top layout, the all-top layout is used). For people used to hand-soldering small chips (if it's your first time, keep the current form with leaded parts of the same value on top). Leaded parts are not put on the bottom
+手で動かした並べ方はそのままです。チップ部品を裏に付けて並べるには「自動で並べ直す」(ユニバーサル基板は「自動配置」) を押します	A layout moved by hand stays as is. To lay out with chip parts on the bottom, press "Rearrange automatically" ("Autoplace" for perfboard)
+取り付け穴の隅に {} か所: {}	{} spots in mounting-hole corners: {}
+隅の 3 × 3 穴は、取り付け穴とスペーサーの場所です。「自動で並べ直す」でよけるか、手で動かしてください	The 3 × 3 holes in each corner are for the mounting hole and spacer. Avoid them with "Rearrange automatically" or move things by hand
+✔ {} × {} 穴の基板に収まります	✔ Fits on a {} × {} hole board
+{} × {} 穴の基板に収まりません: 横が {} 穴・縦が {} 穴 ({:.0} × {:.0} mm) はみ出します	Does not fit on a {} × {} hole board: {} holes over in width and {} holes over in height ({:.0} × {:.0} mm)
+引きかけの線をやめました (もう一度右クリックで選択に戻ります)	Stopped the wire in progress (right-click again to go back to Select)
+表 (部品の面)	Top (part side)
+部品を差す面から見た絵です。部品と線を動かして並べ方を直せます。穴にカーソルを置くと、そこにつながる穴と線が光ります (F で裏と切り替え)	The view from the side where parts are inserted. Move parts and wires to fix the layout. Hover over a hole to light up the holes and wires connected to it (F switches to the bottom)
+裏 (はんだの面)	Bottom (solder side)
+基板を裏返して見た絵です (左右が逆)。はんだ付けする穴・すずめっき線・銅の帯と切る穴を、実物を裏返したときと同じ向きで見ます。穴にカーソルを置くと、そこにつながる穴と線が光ります。裏では、すずめっき線を引く・消す (ユニバーサル基板)、帯を切る (ストリップ基板) ができます。部品と表の線は表で動かします (F で切り替え)	The view of the board turned over (left and right reversed). See the holes to solder, tinned wires, copper strips and cut holes the same way as when you turn the real board over. Hover over a hole to light up the holes and wires connected to it. On the bottom you can draw and delete tinned wires (perfboard) and cut strips (stripboard). Move parts and top wires on the top (F switches)
+裏では銅の面 (すずめっき線・裏の線・帯を切る穴) を直せます。引く線は裏に通ります。部品と表の線は表で動かします	On the bottom you can edit the copper side (tinned wires, bottom wires, strip cuts). Wires you draw go on the bottom. Move parts and top wires on the top
+表の部品と線は、表で直します (F で表に戻す)	Edit parts and top wires on the top (F goes back to the top)
+回路図・基板の「選択」と同じ (ほかの道具からは Esc か右クリックで戻ります)。部品や線の端を穴ごとにドラッグして動かします。回路図と同じく、何も無い所から左ドラッグで囲むと囲んだ部品を、右ドラッグで触れた部品も選び (Shift で今の選択に足す・Shift + クリックで 1 個ずつ足す・外す)、選んだ部品のどれかをドラッグすると、まとめて動きます (囲んだ所の線の端・切る穴も一緒に)。R で選んだ部品をまとめて回します (ストリップ基板は半回転: 帯は横のままなので、中のつながりは変わりません。ユニバーサル基板は 90°)。選んだ部品は R で回り (2 本足は立てる ↔ 寝かせる、IC はストリップ基板では向きを逆に、ユニバーサル基板では 90°)、選んだ線 (表の線・裏のすずめっき線をクリック) は Delete で消えます。囲んでから Delete を押すと、囲んだ中の線をまとめて消します	Same as "Select" in the schematic and board (from other tools, Esc or right-click comes back). Drag parts and wire ends hole by hole. As in the schematic, left-drag from an empty spot selects the enclosed parts and right-drag also the touched parts (Shift adds to the current selection, Shift + click adds or removes one at a time); dragging any selected part moves them all (with the wire ends and cut holes in the box). R rotates the selected parts together (half a turn on stripboard: the strips stay horizontal, so the connections inside don't change; 90° on perfboard). A selected part rotates with R (two-lead parts switch between standing and lying, ICs reverse on stripboard and turn 90° on perfboard), and a selected wire (click a top wire or a bottom tinned wire) is removed with Delete. Box-select and press Delete to remove all wires inside the box
+線を引く	Draw wire
+穴をクリックして、つなぐ先の穴をクリックすると、被覆線を足します (W)。表から見ているときは部品の面に、裏から見ているときは銅の面に通します (裏の線は、すずめっき線の上を越えられます)。右クリックか Esc でやめます	Click a hole, then the hole to connect to, to add an insulated wire (W). Viewed from the top it goes on the part side; viewed from the bottom it goes on the copper side (bottom wires can cross over tinned wires). Right-click or Esc to stop
+帯を切る	Cut strip
+穴をクリックすると、そこで銅の帯を切ります。切った穴をもう一度クリックすると、元に戻します	Click a hole to cut the copper strip there. Click a cut hole again to restore it
+すずめっき線	Tinned wire
+被覆の無いすずめっき線を手で足します。裏から見ているときは銅の面に、表から見ているときは部品の面に通します (ストリップ基板は表だけ)。穴をクリックして、同じ行・同じ列か、ななめ 45° の穴をクリックします (45° なら途中の穴の真ん中を通ります)。同じ面のほかのななめの線と穴と穴の間で交わる線は引けません (裸の線どうしが触れてショートするため)。線の両端と、途中で部品の足や同じ面の別の線に重なる穴がつながります。消すのは「消す」の道具で。右クリックか Esc で引きかけをやめます	Adds a bare tinned wire by hand. Viewed from the bottom it goes on the copper side; viewed from the top it goes on the part side (top only on stripboard). Click a hole, then a hole in the same row or column, or at 45° (at 45° it passes through the middle of the holes on the way). A wire that would cross another diagonal wire on the same side between holes can't be drawn (bare wires would touch and short). Both ends of the wire connect, as do holes on the way where it overlaps a part's lead or another wire on the same side. Use the "Delete" tool to remove one. Right-click or Esc stops a wire in progress
+クリックした線を消します。表から見ているときは表の線 (被覆線・すずめっき線)、裏から見ているときは裏の線とすずめっき線 (手で引いたもの) です。消える線は、カーソルを当てると赤く光ります。元に戻す (Ctrl+Z) で戻せます	Deletes the clicked wire. Viewed from the top, top wires (insulated and tinned); viewed from the bottom, bottom wires and tinned wires (drawn by hand). The wire to be deleted glows red when hovered. You can undo with Undo (Ctrl+Z)
+1 回目のクリックで赤い棒、2 回目で黒い棒を穴に当てます (裏から見た絵でも)。レンジは 電圧・電流・抵抗 から選びます。銅の帯・すずめっき線・表の線でつながったとおりの回路を測るので、帯の切り忘れやはんだのブリッジも、そのとおりに読めます	The first click puts the red probe on a hole, the second the black probe (also in the bottom view). Choose the range: voltage, current or resistance. It measures the circuit exactly as connected by the copper strips, tinned wires and top wires, so forgotten strip cuts and solder bridges show up in the reading too
+探り針を穴に当てると、そのネットの電圧の時間の変化が左に出ます (電源を入れて動かしているときは、動いている波形)	Put the probe on a hole to see that net's voltage over time on the left (the live waveform while the power is on)
+手で動かした・線を引いた・帯を切った・並べ直した操作を 1 つ取り消します (Ctrl+Z)	Undoes one action: a manual move, a drawn wire, a strip cut or a rearrangement (Ctrl+Z)
+取り消した操作をもう一度します (Ctrl+Y)	Does the undone action again (Ctrl+Y)
+いま並べています。終わるまでお待ちください	Arranging now. Please wait until it finishes
+部品だけを自動で置き直します。固定した部品 (L) と、置いた区画の箱はそのままです。線は消えるので、黄色の線を見て手で引くか、「自動配線」で引きます (元に戻すで戻せます)	Re-places only the parts automatically. Locked parts (L) and placed section boxes stay. Wires are removed, so follow the yellow lines and draw them by hand or use "Autoroute" (you can undo this)
+全部つながっていて、引く線がありません	Everything is connected; no wires to draw
+まだつながっていないネット (黄色の線) にだけ線を引きます。手で引いた線も、前に引いた線も、そのまま残ります。通り道の無いネットは黄色の線のまま残ります (元に戻すで戻せます)	Draws wires only for nets not yet connected (yellow lines). Wires drawn by hand or earlier stay. Nets with no path stay as yellow lines (you can undo this)

@@ -31,3 +31,20 @@
 つまみ	Knob
 サレンキー ローパス	Sallen-Key low-pass
 サレンキー ハイパス	Sallen-Key high-pass
+# ブロック (breadboard/blocks_ui.rs)
+もし	If
+そうでなければ	Else
+なら	then
+でない	is false
+ピンの使い方	Pin mode
+シリアルに送る	Send to serial
+シリアルを始める	Start serial
+待つ	Wait
+PWM 出力	PWM output
+かつ	and
+または	or
+かつ・または	and / or
+こんにちは	Hello
+ふつう	Normal
+あと	Headroom
+ここ	here

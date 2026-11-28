@@ -1,0 +1,399 @@
+# crates/app/src/part_form/refldo.rs
+ドロップアウト: 入力が出力よりこれだけ高くないと正確に出せない電圧。電流で増えるなら「0.02 54」のように増え方 [Ω] も。	Dropout: the voltage by which the input must be above the output for the output to be accurate. If it grows with current, also give the growth [Ω], like "0.02 54".
+PSRR: 入力のゆれがどれだけ出力に漏れないか。表の 1 点だけでもよく、「PSRR vs Frequency」の図から何点か読むと、周波数による下がり方も合わせます。	PSRR: how much of the input ripple is kept out of the output. One point from the table is enough; if you read several points from the "PSRR vs Frequency" figure, the drop with frequency is matched too.
+NR・TRIM ピン・TEMP ピンの欄は、そのピンの無い部品なら空にします (REF50xx の値はブロック図とピンの説明から)。	Leave the NR, TRIM pin and TEMP pin fields empty if the part has no such pin (the REF50xx values come from the block diagram and the pin descriptions).
+REF5025 の例を入れる	Fill in the REF5025 example
+同梱の REF5025 を作ったときの値 (TI のデータシートの表と図) を入れます	Fills in the values used to make the bundled REF5025 (from the tables and figures in TI's datasheet)
+ピンを REF50xx の並びにする	Set pins to the REF50xx order
+ピン表を SOIC-8 の REF50xx の並び (2 VIN・4 GND・6 VOUT・5 TRIM/NR・3 TEMP) にします	Sets the pin table to the SOIC-8 REF50xx order (2 VIN, 4 GND, 6 VOUT, 5 TRIM/NR, 3 TEMP)
+min・max は初期精度 (部品ごとの違い。2.5 V ± 0.05 % なら 2.49875 2.50125。空でも可)	min and max are the initial accuracy (part-to-part variation. For 2.5 V ± 0.05 %, 2.49875 2.50125. Can be empty)
+表の値を測ったときの入力電圧 (空なら出力 + 2 V)	Input voltage at which the table values were measured (if empty, output + 2 V)
+ライン [ppm/V]・ロード [ppm/mA]	Line [ppm/V], load [ppm/mA]
+ライン・レギュレーションと、ロード・レギュレーション (吐き出しと吸い込みの 2 つか、同じなら 1 つ)	Line regulation and load regulation (two values for sourcing and sinking, or one if they are the same)
+電源電流 typ・max [A]	Supply current typ, max [A]
+自分で使う電流 (無負荷)。max はばらつきの解析で使います (空でも可)	Current the part uses itself (no load). max is used in the variation analyses (can be empty)
+ドロップアウト [V]・増え [Ω]	Dropout [V], growth [Ω]
+無負荷のドロップアウトと、電流による増え (10 mA で 0.54 V 増えるなら 54)	Dropout at no load, and its growth with current (54 if it grows by 0.54 V at 10 mA)
+短絡電流 [A]: 吐き出し 吸い込み	Short-circuit current [A]: source sink
+出力を GND や電源につないだときの電流	Current when the output is connected to GND or the supply
+1 行に「周波数 [Hz] 除去 [dB]」。1 行なら全部の周波数で同じ、2 行以上なら周波数特性をその点に合わせます	One line per "frequency [Hz] rejection [dB]". With one line it is the same at all frequencies; with two or more, the frequency response is fitted to those points
+「rms [V] 帯域の下 上 [Hz]」(2.25u 10 1k) か、密度 1 つ (70n = 70 nV/√Hz)。NR にコンデンサを付けないときの値	"rms [V] band low high [Hz]" (2.25u 10 1k), or one density (70n = 70 nV/√Hz). The value with no capacitor on NR
+NR・TRIM ピン (空でも可)	NR, TRIM pin (can be empty)
+「バンドギャップの電圧 そこから増幅器までの抵抗 ピンまでの抵抗 大きなコンデンサで残る雑音の割合」。REF50xx は 1.2 10k 1k 0.5 (ブロック図と、1 µF で雑音が半分の文)	"Bandgap voltage, resistance from there to the amplifier, resistance to the pin, fraction of noise left with a large capacitor". For REF50xx: 1.2 10k 1k 0.5 (from the block diagram and the sentence saying 1 µF halves the noise)
+TEMP ピン (空でも可)	TEMP pin (can be empty)
+「25 ℃ の電圧 1 ℃ あたりの変化 出力抵抗」。REF50xx は 0.575 2.64m 60k	"Voltage at 25 ℃, change per 1 ℃, output resistance". For REF50xx: 0.575 2.64m 60k
+出力の温度による変化。1 行に「温度 [℃] 25 ℃ からの変化 [%]」を、低い温度から 2 行以上 (図の「Output Voltage vs Temperature」から)。空なら温度で変わりません	Change of the output with temperature. One line per "temperature [℃] change from 25 ℃ [%]", two or more lines starting from the lowest temperature (from the "Output Voltage vs Temperature" figure). If empty, it does not change with temperature
+SET ピンから出る正確な電流 (LT3045 は 100 µA) を使う人の抵抗 RSET に流し、その電圧を出力に写す LDO のモデルを、同梱の LT3045 と同じひな形で作ります。出力電圧は RSET × 電流、起動の速さと雑音は SET のコンデンサ CSET で決まります。ILIM・EN/UV・PG の欄は、そのピンの無い部品なら空にします	Makes a model of an LDO that passes a precise current from the SET pin (100 µA for LT3045) through your resistor RSET and copies that voltage to the output, with the same template as the bundled LT3045. The output voltage is RSET × current; the start-up speed and the noise are set by the SET capacitor CSET. Leave the ILIM, EN/UV and PG fields empty if the part has no such pin
+SET ピンの電流: 出力電圧を決める電流。3.3 V なら RSET = 3.3 V ÷ 100 µA = 33 kΩ。min・max は部品ごとの違い。	SET pin current: the current that sets the output voltage. For 3.3 V, RSET = 3.3 V ÷ 100 µA = 33 kΩ. min and max are part-to-part variation.
+オフセット: 出力と SET ピンの電圧の差 (typ 0)。min・max だけ入れます。	Offset: the voltage difference between the output and the SET pin (typ 0). Enter only min and max.
+電源電流: 「動作中 出力 1 A あたりの増え 止めたとき」。LT3045 は 2.2 mA、500 mA で約 12.5 mA (2 %)、止めて 0.3 µA。	Supply current: "operating, increase per 1 A of output, when shut down". For LT3045: 2.2 mA, about 12.5 mA at 500 mA (2 %), 0.3 µA when shut down.
+電流制限: 「入出力の差 電流」を 1〜2 行。差が大きいと制限が小さくなる部品は 2 行に。	Current limit: 1 to 2 lines of "input-output difference, current". Use 2 lines for parts whose limit drops when the difference is large.
+PSRR: 表の周波数ごとの値を 1 行ずつ。点の間の形を、高域通過を 2 つまで重ねて合わせます。	PSRR: one line per frequency from the table. The shape between the points is fitted by stacking up to two high-pass stages.
+雑音: 出力の増幅器の雑音 (CSET を大きくしたときの値) と、SET の電流の雑音 (RSET に流れて出力に出ます) を分けて入れます。	Noise: enter the output amplifier noise (the value with a large CSET) and the SET current noise (it flows through RSET and appears at the output) separately.
+LT3045 の例を入れる	Fill in the LT3045 example
+同梱の LT3045 を作ったときの値 (ADI のデータシートの表と図) を入れます	Fills in the values used to make the bundled LT3045 (from the tables and figures in ADI's datasheet)
+ピンを LT3045 の並びにする	Set pins to the LT3045 order
+ピン表を MSOP-12 の LT3045 の並び (1 IN・4 EN/UV・6 ILIM・8 SET・9 GND・11 OUT・10 OUTS・5 PG・7 PGFB) にします。IN・OUT の 2〜3 本のピンは 1 つにまとめた番号です	Sets the pin table to the MSOP-12 LT3045 order (1 IN, 4 EN/UV, 6 ILIM, 8 SET, 9 GND, 11 OUT, 10 OUTS, 5 PG, 7 PGFB). The 2 to 3 IN and OUT pins are combined under one number
+SET ピンの電流 typ [A]・min max	SET pin current typ [A], min max
+オフセット min max [V]	Offset min max [V]
+出力と SET ピンの電圧の差 (VOS) の min・max (空でも可)	min and max of the voltage difference between the output and the SET pin (VOS) (can be empty)
+表の測定の入力電圧 [V]・最小の入力 [V]	Input voltage of the table measurements [V], minimum input [V]
+表の値を測ったときの入力電圧と、これより下では止まる入力 (UVLO)	Input voltage at which the table values were measured, and the input below which it stops (UVLO)
+ライン: SET の電流 [A/V] オフセット [V/V]	Line: SET current [A/V] offset [V/V]
+入力を 1 V 変えたときの SET の電流とオフセットの変化 (空でも可)	Change in SET current and offset when the input changes by 1 V (can be empty)
+ロード: 出力抵抗 [Ω]	Load: output resistance [Ω]
+出力抵抗 1 つか、「オフセットの変化 [V] 電流の変化 [A]」(0.1m 0.499)	One output resistance, or "offset change [V] current change [A]" (0.1m 0.499)
+小さい電流のドロップアウトと、電流による増え (0.21 V + 0.1 Ω × 電流)	Dropout at small current, and its growth with current (0.21 V + 0.1 Ω × current)
+電源電流 [A]: 動作中 増え 止めたとき	Supply current [A]: operating, increase, shut down
+動作中の GND の電流・出力電流 1 A あたりの増え (A/A)・EN で止めたときの電流。1〜3 つ	GND current while operating, increase per 1 A of output current (A/A), current when shut down by EN. 1 to 3 values
+EN のしきい値 [V] (空でも可)	EN threshold [V] (can be empty)
+EN/UV ピンで動き始める電圧。空なら EN ピンなし	Voltage at which the EN/UV pin starts the part. If empty, no EN pin
+ILIM ピン: 比 しきい値 [V] (空でも可)	ILIM pin: ratio threshold [V] (can be empty)
+ILIM から出る電流が出力電流の何分の 1 か、と制限が効くピンの電圧。LT3045 は 500 0.3 (1 kΩ で 150 mA)	What fraction of the output current flows out of ILIM, and the pin voltage at which the limit takes effect. For LT3045: 500 0.3 (150 mA with 1 kΩ)
+PG: しきい値 [V] 抵抗 [Ω] 速い起動 [A] (空でも可)	PG: threshold [V] resistance [Ω] fast start-up [A] (can be empty)
+PGFB のしきい値、PG が Low のときの抵抗、PGFB がしきい値より下の間 SET に足す電流 (速い起動、無ければ 2 つだけ)	PGFB threshold, PG resistance when Low, and the current added to SET while PGFB is below the threshold (fast start-up; if there is none, only the first two)
+1 行に「周波数 [Hz] 除去 [dB]」。表の周波数ごとの値を入れます	One line per "frequency [Hz] rejection [dB]". Enter the table's value for each frequency
+出力雑音 (増幅器)	Output noise (amplifier)
+「rms [V] 帯域の下 上 [Hz]」(0.8u 10 100k) か密度 1 つ。CSET を大きくしたときの値	"rms [V] band low high [Hz]" (0.8u 10 100k), or one density. The value with a large CSET
+「rms [A] 帯域の下 上 [Hz]」(6n 10 100k) か密度 1 つ [A/√Hz]。RSET に流れて出力の雑音になります	"rms [A] band low high [Hz]" (6n 10 100k), or one density [A/√Hz]. It flows through RSET and becomes output noise
+SET の電流の温度: ℃ 変化 [%]	SET current vs temperature: ℃ change [%]
+SET の電流の温度による変化 (出力も同じ割合で動きます)。1 行に「温度 [℃] 25 ℃ からの変化 [%]」を、低い温度から 2 行以上 (図の「SET Pin Current vs Temperature」から)。空なら温度で変わりません	Change of the SET current with temperature (the output moves by the same ratio). One line per "temperature [℃] change from 25 ℃ [%]", two or more lines starting from the lowest temperature (from the "SET Pin Current vs Temperature" figure). If empty, it does not change with temperature
+電源電流の温度: ℃ 変化 [%]	Supply current vs temperature: ℃ change [%]
+動作中の電源電流の温度による変化。1 行に「温度 [℃] 25 ℃ からの変化 [%]」(図の「Quiescent Current vs Temperature」から)。空なら温度で変わりません	Change of the operating supply current with temperature. One line per "temperature [℃] change from 25 ℃ [%]" (from the "Quiescent Current vs Temperature" figure). If empty, it does not change with temperature
+# crates/app/src/part_form/reg_fill.rs
+電流制限: ピーク電流の行に電圧が無いので、入出力の差 {} V の値として入れました (データシートの「出力電流と入出力の差」の図では、差が 8〜10 V のあたりで電流がいちばん大きい)。図があれば見比べてください	Current limit: the peak current row has no voltage, so it was entered as the value at an input-output difference of {} V (in the datasheet's "output current vs input-output difference" figure, the current is largest at a difference of about 8 to 10 V). Compare with the figure if there is one
+出力の温度係数 {} {unit} を、0 ℃と 125 ℃の直線に: {}	Output temperature coefficient {} {unit} as a straight line between 0 ℃ and 125 ℃: {}
+温度の欄はもう入っているので、表の温度係数では上書きしませんでした	The temperature field is already filled in, so it was not overwritten with the table's temperature coefficient
+、周波数特性 {} 点	, frequency response {} points
+リップル除去: 表の {} dB のまま (p.{p} の図では {} Hz で {db} dB{shape})	Ripple rejection: kept the table's {} dB (the figure on p.{p} shows {db} dB{shape} at {} Hz)
+リップル除去: p.{p} の図から {} Hz で {db} dB{shape}	Ripple rejection: {db} dB{shape} at {} Hz from the figure on p.{p}
+# crates/app/src/part_form/sheet_record.rs
+変わった: {}{}  {} (p.{}) → {} (p.{})	Changed: {}{}  {} (p.{}) → {} (p.{})
+新しい版に無い: {}{}  {} (p.{})	Not in the new revision: {}{}  {} (p.{})
+新しい版だけ: {}{}  {} (p.{})	Only in the new revision: {}{}  {} (p.{})
+作った元のデータシート: {} — 表の値 {} 個を記録	Source datasheet: {} — {} table values recorded
+この部品を作ったときに開いていたデータシートの名前・版・日付と、表から読んだ値 (ページ付き)。新しい版の PDF を開くと、値を比べられます	Name, revision and date of the datasheet that was open when this part was made, and the values read from its tables (with pages). Open the PDF of a newer revision to compare the values
+保存すると、開いているデータシートの版 ({}) と表の値 {} 個を部品に記録します	Saving records the open datasheet's revision ({}) and {} table values in the part
+あとでメーカーが改版したとき、新しい版の PDF を開いて値を比べられます。PDF そのものは記録しません	When the maker revises the datasheet later, you can open the new PDF and compare the values. The PDF itself is not recorded
+作った元の版と表の値を比べる	Compare table values with the source revision
+開いている PDF は作った元と別のファイルです。記録した表の値と、この PDF の表の値を並べ、変わった・無くなった・増えた行を出します	The open PDF is a different file from the source. Lists the recorded table values beside this PDF's table values and shows changed, removed and added rows
+{} と {} で、記録した表の値は同じです	The recorded table values are the same in {} and {}
+# crates/app/src/part_form/simple_kinds.rs
+B 定数を入れるか、抵抗-温度表に 25 ℃ 以外の点を入れてください (表から B を求めます)	Enter the B constant, or add points other than 25 ℃ to the resistance-temperature table (B is found from the table)
+{label}「{}」を数で入れてください (例: 3.75 か 75%)	Enter {label} "{}" as a number (e.g. 3.75 or 75%)
+コイルの定格電圧	Coil rated voltage
+リレー (コイル {} V、{})	Relay (coil {} V, {})
+メーク接点 1 つ	1 make contact
+切り替え接点 1 つ	1 changeover contact
+コイルの抵抗	Coil resistance
+動作電圧	Pick-up voltage
+復帰電圧	Drop-out voltage
+接点の抵抗	Contact resistance
+動作時間	Operate time
+復帰時間	Release time
+コイルのインダクタンス	Coil inductance
+コイル 1	Coil 1
+コイル 2	Coil 2
+表の B 定数と、どの 2 つの温度で決めたか (B25/50・B25/85)。空にすると、下の抵抗-温度表に合う B を求めます (使う温度の範囲の点だけを入れると、その範囲で合います)	The B constant from the table, and which two temperatures define it (B25/50, B25/85). If empty, a B that fits the resistance-temperature table below is found (enter only points in the temperature range you use, and it fits that range)
+コイルの値と接点の値から	From the coil and contact values
+データシートのコイルの表 (定格電圧・コイル抵抗・動作電圧 (Pick-up / Must operate)・復帰電圧 (Drop-out / Must release)) と、接点の表 (接触抵抗・動作時間・復帰時間) を入れると、コイルの電圧で接点が切り替わるモデルを作ります (同梱の TQ2-L2-5V と同じ作り)。動作電圧と復帰電圧の間では前の状態のまま (ヒステリシス) です	Enter the datasheet's coil table (rated voltage, coil resistance, pick-up voltage (Pick-up / Must operate), drop-out voltage (Drop-out / Must release)) and contact table (contact resistance, operate time, release time) to make a model whose contacts switch with the coil voltage (built like the bundled TQ2-L2-5V). Between the pick-up and drop-out voltages it keeps its previous state (hysteresis)
+SRD-05VDC-SL-C の例を入れる	Fill in the SRD-05VDC-SL-C example
+工作のリレーモジュールによく載っている 5 V のリレーの表の値を入れます	Fills in the table values of the 5 V relay often found on hobby relay modules
+メーク接点だけ (1a)	Make contact only (1a)
+NC の無い、COM と NO だけのリレー (1 Form A)。チェックしないと切り替え接点 (1c: COM・NO・NC)	A relay with only COM and NO, no NC (1 Form A). If unchecked, a changeover contact (1c: COM, NO, NC)
+ピンを A1・A2・COM・NO・NC にする	Set pins to A1, A2, COM, NO, NC
+「③ ピン」をリレーのピン名にし、部品の形を 1 列の穴にします (番号とパッドの位置は、データシートの図に合わせて「③ ピン」「④ 部品の形」で直してください)	Sets "③ Pins" to the relay pin names and the part shape to a single row of holes (fix the numbers and pad positions to match the datasheet drawing in "③ Pins" and "④ Part shape")
+コイル: 定格電圧 [V]・抵抗 [Ω]	Coil: rated voltage [V], resistance [Ω]
+コイルの表の定格電圧 (Nominal voltage) とコイル抵抗 (Coil resistance)	Rated voltage (Nominal voltage) and coil resistance (Coil resistance) from the coil table
+動作電圧・復帰電圧 [V か %]	Pick-up, drop-out voltage [V or %]
+これを超えると接点が動く電圧 (Pick-up、表の最大) と、これより下がると戻る電圧 (Drop-out、表の最小)。75% のように定格の割合でも書けます	The voltage above which the contacts move (Pick-up, the table's maximum) and below which they return (Drop-out, the table's minimum). Can also be written as a ratio of the rating, like 75%
+接点の抵抗 [Ω]	Contact resistance [Ω]
+接触抵抗 (Contact resistance、初期の最大)。空なら 100m	Contact resistance (Contact resistance, initial maximum). If empty, 100m
+動作時間・復帰時間 [s]	Operate, release time [s]
+Operate time と Release time (表の最大)。空なら 0 (すぐ動く)	Operate time and Release time (the table's maximum). If empty, 0 (acts at once)
+コイルのインダクタンス [H]	Coil inductance [H]
+表にあれば (省略可)。入れると電流がゆっくり立ち上がり、切ったときに逆起電力が出ます	If the table has it (optional). With it, the current rises slowly and a back EMF appears when switched off
+# crates/app/src/part_form/solidcraft.rs
+SolidCraft が見つかりません	SolidCraft not found
+下絵を切り出すか、「たたき台に本体の箱を入れる」を入れてください	Cut out an underlay drawing, or check "Put the body box as a starting point"
+# crates/app/src/part_form/symedit.rs
+この前に空きはありません	There is no space before this
+いまは自動の配置です	Placement is automatic now
+# crates/app/src/part_form/tabs.rs
+電圧基準 (REF50xx など、NR・TEMP ピンつき) のモデルを表の値から作る	Make a voltage reference model (REF50xx etc., with NR and TEMP pins) from table values
+SET ピンの電流で出力を決める LDO (LT3045 など) のモデルを表の値から作る	Make a model of an LDO whose output is set by the SET pin current (LT3045 etc.) from table values
+スイッチ内蔵の降圧 DC-DC (TPS62933 など) のモデルを表の値から作る	Make a model of a step-down DC-DC with a built-in switch (TPS62933 etc.) from table values
+リレー (コイル 1 つ・接点 1 つ) のモデルを表の値から作る	Make a relay model (1 coil, 1 contact) from table values
+負荷容量 CL [pF] (水晶)	Load capacitance CL [pF] (crystal)
+水晶のデータシートの「Load Capacitance」(CL)。水晶の部品だけに入れます。ERC が、水晶の両端から GND へのコンデンサ 2 個 (と浮遊容量 約 5pF) がこの値になっているかを見ます	"Load Capacitance" (CL) from the crystal's datasheet. Enter it only for crystal parts. ERC checks that the 2 capacitors from both ends of the crystal to GND (plus about 5pF of stray capacitance) give this value
+例: 18 / 12 / 8	e.g. 18 / 12 / 8
+絵で直す…	Edit on drawing…
+いまのパッドを絵の上で 1 つずつ直します。クリックで選び、ドラッグで動かし、形 (角丸・四角・長円・円)・大きさ・穴を数字で直し、パッドを足す・消すことができます。データシートの推奨ランドが、寸法の欄で作れない並びのときに	Edit the current pads one by one on the drawing. Click to select, drag to move, set shape (rounded, rectangle, oval, circle), size and hole as numbers, and add or delete pads. For when the datasheet's recommended land pattern is a layout the dimension fields cannot make
+絵で直すのを始められません: {}	Cannot start editing on the drawing: {}
+標準の形を使っているので、寸法は使いません (「寸法で指定」を選ぶと効きます)	A standard shape is used, so the dimensions are not used (they take effect if you choose "By dimensions")
+# crates/app/src/part_form/unit_model.rs
+ピン表にユニット B 以降のピンがありません。「③ ピン」でピンに unit=B などを付けてから作ります	The pin table has no pins of unit B or later. Add unit=B etc. to the pins in "③ Pins" first
+モデルの端子のピン {n} がピン表にありません	Model terminal pin {n} is not in the pin table
+ユニットごとの端子	Terminals per unit
+モデルが 1 ユニット分 (デュアルのオペアンプの 1 チャネル) のとき、ユニットごとにモデルの端子の順のピン番号を 1 行ずつ (A、B、C …)。置いたユニットごとにモデルが 1 つ入ります。空なら、モデルは部品全体のもの	When the model covers one unit (one channel of a dual op-amp), give the pin numbers in model terminal order for each unit, one line each (A, B, C …). Each placed unit gets one model. If empty, the model is for the whole part
+ピン表のユニットから作る	Make from the pin table's units
+「ノード順のピン番号」(ユニット A) から、ほかのユニットの同じ名前のピン (1IN- と 2IN-、-INA と -INB) を探して並べます。電源のように全部のユニットで同じピンは、そのままです	From the "Pin numbers in node order" (unit A), finds the pins with the same name in the other units (1IN- and 2IN-, -INA and -INB) and lists them. Pins shared by all units, such as supply pins, stay as they are
+{n} ユニットの端子を並べました。ピン表と見比べてください	Listed the terminals of {n} units. Compare with the pin table
+消す (部品全体のモデル)	Clear (model for the whole part)
+# crates/app/src/part_form/vendor.rs
+端子が 2 個のモデルだけ選べます	Only models with 2 terminals can be chosen
+# crates/app/src/part_form/zchart.rs
+曲線のとおりにする	Follow the curve
+Isat の式の代わりに、表の点をそのままモデルの曲線にします (点の間は直線、最後の点より大きい電流ではその割合のまま)。急に飽和するコイルは、式より実物に近くなります	Uses the table points directly as the model's curve instead of the Isat formula (straight lines between points; beyond the last point the ratio stays the same). For coils that saturate sharply, this is closer to the real part than the formula
+データシートの「インダクタンス - 電流」(Inductance vs. Current・L vs. DC current) の図を開きます。曲線をクリックすると、表に入れます	Opens the datasheet's "inductance vs current" figure (Inductance vs. Current, L vs. DC current). Click the curve to add points to the table
+# crates/app/src/schematic/ac.rs
+選んだ点がありません	No point selected
+# crates/app/src/schematic/acts.rs
+回路図を整えました: 部品 {} 個を {} 列に、線で結んだネット {} (つながりは同じ。元に戻すは Ctrl+Z)	Tidied the schematic: {} parts in {} columns, {} nets joined by wires (connections unchanged. Undo with Ctrl+Z)
+# crates/app/src/schematic/adc_measure_ui.rs
+温度センサー	Temperature sensor
+公差 (校正の前): 合計 ±{}{unit}・2 乗和 ±{}{unit}\n温度係数 (±{} K): 合計 ±{}{unit}・2 乗和 ±{}{unit}\n	Tolerance (before calibration): total ±{}{unit}, root-sum-square ±{}{unit}\nTemperature coefficient (±{} K): total ±{}{unit}, root-sum-square ±{}{unit}\n
+ (表の値)	 (table value)
+  {}: ±{} %・{} ppm/K{whose} → {} / {}\n	  {}: ±{} %, {} ppm/K{whose} → {} / {}\n
+漏れ: 読みに効く部品はありません	Leakage: no part affects the reading
+漏れ (その部品が無いときとの差): 合計 {}\n	Leakage (difference from without that part): total {}\n
+測り方 {}	Measurement {}
+ADC で測る量の表	ADC measurement table
+ADC で何をどう測るかを 1 行ずつ書きます (メーターのレンジ、センサーの読み、シャントで測る電流、マルチプレクサのチャンネルなど)。測る物 (2 つのネットの間につなぐ電圧・抵抗・電流か、回路図にある部品の値)・試す値・条件・ADC の入力と利得を入れ、「計算する」で、DC 動作点から ADC の読みと、データシートの雑音を測る量に換算した揺れ・止まって見える桁、部品の公差・温度係数・漏れによる誤差を出します。表は回路図と一緒に保存されます	Write what to measure with the ADC and how, one line each (meter ranges, sensor readings, current measured with a shunt, multiplexer channels, etc.). Enter the measured item (a voltage, resistance or current connected between two nets, or the value of a part in the schematic), the test value, the condition, and the ADC input and gain. "Calculate" gives the ADC reading from the DC operating point, the fluctuation from the datasheet noise converted into the measured quantity, the digits that look steady, and the errors from part tolerance, temperature coefficient and leakage. The table is saved with the schematic
+回路図に ADC (モデルに adc_bits のある部品。ADS124S08 など) がありません	The schematic has no ADC (a part whose model has adc_bits, such as ADS124S08)
+測る物	Measured item
+2 つのネットの間につなぐ電圧・抵抗・電流か、回路図にある部品 (抵抗・電源) の値 (センサー・ブリッジの片側など)	A voltage, resistance or current connected between two nets, or the value of a part (resistor, supply) in the schematic (a sensor, one side of a bridge, etc.)
+試す値	Test value
+試す値 (V・Ω・A か、その部品の単位)。満量程や、ふだんの値にします。10k・1Meg・100m のように書けます	Test value (V, Ω, A, or the part's unit). Use full scale or a typical value. Can be written like 10k, 1Meg, 100m
+桁	Digits
+試す値で、表示が止まって見える桁の数 (log10(試す値 ÷ p-p の揺れ))	Number of digits that look steady at the test value (log10(test value ÷ p-p fluctuation))
+揺れ (p-p)	Fluctuation (p-p)
+データシートの雑音を、測る量の単位に換算した揺れ	Datasheet noise converted into the unit of the measured quantity
+誤差 (公差 / 温度 / 漏れ)	Error (tolerance / temp / leakage)
+抵抗の公差 (校正の前) と、温度係数 × 温度の幅による誤差 (どちらも部品ごとの 2 乗和)、ほかの部品の漏れ (クランプのダイオード・開いたリレーの接点・ADC の入力電流) の合計。測る量の単位で。カーソルを重ねると部品ごとの内訳	Error from resistor tolerance (before calibration) and from temperature coefficient × temperature span (each the root-sum-square over parts), plus the total leakage of other parts (clamp diodes, open relay contacts, ADC input current). In the unit of the measured quantity. Hover for the per-part breakdown
+読み	Reading
+ADC の入力の電圧とコード	ADC input voltage and code
+つなぐ所	Connect to
+測る物をつなぐ + 側と − 側のネット (部品の値のときは、その部品)	The + and − nets the measured item connects to (for a part value, that part)
+この測り方のときの部品の状態。部品番号だけ (K1・SW2) で、状態を保つリレーはセット、スイッチは押す (切り替えは B 側)。R5=10k・V3=1.2 で部品の値を置き換え (マルチプレクサの選択の電圧など)。カンマで区切ります	The part states for this measurement. Reference designators only (K1, SW2): latching relays are set, switches are pressed (a changeover goes to side B). R5=10k, V3=1.2 replace part values (such as multiplexer select voltages). Separate with commas
+入力 +	Input +
+入力 −	Input −
+比の入力	Ratio input
+比で測るときの 2 つ目の入力 (基準抵抗の両端、ブリッジの電源など)。— は比を使わない	The second input for ratiometric measurement (across a reference resistor, the bridge supply, etc.). — means no ratio
+レート	Rate
+データレート (SPS)	Data rate (SPS)
+入力が ±基準電圧 / 利得 を超えて、コードが端に張り付いています	The input exceeds ±reference voltage / gain, and the code is stuck at the end
+測る物を変えても読みが変わりません。つなぐ所・条件・ADC の入力を確かめます	The reading does not change when the measured item changes. Check the connections, the condition and the ADC inputs
+基準の抵抗: NTC は 25 °C の値 (R25)、白金などの測温抵抗体は 0 °C の値 (Pt100 は 100)	Reference resistance: for an NTC, the value at 25 °C (R25); for an RTD such as platinum, the value at 0 °C (100 for Pt100)
+NTC の B 定数 (K。3950 など) か、測温抵抗体の温度係数 (1/K。Pt100 は 0.00385)。1 より小さい数は温度係数として読みます。ライブラリの NTC を選ぶと、そのモデルから入ります	B constant of the NTC (K, e.g. 3950) or temperature coefficient of the RTD (1/K, 0.00385 for Pt100). Numbers smaller than 1 are read as a temperature coefficient. Choosing a library NTC fills it in from its model
+状態を変えられる部品: {}	Parts whose state can be changed: {}
+＋ 行を足す	+ Add row
+ADC の部品の設定で選んだ入力・利得・レートから、行を 1 つ足します	Adds one row from the input, gain and rate chosen in the ADC part's settings
+行ごとに、条件を入れ、試す値をつないで DC 動作点を 2 回解き (試す値と 0.1 % 多い値)、ADC の読みと揺れを出します。回路図に電源が無ければ、コネクタに来る 5V・3V3 のような名前の線から入れます	For each row, applies the condition, connects the test value and solves the DC operating point twice (the test value and a value 0.1 % larger), then shows the ADC reading and fluctuation. If the schematic has no supply, supplies are taken from wires with names like 5V or 3V3 that come to connectors
+回路図が変わりました。もう一度計算します	The schematic changed. Calculating again
+誤差の見積もり:	Error estimate:
+ライブラリの抵抗 (データシートの許容差・温度係数を持つもの) と、部品の設定で温度係数を入れた抵抗は、その値を使います。ほかの抵抗は、ここの値です	Library resistors (with tolerance and temperature coefficient from the datasheet) and resistors whose temperature coefficient was entered in the part settings use those values. Other resistors use the values here
+値の無い抵抗 ±	Resistors without values ±
+温度の幅 ±	Temperature span ±
+校正したときの温度から、使うときの温度がどれだけ離れるか	How far the operating temperature is from the calibration temperature
+回路図に電源がないので、コネクタの線から入れました: {}	The schematic has no supply, so supplies were taken from connector wires: {}
+# crates/app/src/schematic/adc_ui.rs
+ADC の読み	ADC reading
+どの入力を、どの基準電圧と利得で変換するかはレジスタの設定です。ここで選ぶと、DC 動作点の電圧から、データシートの理想の式でコードを出します	Which input is converted with which reference voltage and gain is set by registers. Choose them here to get the code from the DC operating point voltage with the datasheet's ideal formula
+変換する入力の + 側 (AINP)	+ side of the input to convert (AINP)
+変換する入力の − 側 (AINN)	− side of the input to convert (AINN)
+基準 +	Reference +
+基準電圧の + 側	+ side of the reference voltage
+基準 −	Reference −
+基準電圧の − 側	− side of the reference voltage
+データレート	Data rate
+1 秒に何回変換するか。遅いほど多くの回数を平均するので、読みの揺れ (雑音) が小さくなります	How many conversions per second. Slower rates average more, so the reading fluctuation (noise) is smaller
+ふつうのフィルタ。雑音が小さい	Normal filter. Low noise
+低遅延	Low latency
+入力を切り替えてすぐ読めるフィルタ。同じデータレートなら雑音が少し大きい	A filter that can be read right after switching inputs. At the same data rate, the noise is a little larger
+グローバルチョップ	Global chop
+入力を入れ替えた 2 回の変換を平均して、オフセットと雑音を減らす機能	A feature that averages two conversions with the inputs swapped to reduce offset and noise
+コード {} ({} ビット)	Code {} ({} bits)
+入力 {}V・基準 {}V・1 段 {}V	Input {}V, reference {}V, 1 step {}V
+コードを電圧に戻すと {}V	Code back to voltage: {}V
+揺れ {}V rms・{}V p-p (± {} コード)	Fluctuation {}V rms, {}V p-p (± {} codes)
+データシートの雑音の表 (入力を短絡、25 °C) の、このデータレート・フィルタ・利得の値。入力に換算した電圧です	Value from the datasheet noise table (input shorted, 25 °C) for this data rate, filter and gain. It is the voltage referred to the input
+実効の分解能 {} ビット・ちらつかない分解能 {} ビット (約 {} 桁)	Effective resolution {} bits, noise-free resolution {} bits (about {} digits)
+実効の分解能は rms の雑音から、ちらつかない分解能は p-p の雑音から、データシートの式 (1)・(2) で今の基準電圧を使って出したもの。桁は、範囲全体を p-p の揺れで割った数の 10 の何乗か (表示が止まって見える桁数の目安)	Effective resolution is from the rms noise and noise-free resolution from the p-p noise, using the datasheet's formulas (1) and (2) with the current reference voltage. Digits is the power of 10 of the full range divided by the p-p fluctuation (a guide to how many digits look steady)
+入力が ±基準電圧 / 利得 の範囲を超えて、コードが端に張り付いています。利得を下げるか、入力を分圧します	The input exceeds the ±reference voltage / gain range, and the code is stuck at the end. Lower the gain or divide the input
+「DC動作点を解析」を実行すると、読みが出ます	Click "Run DC operating point" to see the reading
+測る量の表… ({} 行)	Measurement table… ({} rows)
+この ADC で何をどう測るか (メーターのレンジ・センサー・シャントの電流など) を 1 行ずつ書き、それぞれの読み・測る量での揺れ・止まって見える桁を出す表を開きます	Opens a table where you write what this ADC measures and how (meter ranges, sensors, shunt currents, etc.), one line each, and see each reading, the fluctuation in the measured quantity and the digits that look steady
+# crates/app/src/schematic/analysis_panel.rs
+動く点	Moving dots
+電線の上を、電流の向きに点が動きます。速いほど電流が大きい (1 µA でゆっくり、1 A で速く)。点の速さは「設定」の「表示」で変えられます	Dots move along the wires in the direction of the current. Faster means more current (slow at 1 µA, fast at 1 A). The dot speed can be changed in "Show" in "Settings"
+先に DC 動作点を解析してください	Run the DC operating point first
+ピンとファーム…	Pins and firmware…
+マイコンボード (Arduino など) のピンにつながる信号と番号の一覧です。Arduino 用のヘッダ (.h) に書き出したり、ファームのファイルのピン番号と照合したりします。下の「ビルドと書き込み」で、ファームをビルドしてボードに書き込めます (arduino-cli・Pico SDK・yosys などを呼びます)	A list of the signals and numbers connected to the pins of a microcontroller board (Arduino etc.). Export it to an Arduino header (.h), or check it against the pin numbers in firmware files. With "Build and upload" below, you can build firmware and upload it to the board (calls arduino-cli, Pico SDK, yosys, etc.)
+# crates/app/src/schematic/audio_ui.rs
+音で聴く	Listen
+選んだ信号を、表示している時間の範囲だけ音にします。シミュレーションの 1 秒が音の 1 秒なので、1kHz の信号は 1kHz の音です。直流の分は取り除き、いちばん大きい振れを決まった音量にそろえます (大きすぎる音で耳を傷めないように)。範囲が 1 秒より短いときは、くり返して 1 秒にします。フィルタの前と後、ひずんだ波形ときれいな波形を聴き比べてみましょう。電源の値に WAV(ファイル名 1) と書くと、逆に音のファイルを入力にできます	Turns the selected signal into sound, for the displayed time range only. 1 second of simulation is 1 second of sound, so a 1kHz signal is a 1kHz tone. The DC part is removed and the largest swing is set to a fixed volume (so a sound that is too loud does not hurt your ears). If the range is shorter than 1 second, it is repeated to make 1 second. Try comparing before and after a filter, or a distorted and a clean waveform. Writing WAV(file name 1) as a supply value does the opposite and uses a sound file as an input
+▶ 聴く	▶ Listen
+スピーカーかイヤホンから鳴らします。音量は小さめから	Plays through speakers or earphones. Start with a low volume
+■ 止める	■ Stop
+WAV で保存…	Save as WAV…
+この音を WAV のファイルにします (44.1kHz・16 ビット・モノラル)	Saves this sound as a WAV file (44.1kHz, 16-bit, mono)
+、表示範囲を {} 回くり返し	, visible range repeated {} times
+{:.2} 秒{repeat}。中心 {}{unit} を 0 に、振れ ±{}{unit} を音量 {:.0} % に	{:.2} s{repeat}. Center {}{unit} set to 0, swing ±{}{unit} set to {:.0} % volume
+# crates/app/src/schematic/bench_marks.rs
+実測 {}	Measured {}
+# crates/app/src/schematic/budget.rs
+電源の予算表: 電源のレールが見つかりませんでした	Power budget: no supply rails found
+電源の予算表: レール {} 本、どれも余裕があります	Power budget: {} rails, all have headroom
+電源の予算表: 余裕が少ないレールがあります ({})	Power budget: some rails have little headroom ({})
+電源の予算表を出せませんでした: {e}	Could not make the power budget: {e}
+DC動作点を解いて、電源の予算表を出す	Solve the DC operating point and make the power budget
+電源のレール (電圧源の + 側と、レギュレータの出力) ごとに、流れている電流・部品の定格・あと何 mA 足せるか・レギュレータの発熱と効率を、つながりの順 (電池 → 5V → 3.3V) に並べます	For each supply rail (the + side of voltage sources and regulator outputs), lists the current flowing, the part rating, how many more mA can be added, and the regulator heat and efficiency, in connection order (battery → 5V → 3.3V)
+電源のレールが見つかりません。− が GND の電圧源の + 側と、IN と OUT のピンがあるレギュレータの出力を、レールとして数えます	No supply rails found. The + side of a voltage source whose − is GND, and the output of a regulator with IN and OUT pins, count as rails
+レール	Rail
+発熱・温度	Heat, temperature
+このレールの電源 (電圧源・レギュレータ) が出している電流	Current supplied by this rail's source (voltage source, regulator)
+部品のデータの最大電流 (データシートの定格)	Maximum current in the part data (datasheet rating)
+部品のデータに定格の電流がありません (理想の電圧源など)	The part data has no current rating (ideal voltage source, etc.)
+{} 超過	{} over
+このレールに、あと何 A つなげるか。決めているのは「{}」です	How many more A can be connected to this rail. Limited by "{}"
+電源の部品に定格の電流がないので、決められません	The supply part has no current rating, so this cannot be determined
+・効率 {:.0} %	, efficiency {:.0} %
+{}W・{:.0}℃{eff}	{}W, {:.0}℃{eff}
+レギュレータが熱にする電力と、そのときの部品の温度の目安 (上限 {}℃)。リニアレギュレータは (入力 − 出力) × 電流 が熱になります。温度は部品の θ (データシートの θJA か、パッケージの目安) から出し、基板の銅で下がります (「自己発熱」の解析で詳しく)	Power the regulator turns into heat, and a rough part temperature at that power (limit {}℃). For a linear regulator, (input − output) × current becomes heat. The temperature comes from the part's θ (the datasheet θJA, or a guide for the package) and drops with board copper (see the "Self-heating" analysis for details)
+・{} は余裕が少ないです (決めているのは「{}」)。負荷を減らすか、電流の大きいレギュレータ・放熱・入力の電圧を下げる、を考えましょう	- {} has little headroom (limited by "{}"). Consider reducing the load, using a regulator with more current, adding heat sinking, or lowering the input voltage
+・レールの名前にマウスを乗せると、そのレールから電流をとっている部品が出ます。DC の値なので、パルスで流れる電流 (モーターの起動・無線の送信) は入りません	- Hover over a rail name to see the parts drawing current from that rail. These are DC values, so pulsed currents (motor start-up, radio transmission) are not included
+{} から電流をとっている部品:	Parts drawing current from {}:
+ (下のレールのレギュレータ)	 (regulator of a lower rail)
+  (なし)	  (none)
+入力: {}V・{}A	Input: {}V, {}A
+# crates/app/src/schematic/draw.rs
+ネット {}  (ラベル {} か所)	Net {}  ({} labels)
+ネット {}	Net {}
+(部品のピンにつながっていない線)	(wire not connected to any part pin)
+# crates/app/src/schematic/fault.rs
+この故障では DC 動作点が解けませんでした	The DC operating point could not be solved with this fault
+# crates/app/src/schematic/firmware_ui.rs
+いま動いています。終わるか、止めてからにしてください	Something is running now. Wait for it to finish, or stop it first
+ビルドと書き込み	Build and upload
+ファームをビルドして、ボードに書き込みます。外部のツール (arduino-cli・Pico SDK・yosys など) を呼ぶだけで、ツールは同梱していません。無いときは、何をどこから入れるかを出します。設定は回路図のファイルに保存され、ccad の「firmware」でも同じことができます	Builds firmware and uploads it to the board. It only calls external tools (arduino-cli, Pico SDK, yosys, etc.); the tools are not bundled. If one is missing, it shows what to install and where from. Settings are saved in the schematic file, and ccad's "firmware" can do the same
+フォルダ	Folder
+スケッチ・CMake のプロジェクト・Verilog のあるフォルダ。回路図のファイルの場所からの相対か、絶対のパス	Folder with the sketch, CMake project or Verilog. A path relative to the schematic file, or an absolute path
+フォルダを選びます (回路図と同じ場所の中なら、相対のパスにします)	Choose a folder (inside the schematic's folder, the path is made relative)
+ボード	Board
+ボードの FQBN。UNO は arduino:avr:uno、Mega は arduino:avr:mega、Nano は arduino:avr:nano。arduino-cli board list で、つないだボードのものが分かります	FQBN of the board. UNO is arduino:avr:uno, Mega is arduino:avr:mega, Nano is arduino:avr:nano. arduino-cli board list shows it for connected boards
+書き込むシリアルポート (Windows は COM3 など、デバイスマネージャーの「ポート」で分かります)	Serial port to upload through (COM3 etc. on Windows; see "Ports" in Device Manager)
+PICO_BOARD の名前 (pico・pico_w・pico2)。空なら pico	PICO_BOARD name (pico, pico_w, pico2). If empty, pico
+デバイス	Device
+デバイスとパッケージを「:」でつなぎます (iCEBreaker・UPduino は up5k:sg48、iCEstick は hx1k:tq144)	Join the device and package with ":" (up5k:sg48 for iCEBreaker and UPduino, hx1k:tq144 for iCEstick)
+トップ	Top
+いちばん上のモジュールの名前	Name of the top-level module
+制約	Constraints
+ピンの制約ファイル (.pcf)。上の「書き出す形式」で FPGA の .pcf を選ぶと、回路図から書き出せます	Pin constraint file (.pcf). Choose FPGA .pcf in "Export format" above to export it from the schematic
+ビルド	Build
+ビルドのコマンド。フォルダの中で、シェル (Windows は cmd) で動かします	Build command. Runs in the folder with the shell (cmd on Windows)
+書き込み	Upload
+書き込みのコマンド	Upload command
+▲ 「{tool}」が見つかりません	▲ "{tool}" not found
+ファームのビルド	Firmware build
+ビルドして書き込む	Build and upload
+ビルドが通ったら、続けてボードに書き込みます	After a successful build, also uploads to the board
+ファームのビルドと書き込み	Firmware build and upload
+書き込みだけ	Upload only
+ファームの書き込み	Firmware upload
+{}… {:.0} 秒	{}… {:.0} s
+✔ {}: 終わりました	✔ {}: done
+# crates/app/src/schematic/inrush.rs
+電源の抵抗を 0 以上の数 (Ω) で入れてください (例: 0.1)	Enter the supply resistance as a number 0 or more (Ω) (e.g. 0.1)
+見る時間を 0 より大きい数 (秒) で入れてください (例: 20m)	Enter the time to watch as a number greater than 0 (seconds) (e.g. 20m)
+突入電流: {}	Inrush current: {}
+{} ピーク {}A	{} peak {}A
+突入電流を出せませんでした: {e}	Could not compute the inrush current: {e}
+電源の抵抗	Supply resistance
+電源と配線の抵抗 (Ω)。理想の電源は抵抗 0 なので、ここで実物に近づけます。AC アダプタとケーブルで 0.1〜0.5Ω、実験用電源のリード線で 0.05Ω くらい。小さいほど突入電流は大きくなります	Resistance of the supply and wiring (Ω). An ideal supply has 0 resistance, so this brings it closer to the real thing. About 0.1 to 0.5Ω for an AC adapter and cable, about 0.05Ω for bench supply leads. The smaller it is, the larger the inrush current
+見る時間	Time to watch
+電源を入れてから何秒までを見るか (例: 20m)。コンデンサが充電し終わり、電流が落ち着くまで	How many seconds after power-on to watch (e.g. 20m). Until the capacitors finish charging and the current settles
+電源を入れて、突入電流を見る	Power on and see the inrush current
+コンデンサが空の状態で電源を入れる過渡解析をして、電源から流れる電流のピーク・I²t (ヒューズや接点を温める量)・続く時間と、通り道の部品の電流を、部品の定格と比べます	Runs a transient analysis that turns on the supply with empty capacitors, and compares the peak current from the supply, I²t (what heats fuses and contacts), its duration and the currents of the parts on the path with the part ratings
+{} ({}V): ピーク {}	{} ({}V): peak {}
+落ち着いたときの電流	Settled current
+DC 動作点の電流。ピークがこの何倍かが、突入の大きさです	Current at the DC operating point. How many times larger the peak is shows the size of the inrush
+電流の 2 乗を時間で積んだもの。ヒューズが溶ける・接点が傷むのは、この量で決まります。ヒューズのデータシートの「溶断 I²t」より十分小さいこと	The square of the current integrated over time. Whether a fuse blows or a contact wears depends on this. It should be well below the "melting I²t" in the fuse datasheet
+続く時間	Duration
+電流が、落ち着いたときの 2 倍とピークの 1 割のどちらよりも大きい間	The time the current is larger than both twice the settled value and 10 % of the peak
+  {}: ピーク {} (定格 {})	  {}: peak {} (rating {})
+  {}: ピーク {}	  {}: peak {}
+・電源を入れたあと、電流が落ち着いたときの値 ({}) に戻りません (終わりで {})。ヒューズが切れたか、何かがラッチした可能性があります	- After power-on, the current does not return to the settled value ({}) (at the end: {}). A fuse may have blown or something may have latched
+・{} の電流が定格を超えます。ヒューズならスローブロー (タイムラグ) にするか、突入を抑えます。ダイオードはデータシートのサージ電流 (IFSM) と比べます	- The current of {} exceeds its rating. For a fuse, use slow-blow (time-lag) or reduce the inrush. For diodes, compare with the datasheet surge current (IFSM)
+・ピークが、落ち着いたときの {:.0} 倍です。抑えるには、電源の入口に NTC サーミスタ (冷えているとき約 {}Ω で、温まると下がる) か抵抗を直列に入れる、レギュレータのソフトスタートを使う、入口のコンデンサを小さくする、があります	- The peak is {:.0} times the settled current. To reduce it: put an NTC thermistor (about {}Ω when cold, dropping as it warms) or a resistor in series at the supply input, use the regulator's soft start, or make the input capacitor smaller
+# crates/app/src/schematic/kicad_import.rs
+先に一覧から部品を選んでください	Choose a part from the list first
+# crates/app/src/schematic/lib_sync.rs
+ライブラリの部品が新しくなっています ({} 個)…	Library parts have been updated ({})…
+回路図に置いた部品は、置いたときのライブラリの部品の写し (ピン・モデル・定格・店の型番) を持っています。そのあとライブラリの部品にモデルが付いたり直ったりした部品を並べ、置いた部品を新しくできます	Each part placed in the schematic holds a copy of the library part as it was when placed (pins, model, ratings, shop part numbers). This lists parts whose library part later got a model or a fix, so you can update the placed parts
+ライブラリの部品の更新	Update library parts
+✔ 置いた部品は、どれもライブラリと同じです	✔ All placed parts match the library
+置いたあとでライブラリの部品が変わった部品です。新しくすると、部品の場所・向き・部品番号・値はそのままで、モデル・定格・店の型番などがライブラリの今のものになります (元に戻すで戻せます)。ピンの並びが違う部品は、配線が外れないよう、ピンだけ前のままにします	These are parts whose library part changed after they were placed. Updating keeps the position, orientation, refdes and value, and takes the model, ratings, shop part numbers and so on from the current library (Undo reverts it). For parts whose pin order differs, the pins stay as before so wires do not come off
+ライブラリの部品	Library part
+変わった所	Changes
+ピンは前のまま (置き直すと新しいピンに)	Pins kept as before (place it again for new pins)
+新しくする	Update
+この部品だけ、ライブラリの今の版にします	Updates only this part to the current library version
+全部を新しくする ({} 個)	Update all ({})
+並んだ部品を全部、ライブラリの今の版にします	Updates all listed parts to the current library version
+ライブラリの今の版にしました: {} (元に戻すで戻せます)	Updated to the current library version: {} (Undo reverts it)
+# crates/app/src/schematic/library.rs
+部品 (1 ファイルのまとめ・部品定義 JSON)	Part (single-file bundle, part definition JSON)
+部品のまとめ	Part bundle
+{} を書き出しました: {} (部品・モデル・3D・データシートの版と値。PDF は入りません)	Exported {}: {} (part, model, 3D, datasheet revision and values. The PDF is not included)
+書き出せませんでした: {e}	Could not export: {e}
+# crates/app/src/schematic/linked.rs
+ ({} の中)	 (inside {})
+基板で選んだ {r} のあるシート「{}」{copy}を開きました	Opened sheet "{}"{copy} with {r} selected on the board
+# crates/app/src/schematic/live_logic.rs
+この回路にはクロックがありません	This circuit has no clock
+フリップフロップは、クロックの前後の決まった時間はデータが変わらないことを求めます。破ると、0 と 1 のどちらを覚えるか決まりません (実物では、どちらになるか分かりません)	A flip-flop needs the data to stay unchanged for a set time before and after the clock. If this is broken, it is not decided whether it stores 0 or 1 (in real hardware, you cannot tell which it will be)
+# crates/app/src/schematic/pindefs_ui.rs
+Arduino 用のヘッダ (.h)	Arduino header (.h)
+Zephyr の devicetree overlay (.overlay)	Zephyr devicetree overlay (.overlay)
+マイコンボードのピン (D13・A0・GPIO2 の名前のピン) につながる信号です。部品のピンの名前か、ピンヘッダの「ピンの名前」から読みます。ファーム (Arduino のスケッチ) で使うピン番号を、回路図から書き出して、手で写す間違いをなくします	Signals connected to microcontroller board pins (pins named D13, A0, GPIO2). Read from part pin names or from the "pin names" of pin headers. Export the pin numbers used in firmware (Arduino sketches) from the schematic to avoid mistakes when copying them by hand
+マイコンボードのピンが見つかりません。Arduino などのモジュールの部品を置くか、ケーブルでつなぐピンヘッダの各ピンに、ボードのピンの名前 (D22・A0 など) を付けます (部品の設定の「ピンの名前」)。FPGA のピンは、下の形式で FPGA を選びます	No microcontroller board pins found. Place a module part such as Arduino, or give each pin of a pin header that connects by cable a board pin name (D22, A0, etc.) ("Pin names" in the part settings). For FPGA pins, choose FPGA in the format below
+書き出す形式	Export format
+Arduino はスケッチで #include するヘッダ、Zephyr はボードの devicetree に重ねる overlay (zephyr,user の …-gpios)。FPGA は、選んだ部品のピン番号 (パッケージのピン) とネットの名前を、そのツールの制約ファイルに書きます	Arduino gets a header to #include in the sketch; Zephyr gets an overlay laid over the board's devicetree (…-gpios in zephyr,user). For FPGA, the pin numbers (package pins) of the chosen part and the net names are written to that tool's constraint file
+ピンを書き出す部品 (FPGA など)。電源・GND のピンと、ほかの部品につながらないピンは外します	The part whose pins are exported (FPGA etc.). Supply and GND pins, and pins not connected to other parts, are left out
+定数	Constant
+つながる先	Connects to
+書き出す…	Export…
+選んだ形式でピン定義を書き出します。ファームで読むと、ピン番号の代わりに名前で使えます。回路図を変えたら書き出し直します (このファイルは手で直さず、回路図を直します)。書き出したことは回路図に残り、そのあとピンが変わると ERC が知らせます	Exports pin definitions in the chosen format. Firmware that reads it can use names instead of pin numbers. Export again after changing the schematic (do not edit this file by hand; edit the schematic). The export is recorded in the schematic, and ERC tells you if pins change afterwards
+ピン定義を書き出しました: {}	Exported pin definitions: {}
+ピン定義を書き出せませんでした: {}。保存先のフォルダに書き込めるか確認してください	Could not export pin definitions: {}. Check that the destination folder is writable
+ファームのファイルと照合…	Check against firmware files…
+スケッチ (.ino) やヘッダ (.h・.cpp) の #define と const int のピン番号を読み、回路図とずれている所を出します (例: LED_PIN は 13 番だが、回路図では D12)	Reads the pin numbers in #define and const int of sketches (.ino) and headers (.h, .cpp), and shows where they differ from the schematic (e.g. LED_PIN is 13, but D12 in the schematic)
+ファーム	Firmware
+ファイルを読めませんでした: {}	Could not read the file: {}
+照合: {}	Check: {}
+✔ 回路図とずれているピンはありません	✔ No pins differ from the schematic
+# crates/app/src/schematic/preview.rs
+このシートを小窓に出します (回路図の画面で開いているシート)	Shows this sheet in a small window (the sheet open in the schematic view)
+このシートを小窓に出します	Shows this sheet in a small window
+{} (クリックで基板の上でも光ります)	{} (click to light it up on the board too)
+# crates/app/src/schematic/quick.rs
+resistor r 抵抗 ohm オーム	
+capacitor c condenser コンデンサ キャパシタ	
+inductor l coil コイル インダクタ	
+diode d ダイオード	
+led light 発光 ダイオード	
+source supply battery power v 電源 電池 信号	
+current source i load 電流源 定電流 負荷 電子負荷	
+potentiometer pot volume trimmer vr variable resistor knob ボリューム 可変抵抗 半固定 つまみ	
+npn transistor bjt q トランジスタ	
+header connector pin socket コネクタ ヘッダ ピン ピンヘッダ ピンソケット ソケット メス オス 2列	
+ground gnd 0v アース グランド	
+vcc vdd 3v3 5v rail 電源ネット	
+# crates/app/src/schematic/requirements.rs
+離す {side}	Keep apart {side}
+離す {}: {} mm 以上	Keep apart {}: {} mm or more
+GND の 1 点	GND single point
+ストリップ基板・ユニバーサル基板 (試作のタブ) で、この組を 1 つの区画にします。区画ごとにまとめて置き、区画の間は帯を切り、GND は区画ごとに別の線で、1 点 (右の「GND の 1 点」に印を付けた区画、無ければ表のいちばん上の区画の GND) へ戻します。アナログ・リレー・電源と制御のように分けます	On a stripboard or perfboard (Prototype tab), makes this group one section. Each section is placed together, the strips are cut between sections, and GND runs on a separate wire per section back to one point (the GND of the section marked in "GND single point" on the right, or if none, the section at the top of the table). Separate things like analog, relays, and power vs control
+左の「区画」を入れると選べます	Available after you fill in "Section" on the left
+この区画の GND の帯を、ほかの区画の GND が 1 本ずつ戻る 1 点にします (1 つの区画だけ。印が無ければ、表のいちばん上の区画)。大きな電流が流れる電源やリレーの区画ではなく、測定の基準になるアナログの区画や、電源の入口の区画を選ぶのがふつうです	Makes this section's GND strip the single point that the other sections' GND wires each return to (only one section. If none is marked, the section at the top of the table). Usually choose the analog section used as the measurement reference, or the supply input section, not a power or relay section with large currents

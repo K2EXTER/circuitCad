@@ -1,0 +1,400 @@
+# crates/pcb-core/src/stack.rs
+置き方が見つかりません	No placement found
+# crates/sch-core/src/build_order.rs
+区画の外	Outside sections
+# crates/sch-core/src/firmware.rs
+Arduino のスケッチ (.ino) を arduino-cli でコンパイルし、シリアルポートから書き込みます	Compiles the Arduino sketch (.ino) with arduino-cli and uploads it through the serial port
+Pico SDK の CMake のプロジェクトを cmake でビルドし、picotool で .uf2 を書き込みます	Builds the Pico SDK CMake project with cmake and writes the .uf2 with picotool
+iCE40 FPGA (yosys・nextpnr)	iCE40 FPGA (yosys, nextpnr)
+Verilog を yosys で合成し、nextpnr-ice40 で配置配線、icepack で .bin にして、iceprog で書き込みます	Synthesizes the Verilog with yosys, places and routes with nextpnr-ice40, makes a .bin with icepack, and writes it with iceprog
+自分のコマンド	Custom commands
+ビルドと書き込みのコマンドを自分で書きます (フォルダの中で、シェルで動かします)	Write your own build and upload commands (they run in a shell inside the folder)
+arduino-cli を入れて、PATH の通ったフォルダに置いてください (https://arduino.github.io/arduino-cli/ 。ボードの種類は「arduino-cli core install arduino:avr」で入れます)	Install arduino-cli and put it in a folder on your PATH (https://arduino.github.io/arduino-cli/ . Install board types with "arduino-cli core install arduino:avr")
+CMake と Pico SDK を入れてください (Raspberry Pi の「Pico setup for Windows」で、cmake・Arm のコンパイラ・PICO_SDK_PATH がまとめて入ります)	Install CMake and the Pico SDK (Raspberry Pi's "Pico setup for Windows" installs cmake, the Arm compiler and PICO_SDK_PATH all at once)
+picotool を入れて、PATH の通ったフォルダに置いてください (Pico SDK のセットアップに入っています)。picotool が無いときは、BOOTSEL を押しながら USB をつなぎ、build の .uf2 を出てきたドライブにコピーしても書き込めます	Install picotool and put it in a folder on your PATH (it comes with the Pico SDK setup). Without picotool, you can also hold BOOTSEL while plugging in USB and copy the .uf2 from build to the drive that appears
+OSS CAD Suite (https://github.com/YosysHQ/oss-cad-suite-build) を展開して、その bin を PATH に足してください。yosys・nextpnr-ice40・icepack・iceprog がまとめて入ります	Extract OSS CAD Suite (https://github.com/YosysHQ/oss-cad-suite-build) and add its bin to your PATH. It includes yosys, nextpnr-ice40, icepack and iceprog
+シェルが見つかりません	Shell not found
+そのコマンドを入れて、PATH の通ったフォルダに置いてください	Install that command and put it in a folder on your PATH
+一時フォルダが作れません: {e}	Cannot create a temporary folder: {e}
+スケッチが書けません: {e}	Cannot write the sketch: {e}
+arduino-cli が動きません: {e}	arduino-cli does not run: {e}
+スケッチ	sketch
+arduino-cli のコンパイルが失敗しました	arduino-cli compile failed
+{what}を入れてください	Enter {what}
+ファームの種類 (Arduino・Pico・iCE40・自分のコマンド) を選んでください	Choose the firmware type (Arduino, Pico, iCE40 or custom commands)
+ファームのフォルダ	Firmware folder
+ファームのフォルダ「{}」がありません。回路図のファイルの場所からの相対か、絶対のパスで入れてください	The firmware folder "{}" does not exist. Enter a path relative to the schematic file's location, or an absolute path
+ボードの FQBN (例: arduino:avr:mega)	Board FQBN (e.g. arduino:avr:mega)
+CMake の設定	CMake settings
+いちばん上のモジュールの名前 (例: top)	Name of the top module (e.g. top)
+デバイスとパッケージを「up5k:sg48」の形で入れてください	Enter the device and package in the form "up5k:sg48"
+制約ファイル (.pcf、ピンの表から「ピンとファーム…」で書き出せます)	Constraint file (.pcf; you can export it from the pin table with "Pins and firmware…")
+「{}」に Verilog のファイル (.v) がありません	There are no Verilog files (.v) in "{}"
+合成	Synthesize
+配置配線	Place and route
+.bin にする	Make .bin
+ビルドのコマンド	Build command
+書き込むシリアルポート (例: COM3)	Serial port to upload to (e.g. COM3)
+build に .uf2 がありません。先にビルドしてください	There is no .uf2 in build. Build first
+ATtiny85 のボードの定義 (ATTinyCore) が入っていません。Arduino IDE の「基本設定」の「追加のボードマネージャの URL」に https://drazzy.com/package_drazzy.com_index.json を足し、ボードマネージャで ATTinyCore を入れてください	The ATtiny85 board definition (ATTinyCore) is not installed. In the Arduino IDE, add https://drazzy.com/package_drazzy.com_index.json to "Additional boards manager URLs" in "Preferences", then install ATTinyCore in the Boards Manager
+ボードの種類が arduino-cli に入っていません。「arduino-cli core install arduino:avr」(Mega・UNO など) のように入れてください	The board type is not installed in arduino-cli. Install it with something like "arduino-cli core install arduino:avr" (Mega, UNO, etc.)
+インクルードするファイル (ライブラリ) が見つかりません。Arduino IDE のライブラリマネージャか「arduino-cli lib install <名前>」で入れるか、名前の綴りを確かめてください	An included file (library) was not found. Install it with the Arduino IDE Library Manager or "arduino-cli lib install <name>", or check the spelling of the name
+シリアルポートが開けません。ポートの名前を確かめ、ほかのソフト (シリアルモニタなど) がポートを使っていないか見てください	Cannot open the serial port. Check the port name, and make sure no other software (such as a Serial Monitor) is using the port
+Pico SDK の場所 (環境変数 PICO_SDK_PATH) が決まっていません。Pico SDK を入れて、PICO_SDK_PATH を設定してください	The Pico SDK location (environment variable PICO_SDK_PATH) is not set. Install the Pico SDK and set PICO_SDK_PATH
+FPGA の書き込み器 (FTDI) が見つかりません。USB のケーブルと、ドライバ (Windows では Zadig で WinUSB) を確かめてください	The FPGA programmer (FTDI) was not found. Check the USB cable and the driver (on Windows, WinUSB via Zadig)
+制約ファイル (.pcf) にない信号があります。回路図の「ピンとファーム…」で .pcf を書き出し直してください	Some signals are not in the constraint file (.pcf). Export the .pcf again with "Pins and firmware…" in the schematic
+「{p}」が見つかりません。{how}	"{p}" not found. {how}
+止めました	Stopped
+{} を起動できませんでした: {e}	Could not start {}: {e}
+止められました	Was stopped
+終了コード {c}	Exit code {c}
+{} で止まりました ({code})	Stopped at {} ({code})
+\nヒント: {h}	\nHint: {h}
+✔ 終わりました	✔ Done
+# crates/sch-core/src/harness.rs
+IDC 2.54 mm (フラットケーブル)	IDC 2.54 mm (ribbon cable)
+IDC ソケット 2×{} 極	IDC socket 2×{} pins
+デュポン 2.54 mm	Dupont 2.54 mm
+ハウジング 1×{n} 極 (2.54 mm)	Housing 1×{n} pins (2.54 mm)
+オスのコンタクト (2.54 mm デュポン)	Male contact (2.54 mm Dupont)
+メスのコンタクト (2.54 mm デュポン)	Female contact (2.54 mm Dupont)
+{fp} の相手	Mate for {fp}
+{fp} の相手のハウジング ({n} 極)	Mating housing for {fp} ({n} pins)
+{fp} の相手のコンタクト	Mating contacts for {fp}
+﻿ケーブル,本数,線,色,AWG,長さ (mm),A 側,A のピン,A の信号,B 側,B のピン,B の信号\n	
+ハウジング	Housing
+コンタクト	Contact
+フラットケーブル	Ribbon cable
+{} 芯 1.27 mm ピッチ AWG{}	{} conductors, 1.27 mm pitch, AWG{}
+電線	Wire
+合計 {mm:.0} mm (切る長さ。むく分と余裕を足して買う)	Total {mm:.0} mm (cut length; buy extra for stripping and slack)
+{}: {} ↔ {}   ケーブル {:.0} mm   × {} 本	{}: {} ↔ {}   cable {:.0} mm   × {}
+フラットケーブル {} 芯 AWG{}	Ribbon cable {} conductors AWG{}
+電線 AWG{}	Wire AWG{}
+<text x="{x:.1}" y="{:.1}" font-size="11" fill="#c0392b">型番はデータシートで選んでください</text>\n	
+<text x="20" y="40" font-size="14">ケーブルでつなぐつなぎがありません</text>\n	
+# crates/sch-core/src/lib.rs
+負荷容量 CL: {}pF	Load capacitance CL: {}pF
+# crates/sch-core/src/mount.rs
+そのまま差す	Plug in as is
+同じ値のリード部品に替える	Use a leaded part of the same value
+チップにリード線を付けて差す	Add leads to the chip and plug it in
+裏のランドに直接	Directly on the bottom lands
+丸ピン IC ソケット {pins} ピン ({}) に差す	Plug into a {pins}-pin turned-pin IC socket ({})
+同じ値のリード部品で組む	Build with a leaded part of the same value
+チップの両端にリード線 (すずめっき線) をはんだ付けして、穴に差す	Solder leads (tinned wire) to both ends of the chip and put them in the holes
+{package} を 2 ピンの変換基板に載せる	Mount {package} on a 2-pin adapter board
+{package} を {pins} ピンの SIP 変換基板に載せ、丸ピンの連結ソケット 1×{pins} に差す	Mount {package} on a {pins}-pin SIP adapter board and plug it into a 1×{pins} turned-pin strip socket
+{package} を DIP {pins} ピン ({}) の変換基板に載せ、丸ピンの連結ソケット 1×{} を 2 本に差す	Mount {package} on a DIP {pins}-pin ({}) adapter board and plug it into two 1×{} turned-pin strip sockets
+{name} を、基板にはんだ付けしたメスのピンヘッダ 1×{} 2 本 ({}) に差す	Plug {name} into two 1×{} female pin headers ({}) soldered to the board
+{size} のチップ部品を、裏 (はんだの面) で隣り合う 2 つの穴にまたがせてはんだ付けする	Solder the {size} chip part on the bottom (solder side), bridging two neighboring holes
+{:.1} インチ幅	{:.1} inch wide
+丸ピン IC ソケット {pins} ピン ({})	Turned-pin IC socket, {pins} pins ({})
+リード部品に替える (チップ部品の代わり)	Use a leaded part (instead of the chip part)
+チップにリード線を付ける (すずめっき線 2 本ずつ)	Add leads to the chip (2 tinned wires each)
+メスのピンヘッダ 1×{}	Female pin header 1×{}
+{package} の 2 ピン変換基板	2-pin adapter board for {package}
+{package} → SIP {pins} ピンの変換基板	{package} → SIP {pins}-pin adapter board
+丸ピン連結ソケット 1×{pins}	Turned-pin strip socket 1×{pins}
+{package} → DIP {pins} ピン ({}) の変換基板	{package} → DIP {pins}-pin ({}) adapter board
+丸ピン連結ソケット 1×{}	Turned-pin strip socket 1×{}
+# crates/sch-core/src/netlist.rs
+承知した例外: {} (理由: {})	Accepted exception: {} (reason: {})
+{r} のユニット {letter} が 2 つあります	{r} has two of unit {letter}
+同じ部品の同じユニット (1 つの IC の中の同じ回路) は 1 つだけ置けます。片方を選んで、左の「ユニット」を別のユニットに変えるか、番号を別の部品に変えましょう	You can place each unit of a part (the same circuit inside one IC) only once. Select one of them and change "Unit" on the left to another unit, or change its reference designator to another part
+{r} のユニット A が置かれていません	Unit A of {r} is not placed
+電源のピンはユニット A にあります。ユニット A を置いて電源につながないと、IC 全体が動きません (シミュレーションでも出力が出ません)。部品を選んで「次のユニットを置く」でユニット A を置きましょう	The supply pins are in unit A. Unless you place unit A and connect it to the supply, the whole IC does not work (the simulation gives no output either). Select the part and place unit A with "Place next unit"
+{} のピンどうしだけがつながっていて、ほかの部品に届いていません: {}	Only pins of {} are connected to each other, and they reach no other part: {}
+同じ部品の足どうしをつないだだけの線は、回路のどこにも続いていません。線の端が、つなぎたい部品のピンにちゃんと届いているか (1 マスの隙間が無いか) 確かめましょう	A wire that only joins pins of the same part leads nowhere else in the circuit. Check that the wire end really reaches the pin of the part you want to connect (no one-grid gap)
+コンデンサと入力ピン ({}) だけがつながっていて、直流で電圧を決めるものがありません	Only capacitors and input pins ({}) are connected, and nothing sets the DC voltage
+コンデンサは直流を通さず、入力ピンは電圧を決めないので、この線の電圧は決まりません (シミュレーションでは「GND への DC 経路がありません」になります)。充電する抵抗やバイアスの抵抗がつながっているか、線が途中で切れていないか確かめましょう	Capacitors block DC and input pins do not set a voltage, so the voltage of this net is undefined (the simulation reports "no DC path to GND"). Check that a charging or bias resistor is connected and that the wire is not broken along the way
+# crates/sch-core/src/pindefs.rs
+iCE40 (nextpnr・icestorm)	iCE40 (nextpnr, icestorm)
+Lattice ECP5 (nextpnr・Diamond)	Lattice ECP5 (nextpnr, Diamond)
+{part} が回路図にありません	{part} is not in the schematic
+{part} の信号のピンがありません (電源・GND 以外のピンが、ほかの部品につながっていません)	{part} has no signal pins (no pins other than supply and GND are connected to other parts)
+{path}: FPGA の制約ファイルは、どの部品のピンかを part=U3 のように付けます	{path}: for an FPGA constraint file, say which part's pins it is, like part=U3
+{path}: 拡張子で形式を決めます (.h・.overlay・.pcf・.xdc・.qsf・.lpf)	{path}: the format is chosen by the extension (.h, .overlay, .pcf, .xdc, .qsf, .lpf)
+ピン定義を書き出したあとで、回路図のピンが変わりました ({})	The schematic's pins changed after the pin definitions were exported ({})
+基板でピンを入れ替えた・配線を直したなどで、信号のピンが書き出したときと違います。「ピンとファーム…」から書き出し直し、ファームをビルドし直します	Pins were swapped on the board or wiring was fixed, so the signal pins differ from when they were exported. Export again from "Pins and firmware…" and rebuild the firmware
+ファームのピンが回路図と違います: {}	The firmware's pins differ from the schematic: {}
+照合するファームのファイルが見つかりません ({})	The firmware file to check against was not found ({})
+ファイルを動かしたか消したときは、「ピンとファーム…」の「ファームのファイルと照合…」で選び直します	If you moved or deleted the file, choose it again with "Check against firmware file…" in "Pins and firmware…"
+{} は {} 番ですが、回路図では {} ({}) につながっています	{} is pin {}, but in the schematic that pin connects to {} ({})
+ファームの {} 行目を {} にするか、回路図の配線を直します (つながる先: {})	Change line {} of the firmware to {}, or fix the wiring in the schematic (connects to: {})
+{} ({} 番) は、回路図の名前に無い定数です。回路図ではその番のピン {} は「{}」です	{} (pin {}) is a constant that is not a name in the schematic. In the schematic, that pin {} is "{}"
+同じ信号なら、回路図のネットの名前か定数の名前をそろえると、照合できます	If it is the same signal, make the schematic net name and the constant name match so they can be checked
+回路図の {} ({} 番、{}) を、ファームは名前で使っていません	The firmware does not use {} (pin {}, {}) from the schematic by name
+番号をじかに書いているか、まだ使っていない信号です。書き出したピン定義を #include すると、名前で使えます	The number is written directly, or the signal is not used yet. #include the exported pin definitions to use it by name
+# crates/sch-core/src/review.rs
+出力の {n}	output {n}
+ピン{to}	pin {to}
+ (データシートの注: {})	 (datasheet note: {})
+無いか小さすぎると、レギュレータの出力が発振したり、負荷が変わったときに電圧がふらついたりします。シミュレーションでは理想に近く動いても、実物で困る所です	If it is missing or too small, the regulator output can oscillate or the voltage can wobble when the load changes. The simulation may behave almost ideally, but the real circuit will have trouble
+無いと、ピンの電圧が決まらず、雑音で勝手にリセットがかかったり、動作が止まったりします	Without it, the pin voltage is undefined, and noise can cause random resets or stop the chip
+無いと、データシートのとおりに動きません	Without it, the chip does not work as the datasheet says
+{} の推奨の{word}がありません: {names} ({values}、ピン{pin}{pin_name} と {to_name} の間)	{} is missing its recommended {word}: {names} ({values}, between pin {pin}{pin_name} and {to_name})
+データシートが、{} のこのピンのそばに付けるように言っている{word}です{note}。{why}。部品を選んで、プロパティの「推奨の周辺部品を置く」で置けます。基板では、ピンのすぐ近くに置きましょう	The datasheet says to put this {word} near this pin of {}{note}. {why}. Select the part and place it with "Place recommended parts" in the properties. On the board, put it right next to the pin
+{} のピン{pin}{pin_name} のコンデンサが小さすぎます: {} (推奨 {values})	The capacitor on pin {pin}{pin_name} of {} is too small: {} (recommended {values})
+データシートは、このピンと {to_name} の間に {values} を推奨しています{note}。{why}。値を推奨の値以上にしましょう (電解コンデンサやセラミックの容量は、温度や電圧で減ることも見込みます)	The datasheet recommends {values} between this pin and {to_name}{note}. {why}. Make the value at least the recommended value (allow for electrolytic and ceramic capacitance dropping with temperature and voltage)
+水晶は、両端から GND へのコンデンサ 2 個と、配線・ピンの浮遊容量 (約 {STRAY_PF}pF) を合わせた負荷容量 CL で、データシートの周波数になります。CL = C1×C2÷(C1+C2) + 浮遊容量。合わないと周波数がずれ、ひどいと発振しません。この水晶 (CL = {cl}pF) には、{rec}pF を両端に 1 個ずつが目安です (C = 2×(CL − 浮遊容量))。IC のデータシートが値を言っていれば、そちらに従います	A crystal runs at its datasheet frequency when its load capacitance CL, the two capacitors from its ends to GND plus the stray capacitance of the wiring and pins (about {STRAY_PF}pF), is right. CL = C1×C2÷(C1+C2) + stray capacitance. If it does not match, the frequency shifts, and in bad cases it does not oscillate. For this crystal (CL = {cl}pF), about {rec}pF on each end is a good guide (C = 2×(CL − stray capacitance)). If the IC's datasheet gives a value, follow that
+{} (水晶) の両端に負荷コンデンサがありません (目安 {rec}pF × 2)	{} (crystal) has no load capacitors on its ends (guide: {rec}pF × 2)
+{} (水晶) のピン{pin} 側に、GND への負荷コンデンサがありません	{} (crystal) has no load capacitor to GND on the pin {pin} side
+{} (水晶) の負荷容量が合いません: {}pF と {}pF で約 {:.1}pF、水晶は {cl}pF (目安 {rec}pF × 2)	The load capacitance of {} (crystal) does not match: {}pF and {}pF give about {:.1}pF, but the crystal needs {cl}pF (guide: {rec}pF × 2)
+{} が IC の出力ピン {}.{}{name} に直接つながっていて、電流を制限する抵抗がありません	{} is connected directly to IC output pin {}.{}{name}, with no current-limiting resistor
+LED は電圧がわずかに上がるだけで電流が急に増えます。IC の出力に直接つなぐと、出力の許す最大の電流が流れ、LED か IC の出力が傷みます (マイコンのピンは 1 本 20mA くらいまで)。出力と LED の間に抵抗 (3.3V・5V なら 330Ω〜1kΩ くらい) を入れましょう	An LED's current rises sharply with just a small rise in voltage. Connected directly to an IC output, it draws as much current as the output can give, which damages the LED or the IC output (a microcontroller pin allows about 20mA). Put a resistor between the output and the LED (about 330Ω to 1kΩ for 3.3V or 5V)
+{} は電源の入口 ({}) ですが、逆接続・静電気の保護がありません (情報)	{} is the power input ({}), but it has no reverse-polarity or ESD protection (info)
+電池や AC アダプタを逆に挿すと、IC に逆の電圧がかかって壊れます。電源の入口に、直列のダイオード (0.3〜0.7V 下がる)、P チャネル MOSFET (ほとんど下がらない)、または GND との間に TVS ダイオード (静電気・サージ) を入れると守れます。逆に挿せないコネクタや、付け外ししない電源なら、そのままで構いません	If a battery or AC adapter is plugged in backwards, the IC gets a reverse voltage and breaks. A series diode (drops 0.3 to 0.7V), a P-channel MOSFET (almost no drop), or a TVS diode to GND (ESD, surges) at the power input protects it. If the connector cannot be plugged in backwards, or the supply is never unplugged, you can leave it as is
+# crates/sch-core/src/roles.rs
+LED の電流制限	LED current limit
+約 {}	about {}
+LED は電圧がわずかに上がるだけで電流が急に増えるので、抵抗で電流を決めます{}。ふつうの LED は 5〜20 mA。抵抗を小さくすると明るく、大きくすると暗くなります	An LED's current rises sharply with just a small rise in voltage, so a resistor sets the current{}. A typical LED uses 5 to 20 mA. A smaller resistor makes it brighter, a larger one dimmer
+2 本の抵抗で電圧を分けて、間の点に、両端の間の電圧を作ります	Two resistors divide the voltage, making a voltage between the two ends at the middle point
+2 本の抵抗で電圧を分けて、間の点 {} に {} を作ります (V = {} × {} ÷ ({} + {}))。間の点に電流をたくさん取ると下がるので、つなぐ先は入力 (電流をほとんど取らないもの) にします	Two resistors divide the voltage; the middle point {} gets {} (V = {} × {} ÷ ({} + {})). Drawing much current from the middle point lowers it, so connect it to an input (something that draws almost no current)
+押したとき {}	{} when pressed
+何もつながっていないとき {} を High ({}) に保ちます。スイッチやオープンドレインの出力が GND に落とすと Low になります。抵抗が無いと入力が浮いて、雑音で 0 と 1 を行き来します	Holds {} High ({}) when nothing is connected. It goes Low when a switch or open-drain output pulls it to GND. Without the resistor, the input floats and noise flips it between 0 and 1
+何もつながっていないとき {} を Low (GND) に保ちます。スイッチが電源につなぐと High になります	Holds {} Low (GND) when nothing is connected. It goes High when a switch connects it to the supply
+帰還の抵抗 (オペアンプ)	Feedback resistor (op amp)
+出力の一部を − 入力に戻して (負帰還)、増幅の倍率 (利得) を抵抗の比で決めます。オペアンプそのものの利得は大きくばらつくので、こうして抵抗で決めると安定します	Feeds part of the output back to the − input (negative feedback), so the resistor ratio sets the amplification (gain). The op amp's own gain varies a lot, so setting it with resistors makes it stable
+{} から来た信号の、速い変化 (高い周波数) をコンデンサが逃がし、ゆっくりした変化だけを {} に通します。カットオフ周波数 fc = 1 ÷ (2π R C) より上は弱まります。スイッチのチャタリング取り・雑音取り・PWM を平らな電圧にするのに使います	The capacitor drains away the fast changes (high frequencies) of the signal coming from {} and passes only the slow changes to {}. Frequencies above the cutoff fc = 1 ÷ (2π R C) are weakened. Used for switch debouncing, removing noise, and turning PWM into a flat voltage
+バイパスコンデンサ (パスコン)	Bypass capacitor (decoupling)
+IC が切り替わる瞬間に要る電流を、すぐそばから出して、電源の線 {} の電圧が揺れないようにします。基板では IC の電源ピンのすぐ近くに置きます (遠いと効きません)	Supplies the current the IC needs at the moment it switches from right nearby, so the voltage of the supply net {} does not wobble. On the board, put it right next to the IC's supply pin (it does not work if far away)
+電源の平滑 (大きなコンデンサ)	Supply smoothing (large capacitor)
+電源 {} の電圧のでこぼこ (リップル) をならし、負荷が急に電流を取ったときに電荷を貸します。レギュレータの入出力にも、データシートが推奨する値を付けます	Smooths out the bumps (ripple) in the voltage of supply {}, and lends charge when the load suddenly draws current. On regulator inputs and outputs, also use the value the datasheet recommends
+結合コンデンサ (カップリング)	Coupling capacitor
+直流は通さず、変化 (交流の信号) だけを次の段へ渡します。前後の段の直流の電圧 (バイアス) がずれていても、信号だけつなげます。下の周波数は、後ろの抵抗との RC で決まります (ハイパスフィルタ)	Blocks DC and passes only the changes (the AC signal) to the next stage. Even if the DC voltages (bias) of the stages differ, only the signal is connected. The low-frequency limit is set by the RC with the following resistor (high-pass filter)
+LED (電流制限の抵抗つき)	LED (with current-limiting resistor)
+{} が流れる電流を決めています。LED の明るさは電流でほぼ決まります。電流 = (電源 − LED の電圧 VF) ÷ 抵抗。VF は赤で約 2 V、青・白で約 3 V	{} sets the current that flows. An LED's brightness is set mostly by its current. Current = (supply − LED voltage VF) ÷ resistance. VF is about 2 V for red, about 3 V for blue and white
+利得 1 倍	Gain ×1
+出力を − 入力にそのまま戻すと、出力は + 入力と同じ電圧になります。電流をほとんど取らずに受けて、大きな電流で出せる「緩衝 (バッファ)」です	Feeding the output straight back to the − input makes the output the same voltage as the + input. It is a "buffer" that takes in a signal while drawing almost no current and can put out a large current
+非反転増幅	Non-inverting amplifier
+利得 {} 倍	Gain ×{}
++ 入力 ({}) の信号を、同じ向きに 1 + {} ÷ {} 倍にします	Multiplies the signal at the + input ({}) by 1 + {} ÷ {}, without inverting it
+反転増幅	Inverting amplifier
+利得 −{} 倍	Gain ×−{}
+{} から {} を通って入る信号を、逆向きに {} ÷ {} 倍にします。+ 入力 ({}) が基準の電圧です	Multiplies the signal coming from {} through {} by {} ÷ {}, inverted. The + input ({}) is the reference voltage
+# crates/sch-core/src/section_plan.rs
+{big} のまわり	Around {big}
+# crates/sch-core/src/strip_edit.rs
+揃える部品を 2 つ以上、四角で囲んで選んでください	Drag a box around two or more parts to align
+{} が基板の上か左の端の外に出ます	{} would go past the top or left edge of the board
+{} を動かす先に {} があります。先に {} をどけるか、揃える部品を選び直してください	Moving {} would put it on {}. Move {} out of the way first, or select the parts to align again
+{} を動かす先に、基板の外からの線の穴があります	Moving {} would put it on a hole for a wire from off the board
+同じ穴です。別の穴をクリックします	Same hole. Click a different hole
+すずめっき線は、同じ行・同じ列か、ななめ 45° の穴へ引きます (途中の穴の真ん中を通る向き)	Run tinned wire to a hole in the same row, the same column, or at 45° (a direction that passes through the centers of the holes on the way)
+表のほかのななめのすずめっき線と、穴と穴の間で交わります (裸の線どうしが触れてショートします)。別の道を通すか、被覆線にします	It crosses another diagonal tinned wire on the top between holes (bare wires touch and short). Take another route or use insulated wire
+ほかのななめのすずめっき線と、穴と穴の間で交わります (裸の線どうしが触れてショートします)。別の道を通します	It crosses another diagonal tinned wire between holes (bare wires touch and short). Take another route
+# crates/sch-core/src/strip_print.rs
+裏 (銅の面・左右が逆)	Bottom (copper side, mirrored)
+<text x="2" y="9" font-size="2.2" fill="#555">{} 列 × {} 行 (穴の間隔 2.54 mm)。100 % (実寸) で印刷すると、右下の線が 10 mm になります</text>	
+# crates/sch-core/src/system.rs
+GND は基板「{from}」から (プロジェクトのつなぎで判定)	GND comes from board "{from}" (based on the project's connections)
+この基板には GND 記号がありませんが、つないだ基板「{from}」の GND を基準にします。この基板だけでシミュレーションするときは、GND が要ります	This board has no GND symbol, but it uses the GND of the connected board "{from}" as its reference. To simulate this board alone, it needs a GND
+ピンの番号が逆に並んでいませんか (1 番 ↔ {n} 番にすると、すべての信号が合います)	Are the pin numbers in reverse order? (With pin 1 ↔ pin {n}, all signals match)
+ソケットをピンヘッダに向かい合わせに差すときや、フラットケーブルを折り返すときは、番号が逆になります。そのつなぎ方なら「直す」でピンの組を逆順にします。同じ番号どうしで差すつもりなら、どちらかの基板のピンの並びを直してください	When a socket plugs face to face onto a pin header, or a ribbon cable is folded back, the numbers are reversed. If that is how they connect, "Fix" reverses the pin pairs. If you mean to connect same numbers to each other, fix the pin order on one of the boards
+コネクタが 180° 回っていませんか (1 番 ↔ {n} 番、2 番 ↔ {} 番 … にすると、すべての信号が合います)	Is the connector rotated 180°? (With pin 1 ↔ pin {n}, pin 2 ↔ pin {} …, all signals match)
+2 列のコネクタは、向きの印 (切り欠き・1 番の印) を逆にして差すと 1 番が最後の番号に来ます。そのつなぎ方なら「直す」でピンの組を合わせます。向きを合わせて差すつもりなら、どちらかの基板のピンの並びを直してください	If a 2-row connector is plugged in with its orientation mark (notch, pin 1 mark) reversed, pin 1 lands on the last number. If that is how they connect, "Fix" matches the pin pairs. If you mean to plug it in with the orientation matched, fix the pin order on one of the boards
+2 列のコネクタの列が入れ替わっていませんか (1 番 ↔ 2 番、3 番 ↔ 4 番 … にすると、すべての信号が合います)	Are the rows of the 2-row connector swapped? (With pin 1 ↔ pin 2, pin 3 ↔ pin 4 …, all signals match)
+2 列のソケットを向かい合わせに差すと、列が入れ替わって奇数と偶数の番号が逆になります。そのつなぎ方なら「直す」でピンの組を合わせます。同じ番号どうしで差すつもりなら、どちらかの基板のピンの並びを直してください	When 2-row sockets plug face to face, the rows swap and odd and even numbers are reversed. If that is how they connect, "Fix" matches the pin pairs. If you mean to connect same numbers to each other, fix the pin order on one of the boards
+2 列のコネクタの並びが前後逆になっていませんか (1 番 ↔ {} 番、2 番 ↔ {n} 番 … にすると、すべての信号が合います)	Is the order of the 2-row connector reversed end to end? (With pin 1 ↔ pin {}, pin 2 ↔ pin {n} …, all signals match)
+2 列のコネクタを、列の向きに裏返して差すと (向かい合わせに差す、ケーブルを縦に折り返す)、並びが前後逆になります。そのつなぎ方なら「直す」でピンの組を合わせます。同じ番号どうしで差すつもりなら、どちらかの基板のピンの並びを直してください	If a 2-row connector is flipped along its rows (plugged face to face, or the cable folded lengthwise), the order is reversed end to end. If that is how they connect, "Fix" matches the pin pairs. If you mean to connect same numbers to each other, fix the pin order on one of the boards
+コネクタの向き (1 番ピンの位置) や、ケーブルが入れ替わっていないか確かめます。名前の付け方が違うだけ (例: SDA と I2C_SDA) なら、どちらかの名前を合わせるか、「同じ信号にする」で名前の対応をつなぎに登録します	Check the connector orientation (pin 1 position) and whether the cables are swapped. If only the naming differs (e.g. SDA and I2C_SDA), match one of the names, or register the name pairing in the connection with "Make same signal"
+# crates/sch-core/src/tidy.rs
+ポートかバスのあるシートは、まだ整えられません (位置でつながっているので)	Sheets with ports or buses cannot be tidied yet (they connect by position)
+整える部品がありません	No parts to tidy
+整えると、つながりが変わってしまうので、やめました (階層の記号のように、位置でつながる物がある回路図は、まだ整えられません)	Stopped, because tidying would change the connections (schematics with things that connect by position, such as hierarchy symbols, cannot be tidied yet)
+# crates/sch-core/src/stripboard/check.rs
+{who} が切った穴 {} にあります	{who} is on the cut hole {}
+{} に {other} と {who} の 2 つが入っています	{} holds two things: {other} and {who}
+{r}.{pin} の穴 {} が帯の上にありません	Hole {} of {r}.{pin} is not on a strip
+ショート: {} がつながっています	Short: {} are connected
+{net} が {} か所に分かれています (つなぎ忘れ)	{net} is split into {} pieces (missing connection)
+{} の表の線	Top wires of {}
+「{name}」を {} mm 以内に集める: できています (いちばん遠い {a} と {b} で {} mm)	Keep "{name}" within {} mm: OK (farthest are {a} and {b} at {} mm)
+「{name}」を {} mm 以内に集める: {a} と {b} が {} mm 離れています ({} mm 遠すぎ)。どちらかを相手の方へ寄せてください	Keep "{name}" within {} mm: {a} and {b} are {} mm apart ({} mm too far). Move one toward the other
+{} と {}	{} and {}
+「{name}」を {} mm 以上離す: できています (いちばん近い {a} と {b} で {} mm)	Keep "{name}" at least {} mm apart: OK (closest are {a} and {b} at {} mm)
+「{name}」を {} mm 以上離す: {a} と {b} が {} mm しか離れていません ({} mm 足りない)。どちらかを遠ざけてください	Keep "{name}" at least {} mm apart: {a} and {b} are only {} mm apart ({} mm short). Move one farther away
+ (帯と線で {} mm)	 ({} mm along strips and wires)
+バイパス {cap} ({ic} 用) を {} mm 以内に: できています (いちばん遠い {} の足も {} から {} mm)	Bypass {cap} (for {ic}) within {} mm: OK (even the farthest pin, of {}, measured from {} is {} mm)
+バイパス {cap} ({ic} 用): {} の足が {} から {} mm{along}。承知した例外: {}	Bypass {cap} (for {ic}): the pin of {} measured from {} is {} mm{along}. Accepted exception: {}
+バイパス {cap} ({ic} 用) を {} mm 以内に: {} の足が {} から {} mm{along}。遠いと線のインダクタンスで速い電流に追いつけません。{cap} を {} のそばへ寄せてください	Bypass {cap} (for {ic}) within {} mm: the pin of {} measured from {} is {} mm{along}. If it is far, the wire inductance cannot keep up with fast currents. Move {cap} close to {}
+ケルビン「{name}」: {start} から {a} か {b} へ、帯と線でつながっていません	Kelvin "{name}": {start} is not connected to {a} or {b} by strips and wires
+ケルビン「{name}」: {a} と {b} への道は {start} の足から {v:.1} mm で分かれます ({:.1} mm 以下)	Kelvin "{name}": the paths to {a} and {b} split {v:.1} mm from the {start} pin ({:.1} mm or less)
+ケルビン「{name}」: {a} と {b} への道が {start} の足から {v:.1} mm 一緒に走り、{:.1} mm を超えます。{start} の足を、帯の上で 2 本の線の間に置いてください (片方の電流が流れる帯から、もう片方の線を取らない)	Kelvin "{name}": the paths to {a} and {b} run together for {v:.1} mm from the {start} pin, more than {:.1} mm. Put the {start} pin on the strip between the two wires (do not take one wire from the strip that carries the other's current)
+GND: 「{}」の GND は、1 本の線で「{}」の GND の帯 (1 点) へ戻ります	GND: the GND of "{}" returns with one wire to the GND strip (one point) of "{}"
+GND: 「{}」の GND から「{}」の GND への線が {back} 本、ほかの区画への線が {other} 本あります。1 点へ 1 本で戻すと、ほかの区画の電流が GND を通りません	GND: there are {back} wires from the GND of "{}" to the GND of "{}", and {other} wires to other sections. Returning with one wire to one point keeps other sections' current out of this GND
+# crates/sch-core/src/stripboard/mate.rs
+{b_board}のコネクタの穴の並びは{a_board}と合います	The connector holes of {b_board} line up with {a_board}
+{b_board}のコネクタの穴の並びは、{}° 回すと{a_board}と合います	The connector holes of {b_board} line up with {a_board} when rotated {}°
+{b_board}を裏返す (部品を{a_board}の側に向ける) ときだけ、コネクタの穴の並びが合います。部品を上にして差すなら、並びが鏡に映した形です	The connector holes line up only when {b_board} is flipped (parts facing {a_board}). If it is plugged in with parts up, the layout is a mirror image
+コネクタの穴の並びが合いません: {a_board}は {a}、{b_board}は {b}	The connector holes do not line up: {a_board} is {a}, {b_board} is {b}
+{} のピン {pa} が、この基板の並べ方にありません	Pin {pa} of {} is not in this board's layout
+{} のピン {pb} が、相手の基板の並べ方にありません	Pin {pb} of {} is not in the other board's layout
+つないだピンがありません	No connected pins
+{} 穴が {} 行 × {} 列	{} holes, {} rows × {} columns
+{} のピン {pa} が、相手の基板の並べ方にありません	Pin {pa} of {} is not in the other board's layout
+{} がこの基板の回路図にありません	{} is not in this board's schematic
+{} のピン {pin} は相手の基板につながっていないので、置く穴が決まりません	Pin {pin} of {} is not connected to the other board, so its hole cannot be decided
+# crates/sch-core/src/stripboard/mod.rs
+表の線	Top wire
+表のすずめっき線	Top tinned wire
+裏の線	Bottom wire
+# crates/sim-core/src/adcmeasure.rs
+{} は ADC (モデルに adc_bits のある部品) ではありません	{} is not an ADC (a part with adc_bits in its model)
+{text}: 値 {v} を数にできません	{text}: cannot read the value {v} as a number
+{text}: {k} は値を置き換えられる部品 (抵抗・電圧源・電流源) ではありません	{text}: {k} is not a part whose value can be replaced (resistor, voltage source, current source)
+{k} が回路図にありません	{k} is not in the schematic
+{k} にはモデルがないので、状態を変えられません	{k} has no model, so its state cannot be changed
+{k} のスイッチの位置 ({src}) が回路にありません	The switch position ({src}) of {k} is not in the circuit
+B 側	B side
+{k} は、状態を保つリレーでもスイッチでもありません (値を変えるときは {k}=値 と書きます)	{k} is neither a latching relay nor a switch (to change a value, write {k}=value)
+{k} のピン {pin} がどこにもつながっていません	Pin {pin} of {k} is not connected to anything
+{k} セット	{k} set
+{part} は 2 本のピンが別々のネットにつながった部品ではありません (温度のセンサーは 2 端子の部品)	{part} is not a part with two pins on separate nets (a temperature sensor is a two-terminal part)
+{part} は値を動かせる部品 (抵抗・電圧源・電流源) ではありません	{part} is not a part whose value can be varied (resistor, voltage source, current source)
+{part}: 温度のセンサーのネットが分かりません	{part}: cannot find the temperature sensor's nets
+{}: 試す値は 0 でない数にしてください (抵抗は正の数)	{}: the trial value must be a nonzero number (positive for resistors)
+{}: ネット {net} が回路図にありません (測る物をつなぐネットの名前を入れます)	{}: net {net} is not in the schematic (enter the name of the net the measured item connects to)
+{}: 温度のセンサーは、基準の抵抗 (r0) と B 定数か温度係数 (alpha) を入れてください	{}: for a temperature sensor, enter the reference resistance (r0) and the B constant or the temperature coefficient (alpha)
+# crates/sim-core/src/adcread.rs
+{refdes} は ADC (モデルに adc_bits のある部品) ではありません	{refdes} is not an ADC (a part with adc_bits in its model)
+{refdes} のピン {pin} は、どこにもつながっていません	Pin {pin} of {refdes} is not connected to anything
+{} の電圧が DC の結果にありません	The voltage of {} is not in the DC result
+利得は 0 より大きい数にしてください (例: 1、2、4 … 128)	The gain must be a number greater than 0 (e.g. 1, 2, 4 … 128)
+基準電圧 (ピン {} と {} の差) が 0 V です。基準電圧のピンを確かめます	The reference voltage (difference between pins {} and {}) is 0 V. Check the reference voltage pins
+# crates/sim-core/src/audio.rs
+波形の点が足りません	Not enough waveform points
+時間の範囲が短すぎます (音にするには {:.0} µs 以上)	The time range is too short (at least {:.0} µs is needed for sound)
+時間の範囲が長すぎます (30 秒まで)	The time range is too long (30 seconds at most)
+この信号は変化していないので、音になりません (直流だけです)	This signal does not change, so it makes no sound (it is DC only)
+WAV の形が読めません (PCM か 32 ビットの浮動小数点の WAV にしてください)	Cannot read this WAV format (use a PCM or 32-bit floating-point WAV)
+WAV のファイル「{path}」が開けません: {e}	Cannot open the WAV file "{path}": {e}
+WAV のファイル「{path}」に音が入っていません	The WAV file "{path}" contains no sound
+# crates/sim-core/src/budget.rs
+定格の電流	Rated current
+発熱 (温度の上限)	Heat (temperature limit)
+上の電源の余裕	Headroom of the upstream supply
+# crates/sim-core/src/circuit.rs
+LCURVE には「電流:割合」の点が要ります (例: 0:1,3:0.88,6:0.65)	LCURVE needs "current:ratio" points (e.g. 0:1,3:0.88,6:0.65)
+LCURVE の電流は 0 以上、割合は 0 より大きい数にしてください	In LCURVE, the current must be 0 or more and the ratio greater than 0
+LCURVE の点は、電流の小さい順に並べてください	List the LCURVE points in order of increasing current
+LCURVE の「{p}」は「電流:割合」(例 3:0.88) で書いてください	Write "{p}" in LCURVE as "current:ratio" (e.g. 3:0.88)
+LCURVE の「{s}」が数として読めません	Cannot read "{s}" in LCURVE as a number
+# crates/sim-core/src/inrush.rs
+電源 (− が GND で、値が直流の電圧源) がありません。突入電流は、電源を入れた瞬間に電源から流れる電流です	There is no supply (a DC voltage source with − on GND). Inrush current is the current that flows from the supply the moment it is turned on
+見る時間は 0 より大きく、電源の抵抗は 0 以上にしてください	The time to look at must be greater than 0, and the supply resistance 0 or more
+DC動作点を解けませんでした: {e}	Could not solve the DC operating point: {e}
+電源投入の過渡解析ができませんでした: {e}	The power-on transient analysis failed: {e}
+# crates/sim-core/src/model_meas.rs
+電源 ±{} V	Supply ±{} V
+{sup}、ボルテージフォロワで入力 0 V の出力 (絶対値)	{sup}, voltage follower output with 0 V input (absolute value)
+{sup}、IN+ に流れる電流 (絶対値)	{sup}, current into IN+ (absolute value)
+{sup}、無負荷のボルテージフォロワ	{sup}, voltage follower with no load
+{sup}、0.01 Hz、負荷 2 kΩ	{sup}, 0.01 Hz, load 2 kΩ
+{sup}、開ループの利得が 0 dB になる周波数	{sup}, frequency where the open-loop gain is 0 dB
+{sup}、0 dB の周波数での位相	{sup}, phase at the 0 dB frequency
+{sup}、ボルテージフォロワに 2 V の段の 20〜80 %、負荷 10 kΩ	{sup}, voltage follower, 20 to 80 % of a 2 V step, load 10 kΩ
+{sup}、負荷 10 kΩ、{}の電源からの距離	{sup}, load 10 kΩ, distance from the {} supply
+正	positive
+負	negative
+{sup}、出力を 0 V に短絡 (吐き出し)	{sup}, output shorted to 0 V (sourcing)
+{sup}、ボルテージフォロワの出力の雑音密度 (1 kHz)	{sup}, voltage follower output noise density (1 kHz)
+基準電圧 (OUT − ADJ、ADJ を GND に)	Reference voltage (OUT − ADJ, with ADJ to GND)
+動作点が求まりません	Cannot find the operating point
+{what}、入力 {} V、負荷 {} A	{what}, input {} V, load {} A
+入力 {} → {} V の出力の変化 ÷ 5 V	Output change for input {} → {} V ÷ 5 V
+負荷 {} → {} A の出力の下がり ÷ 電流の変化	Output drop for load {} → {} A ÷ change in current
+{} ピンの電流、負荷 {} A	Current of the {} pin, load {} A
+入力を 出力 + ドロップアウト − 0.3 V ({} V) に下げ、負荷 {} A	Input lowered to output + dropout − 0.3 V ({} V), load {} A
+出力を短絡、入力 {} V	Output shorted, input {} V
+{} Hz、入力から出力へ	{} Hz, input to output
+# crates/sim-core/src/spice_flat.rs
+{}: table(x0 y0 x1 y1 ...) は、点 (x y) を 2 つ以上並べます	{}: table(x0 y0 x1 y1 ...) needs two or more (x y) points
+# crates/sim-core/src/system.rs
+期間は正の値にしてください (例: 10m)	The period must be positive (e.g. 10m)
+どの基板にも AC の信号源がありません。入力にする電源の「AC 振幅」を 1 などにしてから解析してください	No board has an AC signal source. Set "AC amplitude" of the input source to 1 or similar, then run the analysis
+# crates/sim-core/src/timelog.rs
+記録の行が見つかりません。1 行に「時刻 (10:00:01 か秒), 値, 値 …」を並べてください	No log rows found. Put "time (10:00:01 or seconds), value, value …" on each line
+記録の行が 2 つ以上要ります	At least two log rows are needed
+列 {k}	Column {k}
+足す記録に列「{n}」がありません (列: {})。同じ測り方の記録を足します	The log to add has no column "{n}" (columns: {}). Add a log measured the same way
+# crates/sim-core/src/tran.rs
+途中で止めました	Stopped partway
+この回の出力は実物では不定 (0 にも 1 にもなりうる) で、ここでは 0 か 1 を乱数で選んでいます (毎回同じ選び方)。どちらかに落ち着くまで、いつもより遅れることもあります (メタステーブル)	In real hardware this output is undefined (it could be 0 or 1); here 0 or 1 is chosen at random (the same choice every run). It may also take longer than usual to settle on one (metastability)
+# crates/sim-core/src/waveform.rs
+WAV のファイル名の " が閉じていません	The " in the WAV file name is not closed
+WAV(ファイル名 [全振幅の電圧] [秒]) のように、ファイル名を書きます	Write the file name like WAV(file name [full-scale voltage] [seconds])
+# crates/sim-core/src/sketch/blocks.rs
+// ブロックで作ったスケッチ	
+配列 {name} はブロックにありません (変数を 1 つずつ作ります)	There is no block for the array {name} (make the variables one by one)
+関数 {other}() はブロックにありません (ブロックは setup と loop の 2 つだけです)	There is no block for the function {other}() (blocks only have setup and loop)
+{}() は void {}() と書きます	Write {}() as void {}()
+関数の中の変数 {name} はブロックにありません (上の「変数」で作り、「〜にする」ブロックで値を入れます)	There is no block for the variable {name} inside a function (make it with "Variables" above and set its value with a "set to" block)
+do … while はブロックにありません (「〜の間くり返す」を使います)	There is no block for do … while (use "repeat while")
+return はブロックにありません	There is no block for return
+break・continue はブロックにありません	There are no blocks for break and continue
+この for はブロックにありません (「n 回くり返す」は for (int i = 0; i < n; i++) の形だけです)	There is no block for this for ("repeat n times" is only the form for (int i = 0; i < n; i++))
+配列の要素はブロックにありません	There are no blocks for array elements
+pinMode の 2 つ目は OUTPUT・INPUT・INPUT_PULLUP のどれかです	The second argument of pinMode must be OUTPUT, INPUT or INPUT_PULLUP
+{other}(…) はブロックにありません	There is no block for {other}(…)
+「{op}」はブロックにありません (「〜にする」か「〜だけ変える」を使います)	There is no block for "{op}" (use "set to" or "change by")
+この行はブロックにありません (値を計算するだけの行です)	There is no block for this line (it only calculates a value)
+{other}(…) はブロックの値にありません	There is no value block for {other}(…)
+「{op}」はブロックにありません	There is no block for "{op}"
+配列 {n} はブロックにありません	There is no block for the array {n}
+「? :」はブロックにありません (「もし〜なら」を使います)	There is no block for "? :" (use "if")
+値の中の代入はブロックにありません	There is no block for an assignment inside a value
+# crates/sim-core/src/sketch/lex.rs
+#define の後に名前がありません	
+16 進の数「0x{text}」が読めません	Cannot read the hex number "0x{text}"
+2 進の数「0b{text}」が読めません	Cannot read the binary number "0b{text}"
+数「{text}」が読めません	Cannot read the number "{text}"
+数「{text}」が大きすぎるか読めません	The number "{text}" is too large or cannot be read
+' が閉じていません	The ' is not closed
+文字は '1' のように 1 文字を ' で囲みます	A character is one letter in ' quotes, like '1'
+「{c}」はスケッチでは使えない文字です	"{c}" is a character you cannot use in a sketch
+# crates/sim-core/src/sketch/mod.rs
+ピン {p} はありません (ATtiny85 は 0〜5。A0〜A3 は 5・2・4・3 の別名)	There is no pin {p} (the ATtiny85 has 0 to 5; A0 to A3 are other names for 5, 2, 4, 3)
+ピン {p} はありません (0〜{} と A0〜A{})	There is no pin {p} (0 to {} and A0 to A{})
+スケッチの終わりに来ました	Reached the end of the sketch
+配列の番号 {k} が範囲 (0〜{}) の外です	Array index {k} is out of range (0 to {})
+関数の呼び出しが深すぎます (自分を呼び続けていませんか)	Function calls are nested too deep (is a function calling itself over and over?)
+return の戻り先がありません	return has nowhere to return to
+map の入力の範囲の両端が同じです	Both ends of the map input range are the same
+計算の途中の値がたまりすぎました	Too many intermediate values piled up in a calculation
+# crates/sim-core/src/sketch/parse.rs
+スケッチの終わり	end of the sketch
+「{op}」が要るところに {near} があります (; や括弧の閉じ忘れ?)	Found {near} where "{op}" is expected (missing ; or closing bracket?)
+名前が要るところです	A name is expected here
+関数か変数の宣言 (int x = 0; や void loop() { … }) が要るところです	A function or variable declaration (int x = 0; or void loop() { … }) is expected here
+引数の型 (int など) が要ります	The argument needs a type (such as int)
+配列 {name} の大きさが決まりません ([5] か = {{1, 2}} で決めます)	The size of the array {name} is not set (set it with [5] or = {{1, 2}})
+{ に対応する } がありません	
+do { … } の後に while (条件); が要ります	do { … } needs while (condition); after it
+「{w}」は、このスケッチの動かし方ではまだ使えません (if / else で書きかえてください)	"{w}" cannot be used yet with this way of running sketches (rewrite it with if / else)
+「{op}」の左は変数です	The left side of "{op}" must be a variable
+値 (数・変数・関数の呼び出し) が要るところです	A value (number, variable or function call) is expected here
+# crates/sim-core/src/sketch/vm.rs
+変数 {name} の型に void は使えません	The variable {name} cannot have type void
+配列 {name} の大きさ {n} より、最初の値が多くあります	The array {name} has more initial values than its size {n}
+void の関数は値を返せません	A void function cannot return a value
+break はループの中で使います	Use break inside a loop
+continue はループの中で使います	Use continue inside a loop
+変数 {n} が宣言されていません (int {n} = 0; のように)	The variable {n} is not declared (declare it like int {n} = 0;)
+{n} は配列です。{n}[0] のように番号を付けます	{n} is an array. Add an index, like {n}[0]
+配列 {n} が宣言されていません	The array {n} is not declared
+{n} は配列ではありません	{n} is not an array
+代入の左は変数です	The left side of an assignment must be a variable
+「{n}」が何か分かりません (変数の宣言忘れか、書き間違い?)	Unknown name "{n}" (forgot to declare the variable, or a typo?)
+{name} は引数が {want} 個の関数です ({} 個で呼んでいます)	{name} takes {want} arguments (it is called with {})
+{name} の引数の数が違います	Wrong number of arguments for {name}
+ (Serial は begin・print・println だけ使えます)	 (only begin, print and println can be used with Serial)
+ (関数の名前の書き間違い? このスケッチの動かし方で使えない関数かもしれません)	 (a typo in the function name? It may be a function this way of running sketches does not support)
+関数「{name}」が見つかりません{hint}	Function "{name}" not found{hint}
+void {want}() {{ … }} がありません (Arduino のスケッチには setup と loop の 2 つが要ります)	There is no void {want}() {{ … }} (an Arduino sketch needs both setup and loop)
+文字列は計算に使えません (Serial.print で出すだけです)	Strings cannot be used in calculations (they can only be printed with Serial.print)
+「{op}」は使えません	"{op}" cannot be used
+0 で割りました	Divided by 0
+# crates/web/src/main.rs
+<p>起動できませんでした (Could not start): {e:?}</p>	

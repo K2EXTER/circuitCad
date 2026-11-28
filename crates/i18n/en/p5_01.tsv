@@ -1,0 +1,313 @@
+# crates/app/src/actions.rs
+回路図を整える	Tidy schematic
+部品を、信号は左から右・電源は上・GND は下に並べ直す (つながりは変えない。部品を選んでいるときは、選んだ部品だけを下に並べる)	Rearranges parts so signals flow left to right, supplies are at the top and GND at the bottom (connections stay the same. When parts are selected, only the selected parts are arranged below)
+電流の動く点を出す・消す	Show / hide current dots
+DC の結果と試作のタブで、電線の上を電流の向きに動く点 (速さは電流の大きさ)	Dots that move along the wires in the direction of the current, in the DC results and the Prototype tab (speed shows the size of the current)
+# crates/app/src/app_actions.rs
+電流の動く点を出します	Showing the current dots
+電流の動く点を消しました	Hid the current dots
+# crates/app/src/bench_guide.rs
+データシートの PDF を読む	Read the datasheet PDF
+部品の使い方の正解は、メーカーのデータシート (PDF) に書いてあります。英語で数十ページあっても、読む順と見るところは、だいたい決まっています。使っている部品 (78xx・LM358 など) のデータシートを、メーカーのサイトからダウンロードして、circuitCad の部品作成フォーム (回路図の左パネル「＋ 部品を作る…」の「データシート (PDF) を開く」) で開き、上の「読み方の案内」を押すと、この手順のページへ順に飛べます。紙や PDF の閲覧ソフトで読んでもかまいません。	The right way to use a part is written in the maker's datasheet (PDF). Even if it is dozens of pages in English, the reading order and the places to look are mostly the same. Download the datasheet of the part you use (78xx, LM358, etc.) from the maker's site, open it in circuitCad's part form ("Open datasheet (PDF)" under "+ Create part…" in the schematic's left panel), and press "Reading guide" at the top to jump to the page for each step in turn. You can also read it on paper or in a PDF viewer.
+安全 (確かめること): データシートは、型番 (末尾の文字まで) と版 (Rev) が合っているものを使います。同じ型番でもメーカーが違うと、ピン配置や値が違うことがあります。	Safety (check): use a datasheet whose part number (down to the last letter) and revision (Rev) match. Even with the same part number, a different maker may have a different pinout or values.
+見出しが見つからない	Can't find a heading
+メーカーによって見出しの書き方が違います (Specifications の中に表がある、など)。目次 (Table of Contents) から探すか、表の中の語 (VCC、IOUT) で検索します。	Makers write headings differently (the table may be inside Specifications, etc.). Look in the Table of Contents, or search for a word in the table (VCC, IOUT).
+文字が選べない・検索できない (画像の PDF)	Can't select or search the text (image PDF)
+古いデータシートは画像のことがあります。データシートの窓の「文字を読み取る (OCR)」で読めます。	Old datasheets may be images. Use "Read text (OCR)" in the datasheet window to read them.
+min・typ・max の欄が空いている	The min, typ or max column is empty
+空欄はメーカーが決めていない (保証していない) という意味です。typ しかない値は、目安として使います。	An empty cell means the maker does not specify (guarantee) it. Use a value that only has typ as a rough guide.
+ここは、一般的な読み方です。メーカーや部品の種類 (センサ・マイコン・電源 IC) で、見出しや表の並びは違います。迷ったら、メーカーのアプリケーションノートも読みます。	This is a general way to read them. Headings and table order differ by maker and part type (sensor, microcontroller, power IC). If unsure, also read the maker's application notes.
+# crates/app/src/bench_tab.rs
+原寸の確かめ用の図を保存 (SVG)…	Save actual-size check drawing (SVG)…
+パッドと穴を原寸で描いた図 (50 mm の目盛りつき) を保存します。「実際のサイズ」(100 %) で印刷し、実物の部品を当てて足とパッドが合うかを見ます。発注の前に、届いた部品で確かめるのがいちばんです	Saves a drawing of the pads and holes at actual size (with a 50 mm scale). Print it at "Actual size" (100 %) and hold the real parts on it to see if the leads match the pads. It is best to check with the parts you received before you order
+この基板に合う手順書はまだありません。リード部品は、背の低い順に足を穴に通し、裏からはんだ付けして、余った足を切ります。向きのある部品は、付ける前に向きの印を確かめます。	There is no instruction sheet for this board yet. For leaded parts, put the leads through the holes starting with the lowest parts, solder from the bottom, and cut the extra leads. For parts with a direction, check the direction mark before mounting.
+時間の記録…	Time log…
+テスターや自作の DMM の長い時間の記録 (CSV) を時刻の軸で見て、ドリフト (1 時間あたり) と温度係数を出し、予測と比べます	Shows a long-time log (CSV) from a multimeter or a homemade DMM on a time axis, finds the drift (per hour) and the temperature coefficient, and compares them with the prediction
+この回路は動き続けるので、時間とともに変わる点は、過渡解析の後半の平均と、変わる幅を出しています。テスターは平均に近い値を示し、数字が揺れることがあります。	This circuit keeps running, so for points that change over time, the average and the range of change in the second half of the transient analysis are shown. A multimeter shows a value close to the average, and the digits may jump around.
+測った値を「実測」に入れると、予測との差と、合っているか (✔ 合う・▲ ずれ・✖ 大きくずれ) が出ます。テスターの不確かさは「4.98 ±0.02」のように書けます。入れた値は回路図と一緒に保存されます。	Enter a measured value in "Real" to see the difference from the prediction and whether it matches (✔ match, ▲ off, ✖ far off). You can write the multimeter's uncertainty like "4.98 ±0.02". The values you enter are saved with the schematic.
+{} 点を測りました。合っているのは {} 点	Measured {} points. {} match
+予測	Prediction
+テスターで測った電圧 (V)。4.98 や 4.98 ±0.02 のように	Voltage measured with a multimeter (V). Like 4.98 or 4.98 ±0.02
+平均 {}V ({}V 〜 {}V で変わる)	Average {}V (varies from {}V to {}V)
+過渡解析の後半から出した値です。DC 動作点の {}V は、動きが止まった状態の値で、実物では出ません	This value is from the second half of the transient analysis. The DC operating point's {}V is the value with the circuit stopped, which the real circuit does not show
+予測と合っています (部品の誤差・テスターの誤差の内)	Matches the prediction (within part and multimeter tolerances)
+少しずれています。測る点・テスターのレンジ・部品の値を確かめましょう	Slightly off. Check the measuring point, the multimeter range and the part values
+大きくずれています。部品の付け間違い・はんだ付け・向き・電源を確かめます (「5. 修理」で原因を探せます)	Far off. Check for wrong parts, soldering, direction and the supply (you can look for the cause in "5. Repair")
+{} (許す幅 ±{}V)	{} (allowed ±{}V)
+読めません	Cannot read
+# crates/app/src/ds_reading.rs
+1. 何の部品か (表紙と特長)	1. What the part is (cover page and features)
+1 ページ目で、型番と、何をする部品か (Description・概要)、電源電圧の範囲、パッケージを確かめます。特長 (Features) に書いた数値は、いちばん良い条件での値のことが多いので、あとで表の条件と見比べます。	On page 1, check the part number, what the part does (Description), the supply voltage range and the package. The numbers in Features are often values under the best conditions, so compare them later with the conditions in the tables.
+型番と、何をする部品かを確かめた	I checked the part number and what the part does
+電源電圧の範囲と、パッケージ (足の形) を確かめた	I checked the supply voltage range and the package (lead shape)
+特長	
+特徴	
+概要	
+2. 絶対最大定格 (これを超えると壊れる)	2. Absolute maximum ratings (exceed them and it breaks)
+一瞬でも超えると壊れたり、寿命が縮んだりする限界です。「使ってよい値」ではありません。電源電圧・入力の電圧・電流・損失 (電力)・温度を見て、ふだんはこれより十分低く (2〜3 割以上の余裕を見て) 使います。入力の電圧は「電源 + 0.3V」のように電源に対して決まっていることが多いので、電源が入っていないときに入力に電圧をかけないようにも気をつけます。	These are limits that break the part or shorten its life if exceeded even for a moment. They are not "values you may use". Look at the supply voltage, input voltage, current, dissipation (power) and temperature, and normally stay well below them (with a margin of 20-30 % or more). The input voltage is often set relative to the supply, like "supply + 0.3V", so also take care not to apply voltage to an input while the supply is off.
+電源電圧の最大値を見た	I looked at the maximum supply voltage
+入力のピンにかけてよい電圧の範囲を見た	I looked at the voltage range allowed on the input pins
+最大の電流と損失 (電力) を見た	I looked at the maximum current and dissipation (power)
+絶対最大	
+3. 推奨動作条件 (ちゃんと動く範囲)	3. Recommended operating conditions (the range where it works properly)
+メーカーが「この範囲なら表どおりに動く」と決めた範囲です。電源電圧・入力の範囲・周囲の温度は、ここに入るように設計します。絶対最大定格との間は、壊れはしないけれど、性能は保証されない範囲です。	This is the range where the maker says "it works as in the tables". Design so that the supply voltage, input range and ambient temperature fall inside it. Between this and the absolute maximum ratings, the part will not break, but its performance is not guaranteed.
+推奨の電源電圧の範囲に、自分の電源が入っている	My supply is within the recommended supply voltage range
+動作温度の範囲を確かめた	I checked the operating temperature range
+推奨動作範囲	
+動作条件	
+4. 電気的特性 (min・typ・max と条件)	4. Electrical characteristics (min, typ, max and conditions)
+部品の性能の表です。typ は代表値 (たくさん作ったときの真ん中あたり) で、保証ではありません。どの部品でも守られるのは min と max なので、設計は min・max で余裕を見ます (空欄は「決めていない」)。同じ行の「条件」(電源電圧・温度・負荷・周波数) が違うと値も変わるので、自分の使い方に近い条件の行を読みます。表の上に、全部の行に共通の条件 (TA = 25℃、VCC = 5V など) が書いてあることも多いです。	This is the table of the part's performance. typ is a typical value (around the middle of many parts made) and is not guaranteed. Only min and max hold for every part, so design with margin using min and max (an empty cell means "not specified"). Values change when the "conditions" in the same row (supply voltage, temperature, load, frequency) differ, so read the rows whose conditions are close to how you use the part. Conditions shared by all rows (TA = 25℃, VCC = 5V, etc.) are often written above the table.
+typ だけでなく、min か max の値も見た	I looked at the min or max value, not only typ
+その値の条件 (電源電圧・温度・負荷) が、自分の使い方に近いことを確かめた	I checked that the conditions of the value (supply voltage, temperature, load) are close to how I use it
+表の上の共通の条件 (温度など) を見た	I looked at the shared conditions above the table (temperature, etc.)
+電気特性	
+5. 特性のグラフ (条件による変わり方)	5. Characteristic graphs (how it changes with conditions)
+表の 1 点だけではわからない、電圧・電流・温度・周波数による変わり方です。グラフのそばに書いた条件 (TA = 25℃ など) と、ほとんどが typ (代表値) であることに気をつけます。軸が対数のこともあります。circuitCad の「グラフから点を読む」で、曲線の値を読めます。	These show how values change with voltage, current, temperature and frequency, which one point in a table cannot tell you. Note the conditions written by the graph (TA = 25℃, etc.) and that most are typ (typical values). The axes may be logarithmic. You can read values off the curves with circuitCad's "Read points from a graph".
+グラフの条件 (温度・電源電圧) を見た	I looked at the graph's conditions (temperature, supply voltage)
+縦軸・横軸の単位と、対数かどうかを見た	I looked at the units of the vertical and horizontal axes and whether they are logarithmic
+代表特性	
+特性図	
+特性曲線	
+代表的な特性	
+6. ピン配置 (番号と名前)	6. Pinout (numbers and names)
+ピンの番号と名前、それぞれの働きの表です。図が上から見た図 (Top View) か、下から見た図 (Bottom View) かを必ず確かめます。NC (どこにもつながっていない)、裏の放熱パッド (GND につなぐか、つながないか) の扱いも書いてあります。	A table of pin numbers, names and what each pin does. Always check whether the drawing is seen from above (Top View) or from below (Bottom View). It also tells you how to handle NC (not connected anywhere) and the exposed thermal pad on the underside (connect to GND or not).
+上から見た図か下から見た図かを確かめた	I checked whether it is a top view or a bottom view
+電源と GND のピンを見つけた	I found the supply and GND pins
+NC や放熱パッドの扱いを見た	I looked at how to handle NC and the thermal pad
+端子配列	
+ピン構成	
+端子機能	
+ピン説明	
+7. 応用回路と推奨の部品	7. Application circuits and recommended parts
+メーカーがすすめる使い方の回路です。入力・出力のコンデンサの容量や種類、抵抗の値の決め方 (式) が書いてあります。はじめは、この回路をそのまままねると確実です。コンデンサは、できるだけピンの近くに置くように書いてあることも多いです。	These are circuits showing how the maker recommends using the part. They give the value and type of the input and output capacitors and how to choose resistor values (formulas). At first, copying this circuit as it is, is the safe way. They often say to place the capacitors as close to the pins as possible.
+応用回路を見つけた	I found the application circuit
+推奨のコンデンサの容量と種類を確かめた	I checked the recommended capacitor value and type
+応用回路	
+アプリケーション	
+代表的な応用	
+使用例	
+8. 外形寸法とランドパターン	8. Package dimensions and land pattern
+部品の大きさと、基板に作るパッドの推奨寸法です。単位 (mm かインチか)、どの数が最大・最小か、ピン 1 の印の位置を確かめます。基板を作るときは、ここの推奨のパッドを使うと、はんだ付けがうまくいきます。	The size of the part and the recommended size of the pads on the board. Check the units (mm or inch), which numbers are max and min, and where the pin 1 mark is. When you make the board, using the recommended pads here makes soldering go well.
+寸法の単位を確かめた	I checked the units of the dimensions
+ピン 1 の印の位置を確かめた	I checked where the pin 1 mark is
+推奨のパッド (ランド) の寸法を見た	I looked at the recommended pad (land) dimensions
+外形図	
+パッケージ寸法	
+推奨ランド	
+# crates/app/src/flow_dots.rs
+遅い	Slow
+点がゆっくり動きます。電流の違いを落ち着いて見比べたいときに	The dots move slowly. For when you want to compare currents calmly
+はじめの速さです	The default speed
+速い	Fast
+点が速く動きます。小さな電流でも動きが分かりやすくなります	The dots move fast. Even small currents are easy to see moving
+電流の流れを動く点で見せる	Show current flow with moving dots
+DC動作点の結果と、試作のタブで電源を入れて動かしている間、電線の上を点が電流の向きに動きます。速さは電流の大きさ (1 µA でゆっくり、1 A で速く)。0.1 µA より小さい所は動きません。慣れて邪魔に感じたら切ります (回路図の「電流表示」のとなりでも切れます)	In the DC operating point results, and while the Prototype tab is running with power on, dots move along the wires in the direction of the current. The speed shows the size of the current (slow at 1 µA, fast at 1 A). Where it is below 0.1 µA they do not move. Turn it off once you are used to it and find it distracting (you can also turn it off next to "Show currents" in the schematic)
+「電流の流れを動く点で見せる」を入れると変えられます	Turn on "Show current flow with moving dots" to change this
+点の速さ	Dot speed
+# crates/app/src/help.rs
+左パネルに「整列」が出ます。左・右・上・下揃え、縦・横の線に中心、等間隔 (3 個以上)、横・縦に詰めて並べる、つながる順に並べる (コネクタのピンの順に直列抵抗を、のように相手のピンの並びの順に一列に) で、部品の位置をそろえます。固定した部品は動きません。配線は動かないので、配線の前に使うのがおすすめです	"Align" appears in the left panel. Line up parts with left, right, top and bottom align, center on a vertical or horizontal line, equal spacing (3 or more), pack side by side horizontally or vertically, and arrange in connection order (in one row in the order of the other part's pins, such as series resistors in the order of a connector's pins). Locked parts do not move. Tracks do not move, so it is best used before routing
+描いているものを確定します。描いていないときは選択ツールに戻ります。選択ツールでは、選んでいる部品の選択を解除します (Esc と同じ)	Finishes what you are drawing. When not drawing, returns to the select tool. In the select tool, deselects the selected parts (same as Esc)
+# crates/app/src/main.rs
+{} 個をリード部品の形にして、取り込み直しました ({})。パッドが大きくなったので、DRC と配線を確かめてください	Changed {} parts to leaded footprints and imported again ({}). The pads are larger, so check DRC and the tracks
+ケーブルでつなぐサンプル (同じ 2 枚をケーブルで)	Cable connection sample (the same 2 boards with a cable)
+上と同じ 2 枚の基板を横に並べ、4 本の線のケーブルでつないだ例です。「基板どうしのつなぎ」の窓で、線の表 (色・両端のピン・相手のハウジング) と、ケーブルの図 (SVG) と線の表 (CSV) の保存を試せます	An example of the same 2 boards as above placed side by side and joined with a 4-wire cable. In the "Board-to-board connections" window you can try the wire table (colors, pins at both ends, mating housing) and saving the cable drawing (SVG) and wire table (CSV)
+原寸の確かめ用の図をSVGで保存…	Save actual-size check drawing as SVG…
+表の面のパッドと穴を原寸 (1:1) で、50 mm の目盛りをつけて白い紙に描きます。「実際のサイズ」(100 %) で印刷し、実物の部品を当てて、足とパッドが合うかを発注の前に確かめます	Draws the top side's pads and holes at actual size (1:1) on white with a 50 mm scale. Print it at "Actual size" (100 %), hold the real parts on it, and check that the leads match the pads before you order
+# crates/app/src/multiboard.rs
+{what}「{t}」を数値にできません (例: 10m、1k、1Meg)	Cannot read {what} "{t}" as a number (e.g. 10m, 1k, 1Meg)
+同じ基板のコネクタどうしは、ケーブルで並べられません	Connectors on the same board cannot be placed with a cable
+「{}」を「{}」の横 {gap:.0} mm に並べました。コネクタの間は {:.0} mm、ケーブルの長さの目安は {:.0} mm です	Placed "{}" beside "{}" with a {gap:.0} mm gap. The connectors are {:.0} mm apart, and the suggested cable length is {:.0} mm
+つなぎの基板が見つかりません	The boards of the connection were not found
+つなぎのコネクタが回路図に見つかりません	The connection's connector was not found in the schematic
+ピンの組を同じ番号どうしに戻しました	Set the pin pairs back to matching numbers
+ピンの組を逆順にしました (1 番 ↔ {n} 番)	Reversed the pin pairs (pin 1 ↔ pin {n})
+2 列の列を入れ替えた組にしました (1 番 ↔ 2 番、3 番 ↔ 4 番 …)	Swapped the two rows (pin 1 ↔ pin 2, pin 3 ↔ pin 4 …)
+2 列の並びを前後逆にした組にしました (1 番 ↔ {} 番、2 番 ↔ {n} 番 …)	Reversed the two rows end to end (pin 1 ↔ pin {}, pin 2 ↔ pin {n} …)
+{n} 本のケーブルを保存しました: {}	Saved {n} cables: {}
+期間	Duration
+開始周波数	Start frequency
+終了周波数	Stop frequency
+上: ピンの電圧 (A の側、GND から)。下: ピンを流れる電流 (A から B へが正)。ホイールで拡大、ドラッグで移動、ダブルクリックで全体	Top: pin voltage (on the A side, from GND). Bottom: current through the pin (positive from A to B). Wheel to zoom, drag to move, double-click to show all
+上: ピンの電圧の大きさ (dB、1 V が 0 dB)。下: 位相。入力の信号源は基板の電源の「AC 振幅」	Top: magnitude of the pin voltage (dB, 1 V = 0 dB). Bottom: phase. The input signal is the "AC amplitude" of a board's supply
+ひとつのプロジェクトに、いくつかの基板 (回路図と基板の組) を入れて、コネクタどうしのつなぎを調べます。編集できるのは選んでいる 1 枚です (切り替えても、元に戻す履歴は基板ごとに残ります)	Put several boards (schematic and board pairs) in one project and check the connections between their connectors. You can edit the one selected board (when you switch, each board keeps its own undo history)
+番号を逆に	Reverse numbers
+ピンの組を 1 番 ↔ 最後の番号の逆順にします (ソケットを向かい合わせに差す、フラットケーブルを折り返すとき)。2 列のコネクタは、押すたびに 180° 回す → 列を入れ替える → 前後逆、の順。最後に同じ番号どうしに戻ります	Reverses the pin pairs so pin 1 ↔ the last pin (when sockets plug in face to face, or a flat cable is folded back). For 2-row connectors, each press goes: rotate 180° → swap rows → reverse end to end, and finally back to matching numbers
+ケーブルでつなぐ	Connect with cable
+2 枚目の基板を、1 枚目のコネクタに近い辺の外に、下の「間隔」だけ離して同じ高さに並べ、コネクタどうしが向かい合うように回します。コネクタの間の距離から、ケーブルの長さの目安 (2 割の余裕と、差し込む曲がりの 20 mm を足して 10 mm 単位に切り上げ) を出し、3D の窓にケーブルを描きます	Places the second board outside the edge nearest the first board's connector, at the same height and separated by the "Gap" below, and rotates it so the connectors face each other. From the distance between the connectors it gives a suggested cable length (adding 20 % margin and 20 mm for the bend at the plug, rounded up to 10 mm), and draws the cable in the 3D window
+ケーブル {mm:.0} mm でつなぐ	Connected by a {mm:.0} mm cable
+「ケーブルでつなぐ」で置いたときの長さの目安です。「3D で重ねる」にすると、ケーブルなし (直接差す) に戻ります	The suggested length from placing with "Connect with cable". Choosing "Stack in 3D" goes back to no cable (plugged in directly)
+線の表	Wire table
+このケーブルの線ごとに、両端のピン・信号・線の色・太さを表にします。色は信号で決まります (GND は黒、電源は赤、信号は順に黄・緑・青 …)。表の色を選ぶと変えられます	A table of each wire in this cable: the pins at both ends, the signal, the wire color and the gauge. Colors are set by signal (GND black, supply red, signals yellow, green, blue … in turn). Pick a color in the table to change it
+同じ信号: {list}	Same signal: {list}
+名前は違っても同じ信号として照合する組です (照合の注意の「同じ信号にする」で足します)	Pairs checked as the same signal even though the names differ (add them with "Make same signal" in the check warnings)
+対応を消す	Clear mapping
+このつなぎの名前の対応をすべて消し、名前どうしで照合し直します	Clears all name mappings of this connection and checks again by name
+ケーブルのとき:	With a cable:
+「ケーブルでつなぐ」で、1 枚目の基板の辺から 2 枚目の基板の辺までをどれだけ離すか (ケースの中で置く距離)	How far apart to place the edge of the first board and the edge of the second with "Connect with cable" (the distance inside the case)
+同じ信号にする	Make same signal
+「{a}」と「{b}」は名前が違うだけで同じ信号、とこのつなぎに登録します (回路図の名前は変えません)	Registers in this connection that "{a}" and "{b}" are the same signal with different names (the names in the schematic do not change)
+直す	Fix
+このつなぎのピンの組を逆順 (1 番 ↔ 最後の番号) にします	Reverses the pin pairs of this connection (pin 1 ↔ the last pin)
+過渡解析の期間 (秒。10m = 10 ms)。空なら 10 ms	Duration of the transient analysis (seconds. 10m = 10 ms). 10 ms if empty
+全体の過渡解析	System transient analysis
+すべての基板をつないだ 1 つの回路で過渡解析をして、つないだピンごとの電圧と、ピンを流れる電流の時間の変化をグラフにします。電源を入れたときの突入や、ほかの基板へ送るクロックの形が分かります	Runs a transient analysis on one circuit with all boards connected and graphs the voltage of each connected pin and the current through it over time. You can see the inrush at power-on and the shape of a clock sent to another board
+AC 解析の開始周波数 (Hz)。空なら 10 Hz	Start frequency of the AC analysis (Hz). 10 Hz if empty
+AC 解析の終了周波数 (Hz。1Meg = 1 MHz)。空なら 1 MHz	Stop frequency of the AC analysis (Hz. 1Meg = 1 MHz). 1 MHz if empty
+全体の AC 解析	System AC analysis
+すべての基板をつないだ 1 つの回路で AC 解析をして、つないだピンごとの電圧の大きさと位相をグラフにします。どれかの基板の電源に「AC 振幅」(AC 1 など) が要ります。基板にまたがるフィルタや、ケーブルの先での信号の落ち方が分かります	Runs an AC analysis on one circuit with all boards connected and graphs the voltage magnitude and phase of each connected pin. A supply on one of the boards needs an "AC amplitude" (AC 1, etc.). You can see filters that span boards and how much a signal drops at the far end of a cable
+すべての基板の部品を、種類ごとに数えた表です (基板ごとの部品番号と、作る枚数を掛けた合計)。ケーブルでつなぐつなぎがあれば、ケーブルのハウジング・コンタクト・電線 (色ごとの長さ) も入ります。まとめて買うときに使います	A table counting the parts of all boards by type (refdes per board, and totals multiplied by the number of boards to make). If there are cable connections, the cable housings, contacts and wire (length per color) are included too. Use it when buying everything at once
+ケーブルでつなぐつなぎがありません。つなぎの「ケーブルでつなぐ」で長さを決めると押せます	There are no cable connections. Set a length with "Connect with cable" on a connection to enable this
+ケーブルの図 (SVG) を保存…	Save cable drawing (SVG)…
+ケーブルごとに、両端のコネクタとピン・信号、線の色と長さ、相手のハウジングとコンタクトを描いた配線図です。印刷して、ケーブルを作るときと確かめるときに使います	A wiring drawing of each cable showing the connectors, pins and signals at both ends, the wire colors and lengths, and the mating housings and contacts. Print it for making and checking the cables
+線の表 (CSV) を保存…	Save wire table (CSV)…
+ケーブルの線ごとに 1 行 (色・AWG・長さ・両端のピンと信号) の表です。切る・圧着する・テスターで確かめるときの一覧に	A table with one row per cable wire (color, AWG, length, pins and signals at both ends). A list for cutting, crimping and checking with a multimeter
+線	Wire
+A のピン	Pin on A
+B のピン	Pin on B
+信号	Signal
+(空き)	(unused)
+{} (信号で)	{} (by signal)
+信号で決める	By signal
+GND は黒、電源は赤・橙、信号は順に黄・緑・青 … (フラットケーブルは 1 番が赤、ほかは灰)	GND black, supply red or orange, signals yellow, green, blue … in turn (flat cable: pin 1 red, the others gray)
+フラットケーブル {} 芯	Flat cable, {} conductors
+電線 {} 本	{} wires
+{kind}・AWG{}・{:.0} mm・× {} 本 (作る枚数の多いほうの基板に合わせる)	{kind}, AWG{}, {:.0} mm, × {} (matched to the board made in larger numbers)
+基板のコネクタ ({}) から決めた、ケーブル側の相手です	The cable-side mate chosen from the board connector ({})
+フットプリントから相手が分かりませんでした。基板のコネクタのデータシートで、相手のハウジングとコンタクトの型番を選んでください	Could not find the mate from the footprint. Choose the part numbers of the mating housing and contacts from the board connector's datasheet
+# crates/app/src/notes_ui.rs
+付箋 {}: {first}	Note {}: {first}
+付箋 {}: {first}\n(返事 {} 件)	Note {}: {first}\n({} replies)
+付箋 ({where_})	Notes ({where_})
+まだの付箋 {open_count} 枚 / 全部で {} 枚	{open_count} open notes / {} in total
+図の上の位置にコメントを置きます (授業の添削や、人に見てもらうとき)。置くのは、図の空いた所を右クリックして「ここに付箋を置く」。付箋には返事を付けられ、済んだら「解決済み」にします。付箋はファイルに保存されます	Puts comments at places on the drawing (for class corrections, or when someone reviews your work). To place one, right-click an empty spot on the drawing and choose "Place a note here". Notes can have replies, and you mark them "Resolved" when done. Notes are saved in the file
+解決済みも出す	Show resolved
+済んだ付箋も一覧に出します (図の上では灰色の印です)	Also lists resolved notes (gray marks on the drawing)
+付箋はまだありません。図の空いた所を右クリックして「ここに付箋を置く」で置きます	No notes yet. Right-click an empty spot on the drawing and choose "Place a note here"
+(まだ何も書いていません)	(nothing written yet)
+{line}  (返事 {})	{line}  ({} replies)
+押すと、この付箋を選んで、図のその場所を見せます	Click to select this note and show its place on the drawing
+付箋 {}	Note {}
+その場所を見る	Go to place
+図をこの付箋の場所へ動かします	Moves the view to this note's place
+気づいたこと・直してほしいこと	What you noticed, or what should be fixed
+付箋の本文。図の上の印にマウスを置くと、1 行目が出ます	The note's text. Hover over the mark on the drawing to see the first line
+返事 {}:	Reply {}:
+返事	Reply
+この付箋への返事 (直したこと・質問など)	A reply to this note (what you fixed, questions, etc.)
+返事を書くと押せます	Write a reply to enable this
+返事を付ける	Add reply
+解決済み	Resolved
+済んだ付箋にします。図の上の印が灰色になり、一覧では「解決済みも出す」のときだけ出ます	Marks the note as done. Its mark on the drawing turns gray, and it shows in the list only with "Show resolved"
+この付箋を消す	Delete this note
+付箋を消します (元に戻すは Ctrl+Z)	Deletes the note (undo with Ctrl+Z)
+# crates/app/src/power_on_guide.rs
+この回路は動き続けます (発振・パルスなど)。過渡解析の後半では、電流が {} 〜 {} の間で変わり、平均は {} です。電源の電流の表示は平均に近い値になるので、範囲は平均を中心にしています。DC 動作点の {} は、動きが止まった状態の値で、実物では流れません。	This circuit keeps running (oscillation, pulses, etc.). In the second half of the transient analysis, the current varies between {} and {}, with an average of {}. The supply's current display shows a value close to the average, so the range is centered on the average. The DC operating point's {} is the value with the circuit stopped, which does not flow in the real circuit.
+過渡解析は、回路図の解析タブの過渡解析の時間で計算します (前に実行した結果があれば、それを使います)。ゆっくり動く回路は、その時間を数周期ぶんにしてから計算し直してください	The transient analysis uses the transient analysis time in the schematic's analysis tab (if there is an earlier result, that is used). For a slow circuit, set that time to a few periods and calculate again
+# crates/app/src/project.rs
+基板1	Board 1
+基板{}	Board {}
+# crates/app/src/samples.rs
+電源の予算表 (9V → 5V → 3.3V、あと何 mA つなげるか)	Power budget (9V → 5V → 3.3V, how many more mA you can connect)
+9V から LM7805 で 5V、そこから MCP1700 で 3.3V を作り、5V に 150mA、3.3V に 120mA の負荷をつないだ回路。解析の「電源の予算表」で、レールの木 (VIN → 5V → 3V3)、それぞれの電流と定格、あと何 mA つなげるか、レギュレータの発熱と効率が出ます。LM7805 は (9 − 5)V × 270mA ≒ 1.1W が熱になって約 80℃、あと約 220mA で、決め手は定格 (1.5A) ではなく温度だと分かります	A circuit that makes 5V from 9V with an LM7805, then 3.3V with an MCP1700, with a 150mA load on 5V and a 120mA load on 3.3V. The "Power budget" analysis shows the rail tree (VIN → 5V → 3V3), each current and rating, how many more mA you can connect, and the regulators' heat and efficiency. The LM7805 turns (9 − 5)V × 270mA ≈ 1.1W into heat and reaches about 80℃, with about 220mA left, so you can see the limit is temperature, not the rating (1.5A)
+突入電流 (電源を入れた瞬間の大電流)	Inrush current (large current the moment power is turned on)
+12V から逆接続保護のダイオード 1N4007 を通して 1000µF のコンデンサと LM7805 につないだ回路。解析の「突入電流」で、電源を入れた瞬間に空のコンデンサへ数十 A が流れ、ダイオードの定格 1A を大きく超えることが分かります。電源の抵抗を大きくする (細い配線・NTC サーミスタ) と、ピークがどう下がるかも試せます	A circuit connecting 12V through a 1N4007 reverse-polarity protection diode to a 1000µF capacitor and an LM7805. The "Inrush current" analysis shows that tens of A flow into the empty capacitor the moment power is turned on, far over the diode's 1A rating. You can also try how the peak drops when you raise the supply resistance (thin wiring, an NTC thermistor)
+Arduino で LED を点滅させる (スケッチ)	Blink an LED with Arduino (sketch)
+Arduino Nano の D13 から 330Ω を通して LED をつないだ回路。「試作」のタブを開くと、左にスケッチ (setup と loop) があります。「電源」を「入」にすると、スケッチが回路と一緒に動いて LED が 0.5 秒ごとに点滅します。delay の数を変えると、すぐに速さが変わります	A circuit with an LED connected to D13 of an Arduino Nano through 330Ω. Open the "Prototype" tab and the sketch (setup and loop) is on the left. Set "Power" to "on" and the sketch runs with the circuit, blinking the LED every 0.5 s. Change the number in delay and the speed changes right away
+Arduino をブロックで書く (押しボタンで LED)	Program Arduino with blocks (LED with a push button)
+Arduino Nano の D2 に押しボタン (GND へ)、D13 に 330Ω と LED をつないだ回路。スケッチを文字でなくブロックで書いてあります: 「試作」のタブの左で、ブロックの名前をドラッグして並べ替えたり、上の一覧から足したりできます。値の ▼ で数・ピン・変数・読みを替えます。電源を入れて SW1 をクリックすると、押している間 LED が点き、押した回数がシリアルモニタに出ます。「コード」に切り替えると、ブロックから作られた Arduino のコードが見られます	A circuit with a push button on D2 of an Arduino Nano (to GND), and 330Ω and an LED on D13. The sketch is written in blocks instead of text: on the left of the "Prototype" tab you can drag block names to reorder them, or add new ones from the list at the top. Use ▼ on a value to change it to a number, pin, variable or reading. Turn on power and click SW1: the LED is on while it is pressed, and the number of presses appears in the Serial Monitor. Switch to "Code" to see the Arduino code made from the blocks
+Arduino でボリュームを読んで LED の明るさを変える	Read a potentiometer with Arduino and change an LED's brightness
+A0 につないだボリュームの電圧を analogRead で読み (0〜1023)、analogWrite で D9 の LED の明るさにします (0〜255)。「試作」のタブで電源を入れ、ボリュームを回すと LED の明るさが変わり、読んだ値がシリアルモニタに出ます	Reads the voltage of a potentiometer on A0 with analogRead (0-1023) and sets the brightness of the LED on D9 with analogWrite (0-255). Turn on power in the "Prototype" tab and turn the potentiometer: the LED brightness changes, and the value read appears in the Serial Monitor
+Arduino でサーボを回す (Servo ライブラリ)	Turn a servo with Arduino (Servo library)
+Arduino Nano の D9 にマイクロサーボ、A0 にボリュームをつないだ回路。ボリュームを回すと、サーボが同じ角度 (0〜180°) まで回ります。サーボの電源は Nano の 5V から。Servo ライブラリを使うので「本物の命令で動かす」(arduino-cli と、Arduino の Servo ライブラリが要ります) で動きます。「試作」のタブで電源を入れると、サーボの腕の向きと角度が絵で出ます	A circuit with a micro servo on D9 of an Arduino Nano and a potentiometer on A0. Turn the potentiometer and the servo turns to the same angle (0-180°). The servo is powered from the Nano's 5V. It uses the Servo library, so it runs with "Run the real chip's instructions" (needs arduino-cli and Arduino's Servo library). Turn on power in the "Prototype" tab to see the servo arm's direction and angle drawn
+ATtiny85 で LED を点滅 (8 ピンのマイコン)	Blink an LED with ATtiny85 (8-pin microcontroller)
+8 ピンのマイコン ATtiny85 の PB1 に 330Ω と LED、A1 (PB2) にボリュームをつないだ回路。ATtiny85 には USB が無いので、8 番 (VCC) と 4 番 (GND) に 5 V の電源をつなぎます。「試作」のタブで電源を入れると LED が点滅し、ボリュームで速さが変わります。電源のつまみを 0 V にするとマイコンが止まります。「本物の命令で動かす」なら ATTinyCore (arduino-cli に追加のボード) でコンパイルして ATtiny85 の命令で動きます	A circuit with 330Ω and an LED on PB1 of the 8-pin ATtiny85 microcontroller, and a potentiometer on A1 (PB2). The ATtiny85 has no USB, so connect a 5 V supply to pin 8 (VCC) and pin 4 (GND). Turn on power in the "Prototype" tab and the LED blinks; the potentiometer changes the speed. Set the supply knob to 0 V and the microcontroller stops. With "Run the real chip's instructions", it is compiled with ATTinyCore (an extra board for arduino-cli) and runs the ATtiny85's instructions
+Arduino で温度と湿度を測る (SHT31、I²C)	Measure temperature and humidity with Arduino (SHT31, I²C)
+Arduino Nano の A4 (SDA)・A5 (SCL) に、温湿度センサー SHT31 のモジュールをつないだ回路。スケッチは Wire で 1 秒ごとに測ってシリアルモニタに出し、28 ℃ 以上で D13 の LED を点けます。センサーは I²C で読むので、「本物の命令で動かす」(arduino-cli が要ります) で動きます。「試作」のタブで電源を入れ、「周りの温度」「周りの湿度」を動かすと、読みが変わります	A circuit with an SHT31 temperature and humidity sensor module on A4 (SDA) and A5 (SCL) of an Arduino Nano. The sketch measures every second with Wire, prints to the Serial Monitor, and turns on the LED on D13 at 28 ℃ or above. The sensor is read over I²C, so it runs with "Run the real chip's instructions" (needs arduino-cli). Turn on power in the "Prototype" tab and move "Ambient temperature" and "Ambient humidity" to change the readings
+Arduino Mega で流れる光 (ボードの外からジャンパー線)	Running lights with Arduino Mega (jumper wires from off the board)
+Arduino Mega 2560 の D22・D24・D26・D28 に 330Ω と LED を 1 つずつ、A8 にボリュームをつないだ回路。Mega はブレッドボードに差さらないので、「試作」のタブではボードの横に置き、使うピンだけジャンパー線でつなぎます。電源を入れると LED が順に点き、ボリュームで速さが変わります。「本物の命令で動かす」を入れると、arduino-cli でコンパイルして ATmega2560 の命令で動きます	A circuit with 330Ω and an LED on each of D22, D24, D26 and D28 of an Arduino Mega 2560, and a potentiometer on A8. The Mega does not plug into a breadboard, so in the "Prototype" tab it sits beside the breadboard and only the pins in use are connected with jumper wires. Turn on power and the LEDs light in turn; the potentiometer changes the speed. Turn on "Run the real chip's instructions" to compile with arduino-cli and run the ATmega2560's instructions
+音で聴く (ローパスフィルタで高い音を消す)	Listen (remove a high tone with a low-pass filter)
+440Hz の音 (ラ) に 4kHz の「ピー」を混ぜた信号を、1.5kΩ と 100nF のローパスフィルタ (カットオフ約 1kHz) に通す回路。過渡解析をしてから、波形の窓の「音で聴く」で V(IN) と V(OUT) を選んで聴き比べると、出力では高い音だけが消えています。R や C の値を変えて、どこから効くかを耳で確かめましょう	A circuit that passes a 440Hz tone (A) mixed with a 4kHz "beep" through a 1.5kΩ and 100nF low-pass filter (cutoff about 1kHz). Run the transient analysis, then pick V(IN) and V(OUT) in "Listen" in the waveform window and compare: only the high tone is gone from the output. Change R or C and check by ear where it starts to work
+デュアルのオペアンプ (1 つの IC で 2 つのアンプ)	Dual op-amp (2 amplifiers in 1 IC)
+LM358 の中には同じオペアンプが 2 つ入っています。U1A (電源のピンがあるユニット A) で入力を 2 倍に、U1B (ピン 5・6・7 のユニット B) で入力を反転して、1 つの IC で 2 つのアンプを作ります。「過渡解析を実行」で OUTA が 2 倍、OUTB が逆向きになるのが見えます。部品を選んで「ユニット」で A・B を切り替えたり、「次のユニットを置く」で残りのユニットを置いたりできます。番号はどちらも U1 で、基板では 1 つの IC になります	The LM358 has two identical op-amps inside. U1A (unit A, which has the supply pins) doubles the input, and U1B (unit B, pins 5, 6, 7) inverts it, making 2 amplifiers from 1 IC. "Run transient analysis" shows OUTA at 2× and OUTB inverted. Select the part to switch between A and B with "Unit", or place the remaining unit with "Place next unit". Both are U1, and on the board they become one IC
+CMOS インバータ (MOSFET 2 つで NOT)	CMOS inverter (NOT from 2 MOSFETs)
+P チャネル (AO3401A) と N チャネル (AO3400A) の MOSFET を上下に重ねた、ロジック IC の中身と同じ NOT ゲートです。「DCスイープを実行」(V2 を 0〜3.3V) で OUT を見ると、入力が約 1.5V を超えたところで出力が 3.3V から 0V に切り替わります (しきい値)。「過渡解析を実行」で、負荷の 100pF を充放電する切り替わりの速さも見えます	A NOT gate made of a P-channel (AO3401A) and an N-channel (AO3400A) MOSFET stacked on top of each other, the same as inside a logic IC. "Run DC sweep" (V2 from 0 to 3.3V) and look at OUT: when the input goes above about 1.5V, the output switches from 3.3V to 0V (threshold). "Run transient analysis" also shows how fast it switches while charging and discharging the 100pF load
+CMOS の NAND (MOSFET 4 つ)	CMOS NAND (4 MOSFETs)
+P チャネルを 2 つ並列に、N チャネルを 2 つ直列にした NAND ゲートです。A は 1µs ごと、B は 2µs ごとに切り替わり、「過渡解析を実行」(ゼロ状態から) で OUT が真理値表どおり (A と B が両方 1 のときだけ 0) に動くのが見えます。N チャネルが直列なので、下げる力は 1 つのときの半分です	A NAND gate with 2 P-channels in parallel and 2 N-channels in series. A switches every 1µs and B every 2µs, and "Run transient analysis" (from zero) shows OUT following the truth table (0 only when both A and B are 1). The N-channels are in series, so the pull-down strength is half that of one
+リング発振器 (インバータ 3 つの輪)	Ring oscillator (a loop of 3 inverters)
+CMOS インバータ 3 つを輪にすると、どの状態でも落ち着けないので、ひとりでに発振します。「過渡解析を実行」で N1〜N3 が順にずれて約 200kHz で振れます。1 段の遅れは R (1kΩ) × (C + 次のゲートの容量) で決まり、C1〜C3 を大きくするとゆっくりになります (MOSFET のゲートそのものが約 1nF の負荷です)。電源 V1 は、入れた瞬間 (0→3.3V) から始まります	When 3 CMOS inverters are joined in a loop, no state can settle, so it oscillates by itself. "Run transient analysis" shows N1 to N3 swinging one after another at about 200kHz. The delay of one stage is set by R (1kΩ) × (C + the next gate's capacitance), and larger C1 to C3 make it slower (the MOSFET gate itself is a load of about 1nF). The supply V1 starts at the moment it is turned on (0→3.3V)
+7 セグメントで数える (0〜9 のカウンタ)	Count on a 7-segment display (0-9 counter)
+開くと「デジタル回路を動かす」になります。74HC161 が数え、10 になった瞬間に NAND がクリアして 0〜9 をくり返し、CD4511B がその数を 7 セグメント表示器の形に変えます。74HC161 の上の「記憶」に中の 4 ビットが出ます。「ゆっくり」で 9 → 0 を見ると、一瞬だけ 10 (表示が消える) を通るのが分かります (非同期クリアのグリッチ)	Opens in "Run digital circuit". The 74HC161 counts, the NAND clears it the moment it reaches 10 so it repeats 0 to 9, and the CD4511B turns the number into the 7-segment display's pattern. The 4 bits inside show in "Memory" above the 74HC161. Watch 9 → 0 with "Slow" and you can see it pass through 10 (display blank) for an instant (the glitch of an asynchronous clear)
+シフトレジスタを動かす (1 クロックで 1 つ隣へ)	Run a shift register (one step per clock)
+開くと「デジタル回路を動かす」になります。スライドスイッチ SW1 で入れるデータ (0 か 1) を決め、「1 クロック」を押すたびに 74HC164 が 8 つの LED の並びを 1 つ隣へ送ります。1 と 0 を混ぜて入れると、模様が流れていきます	Opens in "Run digital circuit". Set the input data (0 or 1) with the slide switch SW1; each press of "1 clock" makes the 74HC164 shift the row of 8 LEDs by one. Mix 1s and 0s and the pattern flows along
+信号機を動かす (10 の状態を順に)	Run a traffic light (10 states in turn)
+開くと「デジタル回路を動かす」になります。74HC4017 がクロックごとに Q0〜Q9 の 1 つだけを High にし、Q0〜Q3 で青 (緑)、Q4 で黄、Q5〜Q9 で赤が光ります。青と赤は、いくつもの出力をダイオードでまとめています (ダイオード OR: どれか 1 つが High なら光る)	Opens in "Run digital circuit". On each clock the 74HC4017 sets just one of Q0 to Q9 High: green lights on Q0 to Q3, yellow on Q4, and red on Q5 to Q9. Green and red combine several outputs with diodes (diode OR: lights if any one is High)
+ADC で測る量の表 (レンジ・比・センサー・シャント・温度)	ADC measurement table (ranges, ratio, sensor, shunt, temperature)
+1 つの ADC (ADS124S08) で 5 通りに測ります。U1 を選び、部品の設定の「ADC の読み」の「測る量の表…」を開いて「計算する」を押すと、行ごとに ADC の読みと、データシートの雑音を測る量 (V・Ω・A) に換算した揺れと、表示が止まって見える桁が出ます。10V の行は状態を保つリレー K1 をセットして 1/10 の分圧に切り替え、10k の行は基準抵抗 R3 との比で読み、センサーの行は回路図にある RT の値を動かし、シャントの行は 1Ω に流れる電流を利得 16 で読み、温度の行は NTC サーミスタ TH を °C で読みます。「誤差」の列は、抵抗の公差・温度係数と、ほかの部品の漏れ (10V の入力のクランプのダイオード D1、ADC の入力電流) が測る値をどれだけずらすかです。カーソルを重ねると部品ごとの内訳が出ます。利得やデータレートを変えて、桁がどう変わるか比べてください	Measures 5 ways with one ADC (ADS124S08). Select U1, open "Measurement table…" under "ADC reading" in the part settings, and press "Calculate": each row shows the ADC reading, the datasheet noise converted to the measured quantity (V, Ω, A), and the digits that look stable on the display. The 10V row sets the latching relay K1 to switch to a 1/10 divider, the 10k row reads the ratio to the reference resistor R3, the sensor row varies the value of RT in the schematic, the shunt row reads the current through 1Ω with a gain of 16, and the temperature row reads the NTC thermistor TH in °C. The "Error" column is how much resistor tolerance, temperature coefficient and leakage of other parts (the 10V input clamp diode D1, the ADC input current) shift the measured value. Hover to see the breakdown by part. Change the gain or data rate and compare how the digits change
+実在の降圧 DC-DC (TPS62933、12V → 5V・1A)	A real buck DC-DC (TPS62933, 12V → 5V, 1A)
+TI の TPS62933 をデータシートの設計例どおり (6.8µH・44µF・帰還 52.5k と 10k・RT 開放で 500kHz) につないだ回路。過渡解析で、SS の 6.8nF による約 1ms のソフトスタート、SW の 500kHz のスイッチング、コイルの電流とリップルが見られます。BST と SW の間の 100nF を外すと、上側のスイッチが入らず 5V になりません。計算に 20 秒ほどかかります	A circuit with TI's TPS62933 connected as in the datasheet's design example (6.8µH, 44µF, feedback 52.5k and 10k, RT open for 500kHz). The transient analysis shows the soft start of about 1ms from the 6.8nF on SS, the 500kHz switching on SW, and the inductor current and ripple. Remove the 100nF between BST and SW and the high-side switch does not turn on, so it does not reach 5V. The calculation takes about 20 seconds
+# crates/app/src/settings_window.rs
+「ヒントを出す」を入れると選べます	Turn on "Show hints" to choose this
+回路図で、つながっていない線の交差を飛び越しで描く	Draw unconnected wire crossings as hops in the schematic
+横の線が縦の線をまたぐ所を、小さな半円の山で描きます。つながっている所 (黒い丸) と見分けやすくなります。オフにすると、ただの十字で描きます (つながっていないのは同じです)	Draws a small half-circle bump where a horizontal wire crosses a vertical one. This makes it easier to tell apart from a connection (a black dot). When off, it is drawn as a plain cross (still not connected)
+パネルと窓	Panels and windows
+左右のパネル・窓・メニューの地の明るさです。回路図や基板を描く所 (キャンバス) の色は、下で別に選びます	The background brightness of the side panels, windows and menus. The color of the area where the schematic and board are drawn (canvas) is chosen separately below
+暗い	Dark
+暗い灰色の地に明るい文字。長い時間でも目が疲れにくい	Light text on dark gray. Easier on the eyes over long sessions
+明るい	Light
+白い地に黒い文字。明るい部屋や、プロジェクターで見せるとき	Black text on white. For bright rooms or showing on a projector
+色覚に配慮	Color-vision friendly
+どの色覚の型でも見分けやすい色の組 (暗い地)。電圧は 0 V より下が青・上が橙。波形は線の形 (実線・破線・点線) と線の端の名前でも、熱の地図は明るさの順でも見分けられます	A set of colors easy to tell apart with any type of color vision (dark background). Voltages below 0 V are blue and above are orange. Waveforms can also be told apart by line style (solid, dashed, dotted) and the name at the line's end, and the heat map by order of brightness
+テーマから変えた色はありません	No colors changed from the theme
+# crates/app/src/startup.rs
+/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc	
+# crates/app/src/xcheck_tran.rs
+エッジが少ない (自前{} ngspice{})	Few edges (ours {} ngspice {})
+# crates/app/src/args/mod.rs
+回路図が空なので、{what} に書き出せません	The schematic is empty, so it cannot be exported to {what}
+{what} を保存できませんでした: {e}。保存先のフォルダに書き込めるか確認してください	Could not save {what}: {e}. Check that you can write to the destination folder
+{what} を保存しました: {path}	Saved {what}: {path}
+# crates/app/src/board_editor/align.rs
+揃える	Align
+並べる	Arrange
+横に詰めて並べる	Pack horizontally
+今の左からの順で、いちばん左の部品から右へ、1 mm ずつ空けて横一列に並べます (中心は最初の部品の横の線に)	Arranges the parts in one horizontal row in their current left-to-right order, starting from the leftmost part and going right with 1 mm gaps (centers on the first part's horizontal line)
+縦に詰めて並べる	Pack vertically
+今の上からの順で、いちばん上の部品から下へ、1 mm ずつ空けて縦一列に並べます (中心は最初の部品の縦の線に)	Arranges the parts in one vertical column in their current top-to-bottom order, starting from the topmost part and going down with 1 mm gaps (centers on the first part's vertical line)
+つながる順に並べる	Arrange in connection order
+つながる相手の IC やコネクタのピンの並びの順に、1 mm ずつ空けて一列に並べます。コネクタのピンの順に直列抵抗を、ドライバの出力の順に LED の抵抗を、のように使うと、配線が交わりません。列の真ん中は相手のピンの真ん中の向かいに、外形の中に置きます (相手のピンが横に並んでいれば横一列、縦なら縦一列)	Arranges the parts in one row with 1 mm gaps, in the order of the pins of the IC or connector they connect to. Use it for series resistors in a connector's pin order, or LED resistors in a driver's output order, and the tracks will not cross. The middle of the row is placed facing the middle of those pins, inside the board outline (a horizontal row if the pins run horizontally, a vertical one if vertically)
+# crates/app/src/board_editor/file.rs
+原寸の図を保存しました: {} (ブラウザで開き、「実際のサイズ」で印刷します)	Saved the actual-size drawing: {} (open it in a browser and print at "Actual size")
+原寸の図を保存できませんでした: {e}	Could not save the actual-size drawing: {e}
+# crates/app/src/board_editor/interact.rs
+ここに付箋を置く	Place a note here
+この場所にコメント (付箋) を置きます。返事を付けたり、解決済みにしたりできます。ファイルに保存されます	Puts a comment (note) at this place. You can add replies or mark it resolved. It is saved in the file
+選択を解除しました	Deselected
+# crates/app/src/board_editor/livepath.rs
+銅箔どうし	
+# crates/app/src/board_editor/netclass.rs
+board_sec_層構	
+# crates/app/src/board_editor/nettable.rs
+遅れ	Delay
+パッドからパッドへのいちばん長い配線を、信号が伝わるのにかかる時間 (層と線幅から電界ソルバで)。立ち上がり時間の 1/6 を超えると伝送線路として振る舞い、端の跳ね返りで波形が揺れます (リンギング)。オレンジは超えているネット。立ち上がり時間は、ネットの設定の窓の「ルール」で変えられます (既定は速いマイコンのピンの目安 2 ns)。電源・GND・ベタのネットは出しません	The time a signal takes to travel along the longest pad-to-pad track (from the layer and track width, with the field solver). Over 1/6 of the rise time, the track behaves as a transmission line and reflections at the ends make the waveform ring (ringing). Orange marks nets that are over. The rise time can be changed in "Rules" in the net settings window (default is 2 ns, typical for a fast microcontroller pin). Supply, GND and copper pour nets are not shown
+{} → {} の {:.0} mm。立ち上がり {} ns{} の 1/6 は {:.0} ps (配線で約 {:.0} mm)	{} → {}: {:.0} mm. 1/6 of the {} ns{} rise time is {:.0} ps (about {:.0} mm of track)
+ (目安)	 (typical)
+。超えています: 配線を短くするか、ドライバのそばに 22〜47 Ω の直列の抵抗 (ダンピング抵抗) を入れましょう	. Over: shorten the track, or put a 22-47 Ω series resistor (damping resistor) near the driver
+# crates/app/src/board_editor/netwindow.rs
+目安 ({} ns)	Typical ({} ns)
+このクラスのネットを駆動する出力の立ち上がり時間 (ドライバのデータシートの tr・tf)。配線を信号が伝わる時間がこの 1/6 を超えると、伝送線路として振る舞い反射で波形が揺れるので、ネットの一覧の「遅れ」と発注前チェックが知らせます。0 は目安の 2 ns (速いマイコンのピン)。74HC は約 6 ns、74LVC は約 1〜2 ns	The rise time of the output driving this class's nets (tr, tf in the driver's datasheet). If the time for a signal to travel along the track is over 1/6 of this, the track behaves as a transmission line and reflections make the waveform ring, so "Delay" in the net list and the pre-order check warn you. 0 means the typical 2 ns (a fast microcontroller pin). 74HC is about 6 ns, 74LVC about 1-2 ns
+# crates/app/src/board_editor/order.rs
+原寸の図を保存 (表)…	Save actual-size drawing (top)…
+裏…	Bottom…
+パッドと穴を原寸で描いた図 (SVG、50 mm の目盛りつき) を保存します。ブラウザで開き、印刷の倍率を「実際のサイズ」(100 %) にして印刷します。裏は、裏に付ける部品のため (下から見た図)	Saves a drawing of the pads and holes at actual size (SVG, with a 50 mm scale). Open it in a browser and print with the scale set to "Actual size" (100 %). Bottom is for parts mounted on the bottom (seen from below)
+上の発注前チェックのエラーを直すと書き出せます	Fix the errors in the pre-order check above to export
+# crates/app/src/board_editor/panel.rs
+{} ほか {} 個	{} and {} more
+{} は、表面実装 (0805 などの小さなチップ) の形です。ブレッドボードと同じ、足を穴に通すリード部品で作るなら:	{} use surface-mount footprints (small chips such as 0805). To build with leaded parts whose leads go through holes, as on a breadboard:
+リード部品にする	Make leaded
+回路図のこれらの部品の形 (フットプリント) を、リード部品のものにして、取り込み直します: 抵抗は 10.16 mm 間隔、コンデンサはディスク形 (5.08 mm)、ダイオードは DO-35、LED は 5 mm、トランジスタは TO-92。部品の位置は残りますが、パッドが大きくなるので、配置と配線は直しが要ることがあります。形は、回路図で部品を選んだ「基板とモデル」でも 1 個ずつ変えられます	Changes these parts' footprints in the schematic to leaded ones and imports again: resistors at 10.16 mm spacing, disc capacitors (5.08 mm), DO-35 diodes, 5 mm LEDs, TO-92 transistors. Part positions are kept, but the pads get larger, so placement and tracks may need fixing. You can also change footprints one by one in "Board and model" after selecting a part in the schematic
+パッドの角を丸める ({sharp} 個)	Round pad corners ({sharp})
+四角い面実装のパッドの角を、短い辺の 25% (大きくても 0.25 mm) の半径で丸めます (KiCad と IPC-7351 の既定)。前の版で 0.25 mm より大きく丸めたパッドも 0.25 mm に直します。細かいピッチの IC (0.5 mm 以下) や 45° に置いた部品では、四角の角どうしがいちばん近く、発注先の最小間隔を割ることがあります。丸めると角のすき間が広がり、DRC・ベタの逃げ・ガーバーもその形で作ります。穴のあるパッド (1 番ピンの四角) は変えません。「元に戻す」で戻せます	Rounds the corners of rectangular SMD pads with a radius of 25% of the short side (at most 0.25 mm) (the KiCad and IPC-7351 default). Pads rounded more than 0.25 mm by an earlier version are also set to 0.25 mm. On fine-pitch ICs (0.5 mm or less) or parts placed at 45°, the square corners are the closest points and may break the fab's minimum clearance. Rounding widens the gap at the corners, and DRC, copper pour clearances and Gerbers use that shape too. Pads with holes (the square pin 1) are not changed. Undo restores them
+{n} 個のパッドの角を丸めました	Rounded the corners of {n} pads
+先に基板の上のパッドを 1 つクリックして、ネットを選んでください	First click a pad on the board to choose a net
+パッドを選ぶと、そのパッドのネットだけを自動配線します。重要な線は手で引き、残りを任せる使い方ができます	Select a pad to autoroute only that pad's net. You can route important tracks by hand and leave the rest to it
+パッドを選ぶと、そのパッドのネットの配線だけを短くしてみます (まわりの配線を動かすことはあります)	Select a pad to try shortening only the tracks of that pad's net (nearby tracks may be moved)

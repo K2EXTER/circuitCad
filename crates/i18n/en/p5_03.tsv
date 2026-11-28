@@ -1,0 +1,388 @@
+# crates/app/src/breadboard/strip_view.rs
+まだ手で動かしていないので、回路図を変えると並べ直されます。動かすと、その並べ方が回路図のファイルに入り、回路図を変えたときは、足した部品だけが基板の右に加わり、そのネットへの線も引かれます	You haven't moved anything by hand yet, so changing the schematic rearranges it. Once you move something, that arrangement is saved in the schematic file, and when you change the schematic, only the added parts are put at the right of the board, with wires to their nets.
+回路図から並べ方を作り直します。手で動かした分は消えます (元に戻すで戻せます)	Rebuilds the arrangement from the schematic. What you moved by hand is lost (you can undo it).
+まだ手で動かしていないので、回路図を変えると並べ直されます。動かすと、その並べ方が回路図のファイルに入り、回路図を変えたときは、足した部品だけが基板の右に加わり、そのネットへの線も引かれます (帯の片に空いた穴が無くて引けない線は、照合が言います)	You haven't moved anything by hand yet, so changing the schematic rearranges it. Once you move something, that arrangement is saved in the schematic file, and when you change the schematic, only the added parts are put at the right of the board, with wires to their nets (the check reports wires that can't be drawn because the strip piece has no free hole).
+選んだ {} 個を (?)	{} selected (?)
+{} の固定を外す	Unlock {}
+{} を固定する	Lock {}
+選んだ部品を今の穴に固定します (L)。「自動配置」で、固定した部品は動かさず、ほかの部品を並べ直します。コネクタやつまみのようにケースの穴に合わせる部品、大きい IC など、置き場所を自分で決めたい部品に使います	Locks the selected parts in their current holes (L). "Autoplace" leaves locked parts where they are and rearranges the others. Use it for parts whose place you want to choose yourself, such as connectors and knobs that must line up with holes in the case, or large ICs.
+置いた区画の箱 ({} 個) を自動に戻す	Return placed section boxes ({}) to automatic
+区画の名前をドラッグして置いた箱の場所を自動に任せ、箱を詰め直して線を引き直します (元に戻すで戻せます)	Lets the automatic arrangement decide where the boxes you placed by dragging section names go, packs the boxes again and redraws the wires (you can undo it).
+部品・線の端をドラッグ / 何も無い所から囲んで選ぶ (右ドラッグは触れた物も・Shift で足す)・選んだ部品をまとめて動かす・R で半回転 / Delete で線を消す / 右クリックで選択を外す / Ctrl+Z で戻す	Drag parts and wire ends / drag from empty space to select (right-drag also takes what it touches, Shift adds), move the selected parts together, R rotates 180° / Delete removes a wire / right-click clears the selection / Ctrl+Z undoes
+部品・線の端をドラッグ / 何も無い所から囲んで選ぶ (右ドラッグは触れた物も・Shift で足す)・選んだ部品をまとめて動かす・R で 90° 回す / L で部品を固定 / 区画の名前をドラッグで箱を置く / 線をクリックして Delete で消す (囲んで Delete で中の線を全部) / 右クリックで選択を外す / Ctrl+Z で戻す	Drag parts and wire ends / drag from empty space to select (right-drag also takes what it touches, Shift adds), move the selected parts together, R rotates 90° / L locks a part / drag a section name to place its box / click a wire and press Delete to remove it (select an area and press Delete to remove all wires inside) / right-click clears the selection / Ctrl+Z undoes
+穴をクリックして、つなぐ先の穴をクリックします (右クリックか Esc でやめる。もう一度で選択に戻る)	Click a hole, then click the hole to connect it to (right-click or Esc to stop; click again to return to Select).
+帯を切る穴をクリックします (切った穴はもう一度で戻ります)	Click a hole to cut the strip there (click a cut hole again to undo the cut).
+穴をクリックして、同じ行・同じ列か、ななめ 45° の穴をクリックします / 消すのは「消す」で / 右クリックか Esc でやめる	Click a hole, then a hole in the same row or column, or at 45° / To delete, use "Delete" / Right-click or Esc to stop
+消す線をクリックします (表では表の線、裏ではすずめっき線)。消える線は赤く光ります / Ctrl+Z で戻せます	Click the wire to delete (top wires on the top, tinned wires on the bottom). The wire to be deleted glows red / Ctrl+Z undoes it
+穴をクリックして赤い棒、もう一度で黒い棒 (裏からも当てられます)	Click a hole for the red probe, and again for the black probe (you can also probe from the bottom).
+探り針を当てる穴をクリックします (裏からも当てられます)	Click the hole to touch with the probe (you can also probe from the bottom).
+線を引いています…	Drawing wires…
+ネットを引く順番をいくつも試し、そのあと 1 本ずつ外して引き直し、短くなる道を選んでいます (大きい基板で 2 秒ほど)。終わるまでは前の基板を見せます	Trying many orders to draw the nets, then removing and redrawing them one at a time to pick shorter paths (about 2 seconds on a large board). The previous board is shown until it finishes.
+並べています…	Arranging…
+部品の置き方と線の引き方をいくつも試して、表の線がいちばん少ない形を選んでいます (ユニバーサル基板で最長 1.5 秒)。終わるまでは前の並べ方を見せ、自動の並べ方は動かせません	Trying many part placements and wire layouts to pick the one with the fewest top wires (up to 1.5 seconds on a perfboard). The previous arrangement is shown until it finishes, and the automatic arrangement can't be moved meanwhile.
+▲ 表の線 {}–{} が {} の足の列の上を通ります	▲ Top wire {}–{} runs over the pin row of {}
+表の線が IC やヘッダの足の上に沿って走っていて、ソケットの上をまたぐ形になります。電気的には被覆があるのでつながりませんが、組みにくく、絵では足とつながって見えます。線の端をドラッグして足の列を避けるか、そのままにします (自動の並べ方は、ほかに通れる所が無いときにこう引きます)	The top wire runs along the pins of an IC or header, passing over the socket. It is insulated, so it doesn't connect electrically, but it makes building harder, and in the picture it looks connected to the pins. Drag the wire end away from the pin row, or leave it (the automatic arrangement draws it this way only when there is no other way through).
+並べたとおりに組んだ基板に電源を入れて、時間とともに動かします (ブレッドボードと同じ)。計算するのは銅の帯・すずめっき線・表の線でつながったとおりの回路なので、帯の切り忘れや線の付け違いがあれば、そのとおりに動いたり壊れたりします。LED は流れる電流で光り、スイッチと押しボタンは基板の上でクリックで切り替わります。定格を超えた部品は焦げた印と理由が出ます	Powers the board built as arranged and runs it over time (same as the breadboard). The circuit computed is exactly as connected by the copper strips, tinned wires and top wires, so a forgotten strip cut or a misplaced wire makes it behave, or break, just that way. LEDs light with the current through them, and switches and push buttons toggle when you click them on the board. Parts over their rating show a burn mark and the reason.
+基板の大きさ  {} × {} 穴 ({:.0} × {:.0} mm)	Board size  {} × {} holes ({:.0} × {:.0} mm)
+印刷用の図を保存 (表と裏)	Save printable drawings (top and bottom)
+穴の格子に部品・線・切る穴を実寸で描いた図を、表 (部品の面) と裏 (銅の面。左右が逆) の 2 つの SVG に保存します。ブラウザで開いて 100 % (実寸) で印刷すると、図の穴が基板の穴に重なります。右下の 10 mm の線で大きさを確かめられます	Saves drawings of the parts, wires and cut holes on the hole grid at actual size as two SVG files: top (part side) and bottom (copper side, mirrored). Open them in a browser and print at 100 % (actual size), and the holes in the drawing line up with the holes in the board. Check the size with the 10 mm line at the bottom right.
+区画	Sections
+区画  {}	Section  {}
+区画とつなぎ方の決まり	Sections and connection rules
+回路図の「設計の要件」の表から: 「近くに置く組」で「区画」に印を付けた組ごとにまとめて置き、区画の間は帯を切ります。GND は区画ごとに 1 本の線で、表のいちばん上の区画の GND の帯 (1 点) へ戻します。「… mm 以内に集める」の行は、組の部品のうちいちばん遠い 2 つ (足の真ん中どうし) の距離、「… mm 以上離す」の行は、いちばん近い 2 つの穴どうしの距離で確かめ、その 2 つの名前と、あと何 mm かを出します。行をクリックすると、その 2 つの部品を選びます。「ケルビン」の行は、測定の「分かれ目」: 抵抗の足から電流の線とセンスの線への道が、帯の上を一緒に走る長さです (自動の並べ方は、足が 2 本の線の間に来るように部品や線の端をずらします)	From the "Design requirements" table of the schematic: each group in "Groups to place close" marked "Section" is placed together, and the strips are cut between sections. GND runs as one wire per section back to the GND strip (one point) of the topmost section on the board. A "Gather within … mm" row is checked by the distance between the two farthest parts of the group (between pin centers), and a "Keep at least … mm apart" row by the distance between the two nearest holes; it shows those two names and how many mm are left. Click a row to select those two parts. A "Kelvin" row is the measurement "split point": the length that the paths from the resistor's pin to the current wire and to the sense wire run together on a strip (the automatic arrangement shifts parts and wire ends so the pin sits between the two wires).
+クリックで {} を選びます (基板の上で光ります)	Click to select {} (it glows on the board)
+区画はまだありません	No sections yet
+区画に分けるには、回路図の「設計の要件」→「近くに置く組」で組を作り、「区画」に印を付けます	To split into sections, make a group in "Design requirements" → "Groups to place close" in the schematic and mark it "Section".
+固定	Locked
+この部品は固定してあります。「自動配置」で動きません	This part is locked. "Autoplace" doesn't move it.
+付け方を変えました。手で動かした並べ方はそのままです。新しい付け方で並べるには「自動で並べ直す」(ユニバーサル基板は「自動配置」) を押します	Changed the mounting. The arrangement you moved by hand stays as it is. To arrange with the new mounting, press "Rearrange automatically" ("Autoplace" on a perfboard).
+ソケットと変換基板	Sockets and adapter boards
+IC は基板に直接はんだ付けせず、丸ピンのソケットに差します。こての熱で傷めず、壊れたら差し替えられます。足の細かい表面実装の IC (SOP・QFN・QFP・SOT-23) は、変換基板にはんだ付けしてから、そのピンを丸ピンの連結ソケットに差します。変換基板はチップの 1 番ピンが変換基板の 1 番ピン (DIP の数え方) になるので、上の穴の表は、部品のピンの番号のままで差せます。チップ抵抗・コンデンサは、同じ値のリード部品で組めます	ICs aren't soldered to the board directly; they plug into a round-pin socket. The iron's heat can't damage them, and you can swap them if they break. Fine-pitch surface-mount ICs (SOP, QFN, QFP, SOT-23) are soldered onto an adapter board, whose pins then plug into round-pin strip sockets. Pin 1 of the chip becomes pin 1 of the adapter board (DIP numbering), so you can use the hole table above with the part's pin numbers as they are. Chip resistors and capacitors can be replaced by leaded parts of the same value.
+帯を切る穴 ({} か所)	Holes where the strip is cut ({})
+この穴で銅の帯を切り、左右を分けます。切ったら、テスターの抵抗のレンジで、左右がつながっていないことを確かめます	Cut the copper strip at this hole to separate the left and right sides. After cutting, check with the multimeter's resistance range that the two sides aren't connected.
+裏のすずめっき線	Tinned wires on the bottom
+同じ行の穴を、端から端まで 1 本の線でつないで、はんだ付けします	Connect the holes in the same row from end to end with one wire and solder it.
+部品の面に通す被覆線。両端を穴に通して、裏ではんだ付けします	Insulated wire on the part side. Pass both ends through the holes and solder them on the bottom.
+部品の面に通す、被覆の無いすずめっき線。通り道の部品の足や、ほかの表のすずめっき線に触れるとつながります	Bare tinned wire on the part side. It connects to any part lead or other top tinned wire it touches along the way.
+銅の面 (裏) に這わせる被覆線。裏のすずめっき線の上を越えられます	Insulated wire run on the copper side (bottom). It can cross over the bottom tinned wires.
+{} ({} 本)	{} ({} pcs)
+基板の外 (電源・電池・信号源)	Off the board (supply, battery, signal source)
+シミュレーション専用 (置かない・線なし)	Simulation only (not placed, no wires)
+回路図で「シミュレーション専用」にした部品 (測る相手や、別の基板に載る部品の代わり) は、この基板には置かず、線も引きません。電源を入れて動かすときは、同じ名前のネット (つないだ端子) につながっているものとして計算します	Parts set to "Simulation only" in the schematic (things being measured, or stand-ins for parts on another board) are not placed on this board and get no wires. When you power it and run it, they are computed as connected to the nets of the same name (the terminals they connect to).
+裏 (はんだの面) から見た絵です。左右が逆で、表の左の端がここでは右の端です。穴にカーソルを置くと、つながる穴と線が光ります。部品と表の線は表で直します (F)	This is the view from the bottom (solder side). Left and right are mirrored: the left edge of the top is the right edge here. Hover over a hole to highlight the holes and wires connected to it. Fix parts and top wires on the top (F).
+裏 (はんだの面、左右が逆):	Bottom (solder side, mirrored):
+{}: ネット {} (つながる穴 {} 個)	{}: net {} ({} connected holes)
+表の線の端	Top wire end
+ネット {} (つながる穴 {} 個)	Net {} ({} connected holes)
+裏の線を 1 本消しました (元に戻すで戻せます)	Deleted one bottom wire (you can undo it)
+すずめっき線を 1 本消しました (元に戻すで戻せます)	Deleted one tinned wire (you can undo it)
+印刷用の図を保存できませんでした: {e}。保存先のフォルダに書き込めるか確認してください	Couldn't save the printable drawings: {e}. Check that you can write to the destination folder.
+印刷用の図を保存しました: {}	Saved the printable drawings: {}
+表の線を 1 本消しました (元に戻すで戻せます)	Deleted one top wire (you can undo it)
+{r} は、ここでは回せません (基板の上か左にはみ出す向き)	{r} can't be rotated here (it would stick out past the top or left edge of the board)
+囲んだ範囲に、消せる線 (表の線・裏のすずめっき線) がありません	There are no deletable wires (top wires, bottom tinned wires) in the selected area
+線を {} 本消しました (元に戻すで戻せます)	Deleted {} wires (you can undo it)
+# crates/app/src/breadboard/zoom.rs
+基板の全体が収まる大きさと位置に戻します (Home)	Returns to the size and position that fits the whole board (Home)
+拡大します (ホイールでも。ポインタの所を中心に)	Zooms in (also with the wheel, centered on the pointer)
+縮小します (ホイールでも)。絵を動かすのは、中ボタンか Alt + 左ボタンのドラッグ	Zooms out (also with the wheel). To move the picture, drag with the middle button or Alt + left button
+# crates/app/src/learn/paths.rs
+絶対最大定格・推奨動作条件・電気的特性の min・typ・max と条件・グラフの条件。部品の正しい使い方を、メーカーの PDF から読み取る順番	Absolute maximum ratings, recommended operating conditions, min/typ/max of the electrical characteristics and their conditions, graph conditions. The order in which to read how to use a part correctly from the maker's PDF
+78xx か LM358 のデータシートをダウンロードして、部品作成フォームで開き、「読み方の案内」で読みます	Download the datasheet of a 78xx or LM358, open it in the part creation form, and read it with "Reading guide".
+MOSFET でロジックを組む (リング発振器で遅れを見る)	Build logic from MOSFETs (see the delay with a ring oscillator)
+CMOS は P と N の MOSFET の組、奇数個のインバータの輪は発振する、遅れは R × C (つなぐ先のゲートの容量)	CMOS is a pair of P and N MOSFETs, a ring of an odd number of inverters oscillates, and the delay is R × C (the gate capacitance of what it drives)
+74HC04 の 3 つのインバータを輪にしてオシロで見ると、数十 MHz で振れます (プローブの容量で遅くなります)	Connect three inverters of a 74HC04 in a ring and look with an oscilloscope: it swings at tens of MHz (the probe capacitance slows it down).
+# crates/app/src/part_form/buck_form.rs
+{label}「{}」が数として読めません (例: 0.8、76m、5.5u)	{label} "{}" can't be read as a number (e.g. 0.8, 76m, 5.5u)
+「12u 2u」(スイッチしていないとき・止めたとき [A])	"12u 2u" (not switching, shut down [A])
+「3.6 3.3」(立ち上がり・立ち下がり [V])	"3.6 3.3" (rising, falling [V])
+「76m 32m」(上側・下側 [Ω])	"76m 32m" (high side, low side [Ω])
+「5 3.8」(上側のピーク・下側の谷 [A])	"5 3.8" (high-side peak, low-side valley [A])
+最小オン・オフ時間	Minimum on/off time
+「1.21 1.17 0.7u 1.4u」(立ち上がり・立ち下がり [V]・引き上げの電流・オンの間に足す電流 [A]) か空	"1.21 1.17 0.7u 1.4u" (rising, falling [V], pull-up current, extra current while on [A]) or empty
+RT と周波数	RT and frequency
+RT と周波数は 1 行に「RT [kΩ] 周波数 [kHz]」で入れてください (例: 71.5 310)	Enter RT and frequency as "RT [kΩ] frequency [kHz]" on each line (e.g. 71.5 310)
+RT 開放の周波数	Frequency with RT open
+RT 開放の周波数は「500 280」(kHz と、これより大きい RT [kΩ] を開放とみる) か、周波数 1 つで入れてください	Enter the frequency with RT open as "500 280" (kHz, and the RT [kΩ] above which it counts as open) or as one frequency
+RT を GND の周波数	Frequency with RT to GND
+RT を GND の周波数は「1200 1」(kHz と、これより小さい RT [kΩ] を GND とみる) か空で入れてください	Enter the frequency with RT to GND as "1200 1" (kHz, and the RT [kΩ] below which it counts as GND) or leave it empty
+ループの図	Loop plot
+ループの図は「5 44u 49.4k 57」(出力 [V]・実効の出力容量 [F]・帯域 [Hz]・位相余裕 [度]、位相余裕は無くても可) で入れてください	Enter the loop plot as "5 44u 49.4k 57" (output [V], effective output capacitance [F], bandwidth [Hz], phase margin [deg]; the phase margin may be left out)
+内部の値	Internal values
+内部の値は「300u 4 0.5 1.5 5n」(誤差アンプの gm・電流の指令 A/V・COMP のオフセット V・スロープ補償 A・ゲートの電荷 C、最後は無くても可) で入れてください	Enter the internal values as "300u 4 0.5 1.5 5n" (error amplifier gm, current command A/V, COMP offset V, slope compensation A, gate charge C; the last may be left out)
+SS ピンの電流	SS pin current
+内部のソフトスタートの時間	Internal soft-start time
+基準電圧の min・max	Reference voltage min/max
+「0.792 0.808」の 2 つの数	Two numbers like "0.792 0.808"
+PFM の最小ピーク電流	PFM minimum peak current
+表の typ の値からスイッチングのモデルを作ります	Builds a switching model from the typ values in the table
+スイッチを内蔵した同期整流の降圧 DC-DC コンバータのモデルを、同梱の TPS62933 と同じひな形で作ります。実際にスイッチを入り切りするので、過渡解析でデューティ・コイルのリップル電流・出力のリップル・ソフトスタートが見られます (計算は重め)。制御はピーク電流モードで、内部の補償はデータシートのループの図の帯域に合わせて決めます	Builds a model of a synchronous buck DC-DC converter with built-in switches, from the same template as the bundled TPS62933. It actually switches on and off, so transient analysis shows the duty cycle, inductor ripple current, output ripple and soft start (heavy to compute). Control is peak current mode, and the internal compensation is set to match the bandwidth in the datasheet's loop plot.
+基準電圧 (VFB・VREF): FB ピンの電圧。出力 = 基準電圧 × (1 + 上の抵抗 ÷ 下の抵抗)。	Reference voltage (VFB, VREF): the voltage of the FB pin. Output = reference voltage × (1 + upper resistor ÷ lower resistor).
+オン抵抗と電流制限: 表の上側 (High-side)・下側 (Low-side) の MOSFET の値。電流制限は上側のピークと下側の谷。	On-resistance and current limit: the values of the high-side and low-side MOSFETs in the table. The current limit is the high-side peak and the low-side valley.
+周波数: RT の抵抗と周波数の表の点を 1 行ずつ (2 点以上でべき乗の式を通します)。RT を開放・GND にしたときの周波数も。RT ピンが無ければ点を空にして、開放の欄に固定の周波数を。	Frequency: points of the RT resistor vs frequency table, one per line (with 2 or more points, a power-law curve is fitted). Also the frequencies with RT open and RT to GND. If there is no RT pin, leave the points empty and put the fixed frequency in the open field.
+軽い負荷: 「PFM の最小ピーク電流」(IPEAK_MIN) を入れると、軽い負荷で周期を飛ばす PFM に。空なら周波数を保つ連続モード (FCCM)。	Light load: entering "PFM minimum peak current" (IPEAK_MIN) gives PFM, which skips cycles at light load. If empty, continuous mode that keeps the frequency (FCCM).
+ループの図: データシートの「Loop Frequency Response」の図の条件 (出力電圧・実効の出力容量) と帯域 (BW)。内部の補償の値はデータシートに無いので、この帯域になるように決めます。	Loop plot: the conditions (output voltage, effective output capacitance) and bandwidth (BW) of the datasheet's "Loop Frequency Response" plot. The internal compensation values aren't in the datasheet, so they are chosen to give this bandwidth.
+内部の値 (gm・電流の指令・オフセット・スロープ・ゲートの電荷) はデータシートに無い仮の値です。ふつうは例のままで構いません。	The internal values (gm, current command, offset, slope, gate charge) are provisional values that aren't in the datasheet. Usually the example values are fine.
+TPS62933 の例を入れる	Fill in the TPS62933 example
+同梱の TPS62933 を作ったときの値 (TI のデータシートの表と図) を入れます	Fills in the values used to build the bundled TPS62933 (from the tables and plots of TI's datasheet)
+ピンを TPS62933 の並びにする	Use the TPS62933 pin order
+ピン表を SOT583 の TPS62933 の並び (1 RT・2 EN・3 VIN・4 GND・5 SW・6 BST・7 SS・8 FB) にします	Sets the pin table to the order of the TPS62933 in SOT583 (1 RT, 2 EN, 3 VIN, 4 GND, 5 SW, 6 BST, 7 SS, 8 FB)
+基準電圧 typ [V]	Reference voltage typ [V]
+FB ピンの電圧 (VFB)	Voltage of the FB pin (VFB)
+基準電圧 min max [V]	Reference voltage min max [V]
+25 ℃の部品ごとの違い (空でも可)	Part-to-part spread at 25 ℃ (may be empty)
+電源電流 [A]: 動作 止めたとき	Supply current [A]: operating shutdown
+スイッチしていないときの電流 (IQ) と、EN で止めたときの電流 (ISHDN)	Current when not switching (IQ) and when shut down with EN (ISHDN)
+UVLO [V]: 立ち上がり 立ち下がり	UVLO [V]: rising falling
+VIN がこれより上で動き始め、下で止まる	It starts when VIN is above this and stops when it is below
+EN (空でも可)	EN (may be empty)
+「立ち上がり 立ち下がり [V] 引き上げの電流 オンの間に足す電流 [A]」。空なら EN ピンなし	"Rising falling [V] pull-up current extra current while on [A]". If empty, no EN pin
+オン抵抗 [Ω]: 上側 下側	On-resistance [Ω]: high side low side
+RDSON_HS と RDSON_LS	RDSON_HS and RDSON_LS
+電流制限 [A]: ピーク 谷	Current limit [A]: peak valley
+上側の電流制限 (IHS_LIMIT) と下側の電流制限 (ILS_LIMIT)	High-side current limit (IHS_LIMIT) and low-side current limit (ILS_LIMIT)
+PFM の最小ピーク電流 [A]	PFM minimum peak current [A]
+IPEAK_MIN。空なら軽い負荷でも周波数を保つ連続モード (FCCM)	IPEAK_MIN. If empty, continuous mode that keeps the frequency even at light load (FCCM)
+SS ピンの電流 [A]	SS pin current [A]
+ソフトスタートのコンデンサを充電する電流 (ISS)。時間 = CSS × 基準電圧 ÷ この電流。空なら下の内部の時間	Current that charges the soft-start capacitor (ISS). Time = CSS × reference voltage ÷ this current. If empty, the internal time below
+内部のソフトスタート [s]	Internal soft start [s]
+SS ピンの無い部品の、決まったソフトスタートの時間 (TSS)	Fixed soft-start time for parts without an SS pin (TSS)
+RT と周波数: kΩ kHz	RT and frequency: kΩ kHz
+1 行に「RT [kΩ] 周波数 [kHz]」を 2 行以上 (表か図の点)。空なら RT ピンなしで、下の「開放」の周波数に固定	"RT [kΩ] frequency [kHz]" on each line, 2 or more lines (points from a table or plot). If empty, there is no RT pin and the frequency is fixed to the "open" frequency below
+RT 開放 [kHz] (と境の kΩ)	RT open [kHz] (and limit kΩ)
+RT を開放にしたときの周波数と、これより大きい抵抗を開放とみる境 (無ければ 280 kΩ)	Frequency with RT open, and the limit above which a resistor counts as open (280 kΩ if none)
+RT を GND [kHz] (と境の kΩ)	RT to GND [kHz] (and limit kΩ)
+RT を GND につないだときの周波数と、これより小さい抵抗を GND とみる境 (空なら開放と同じ)	Frequency with RT connected to GND, and the limit below which a resistor counts as GND (same as open if empty)
+最小オン・オフ時間 [s]	Minimum on/off time [s]
+tON_MIN と tOFF_MIN	tON_MIN and tOFF_MIN
+OVP (基準の何倍)	OVP (times the reference)
+出力の過電圧で上側を止める FB の割合 (115 % なら 1.15)。空なら無し	Ratio of FB at which output overvoltage turns off the high side (1.15 for 115 %). If empty, none
+ループの図: Vout Cout 帯域 位相余裕	Loop plot: Vout Cout bandwidth phase margin
+データシートのループの図の条件と、そこに書かれた帯域 [Hz] と位相余裕 [度]	Conditions of the datasheet's loop plot, and the bandwidth [Hz] and phase margin [deg] written there
+内部の値 (仮): gm gcs オフセット スロープ Qg	Internal values (provisional): gm gcs offset slope Qg
+データシートに無い値。誤差アンプの gm [A/V]・COMP 1 V あたりの電流の指令 [A/V]・COMP のオフセット [V]・1 周期のスロープ補償 [A]・上側のゲートの電荷 [C]	Values not in the datasheet. Error amplifier gm [A/V], current command per 1 V of COMP [A/V], COMP offset [V], slope compensation per cycle [A], high-side gate charge [C]
+入れた値をひな形に入れてモデルを作り、RT の点と式の周波数を並べます	Puts the entered values into the template to build the model, and lists the RT points next to the frequencies from the formula
+作ったモデルと注記を、シミュレーションのタブに入れます。ピンは名前で探します (EN・RT・SS は欄が空なら要りません)	Puts the built model and notes into the Simulation tab. Pins are found by name (EN, RT and SS aren't needed if their fields are empty)
+# crates/app/src/part_form/chip.rs
+Q「{qv}」を 0 より大きい数で入れてください (例: 17 2.52M)	Enter Q "{qv}" as a number greater than 0 (e.g. 17 2.52M)
+Q の周波数	Q frequency
+コアの損失は Q から {}Ω (並列) と求めました	Core loss from Q: {}Ω (parallel)
+Q の値では巻線の抵抗だけで足りるか、自己共振より上なので、コアの損失は入れませんでした	With this Q, the winding resistance alone is enough, or it is above self-resonance, so no core loss was added
+Q は「17 2.52M」(Q と、それを測った周波数) の 2 つで入れてください (空でも作れます)	Enter Q as two values, "17 2.52M" (Q and the frequency it was measured at) (may be empty)
+「曲線のとおりにする」には、インダクタンスと電流の表に 2 行以上要ります	"Follow the curve" needs 2 or more rows in the inductance vs current table
+インダクタンスと電流の表: {e}	Inductance vs current table: {e}
+ユーザー	User
+Q と周波数	Q and frequency
+データシートの表の Q と、それを測った周波数 (Bourns は「Q (Ref.)」と「Test Freq.」)。コアの損失を、Q がその値になる並列の抵抗で入れます。DC-DC でコイルにかかる電圧の 2 乗に比例して熱になります。空なら入れません	Q from the datasheet table and the frequency it was measured at (Bourns: "Q (Ref.)" and "Test Freq."). Core loss is added as the parallel resistor that gives this Q. In a DC-DC, it turns into heat in proportion to the square of the voltage across the inductor. If empty, none is added
+# crates/app/src/part_form/chip_land.rs
+データシートの寸法表から:	From the datasheet dimension table:
+開いているデータシートの外形寸法の表 (L・W と下面の電極の長さ) から、IPC-7351 の式でパッドを作ります。標準の形 (0603 など) の代わりに、このメーカーの寸法に合わせたいときに使います	Makes pads with the IPC-7351 formula from the outline dimension table of the open datasheet (L, W and the length of the bottom terminals). Use it instead of a standard shape (0603 etc.) when you want to match this maker's dimensions.
+L {}・W {}・電極 {} ({}) mm、p.{}	L {}, W {}, terminal {} ({}) mm, p.{}
+{} の下面の電極の長さが表に無いので、パッドを計算できません	The table has no bottom terminal length for {}, so the pads can't be calculated
+{} の寸法 (L {}・電極 {}) では、両側のパッドが重なります。表の読みを確かめてください	With the dimensions of {} (L {}, terminal {}), the pads on the two sides overlap. Check how the table was read.
+{} (p.{}) の寸法から IPC の式で、パッド {:.2} × {:.2} mm・中心の間 {:.2} mm にしました (電極は {})。推奨のランドの図があれば見比べてください	From the dimensions of {} (p.{}), the IPC formula gives pads of {:.2} × {:.2} mm, {:.2} mm center to center (terminal {}). Compare with the recommended land drawing if there is one.
+{lo:.2} 以上	{lo:.2} or more
+# crates/app/src/part_form/coil_lineup.rs
+先にシリーズの共通の表を読んでください	Read the series common table first
+まとめて作る型番にチェックを入れてください	Check the part numbers to create together
+# crates/app/src/part_form/companion_fill.rs
+帰還のピン (ADJ・FB) がピン表にありません。出力電圧が決まった部品には分圧の抵抗は要りません	There is no feedback pin (ADJ, FB) in the pin table. Parts with a fixed output voltage don't need divider resistors.
+出力のピン (VOUT・OUT・OUTPUT) がピン表にありません	There is no output pin (VOUT, OUT, OUTPUT) in the pin table
+出力電圧 {vout} V は基準電圧 {vref} V より高くします	Make the output voltage {vout} V higher than the reference voltage {vref} V
+出力 {vout} V の分圧 (VREF {vref} V で {got:.3} V)	Divider for {vout} V output ({got:.3} V with VREF {vref} V)
+入力電圧 > 出力電圧 > 0、出力電流と周波数は 0 より大きくしてください	Make input voltage > output voltage > 0, and output current and frequency greater than 0
+スイッチのピン (SW・LX) がピン表にありません。降圧の DC-DC の部品で使います	There is no switch pin (SW, LX) in the pin table. This is for buck DC-DC parts.
+入力のピン (VIN) がピン表にありません	There is no input pin (VIN) in the pin table
+CIN | C | 10u | {vin_pin} | GND | 入力のすぐそばに (セラミック、入力電圧の 1.5 倍以上の耐圧)	CIN | C | 10u | {vin_pin} | GND | Right next to the input (ceramic, rated 1.5× the input voltage or more)
+CBST | C | 100n | {bst} | {sw} | ブートストラップ (無いと上側のスイッチが入らない)	CBST | C | 100n | {bst} | {sw} | Bootstrap (without it the high-side switch doesn't turn on)
+CSS | C | {} | {ss} | GND | ソフトスタート 約 {:.1} ms (CSS × {} V ÷ {} µA)	CSS | C | {} | {ss} | GND | Soft start about {:.1} ms (CSS × {} V ÷ {} µA)
+L1 | L | {} | {sw} | net:VOUT | リップル電流 約 {di:.2} A (出力電流の {:.0} %)、飽和電流は {:.1} A 以上の品を	L1 | L | {} | {sw} | net:VOUT | Ripple current about {di:.2} A ({:.0} % of output current); pick one with a saturation current of {:.1} A or more
+COUT | C | {} | net:VOUT | GND | 出力のリップル 約 {:.1} mV。セラミックは直流電圧で容量が減るので、実効でこれだけ残る品か 2 個に	COUT | C | {} | net:VOUT | GND | Output ripple about {:.1} mV. Ceramic capacitors lose capacitance under DC voltage, so pick one that keeps this much effectively, or use 2
+入力 {} V → 出力 {} V・{} A・{} kHz: コイル {}H (リップル {:.2} A)、出力 {}F、分圧で {:.3} V	Input {} V → output {} V, {} A, {} kHz: inductor {}H (ripple {:.2} A), output {}F, divider gives {:.3} V
+{label}を入れてください	Enter {label}
+{how}。データシートの応用回路の値があれば、それに直してください	{how}. If the datasheet's application circuit has values, change to those.
+出力電圧を V で入れてください (例: 5)	Enter the output voltage in V (e.g. 5)
+データシートの表	Datasheet table
+表に無いので LM317 の 1.25 V	Not in the table, so LM317's 1.25 V
+R1・R2 を足しました: VREF {vref} V ({from}) で {got:.3} V。応用回路の図に R1 の値があれば、その値に直してください	Added R1 and R2: {got:.3} V with VREF {vref} V ({from}). If the application circuit shows a value for R1, change to that value.
+出力電圧 [V]	Output voltage [V]
+出力電圧を抵抗で決める部品 (LM317 の ADJ、DC-DC の FB) の、作りたい出力電圧	The output voltage you want, for parts whose output voltage is set with resistors (ADJ of LM317, FB of a DC-DC)
+分圧の抵抗 R1・R2 を足す	Add divider resistors R1, R2
+出力と ADJ (FB) の間に R1、ADJ と GND の間に R2 を足します。基準電圧はデータシートの表の VREF (VFB)、R1 は ADJ なら 240 Ω、FB なら 10 kΩ、R2 は E24 のいちばん近い値	Adds R1 between the output and ADJ (FB), and R2 between ADJ and GND. The reference voltage is VREF (VFB) from the datasheet table, R1 is 240 Ω for ADJ or 10 kΩ for FB, and R2 is the nearest E24 value
+降圧 DC-DC: 入力 [V]	Buck DC-DC: input [V]
+スイッチ内蔵の降圧 DC-DC (SW・BST・FB のピン) の、入力電圧	Input voltage of a buck DC-DC with built-in switch (SW, BST, FB pins)
+出力電流 [A]	Output current [A]
+使う最大の出力電流。コイルのリップル電流をその 30 % にします	The maximum output current you use. The inductor ripple current is set to 30 % of it
+スイッチング周波数 (空なら 500k)	Switching frequency (500k if empty)
+DC-DC の周辺部品を足す	Add DC-DC peripheral parts
+上の「出力電圧」とこの欄から、入力のコンデンサ・BST と SW の間の 100 nF・ソフトスタートのコンデンサ (1 ms)・コイル (リップル 30 %)・出力のコンデンサ (リップル 0.5 % 以下、22 µF 以上)・帰還の分圧を足します。コイルと出力のコンデンサは「net:VOUT」(コイルの先の出力) につながります	From "Output voltage" above and these fields, adds the input capacitor, 100 nF between BST and SW, the soft-start capacitor (1 ms), the inductor (30 % ripple), the output capacitor (0.5 % ripple or less, 22 µF or more) and the feedback divider. The inductor and output capacitor connect to "net:VOUT" (the output after the inductor).
+# crates/app/src/part_form/datasheet_view.rs
+最初のページです	This is the first page
+最後のページです	This is the last page
+見るところ:	Look at:
+いまが最初の手順です	This is the first step
+◀ 前へ	◀ Previous
+前の手順	Previous step
+このページを探す	Find this page
+この手順の見出しを、データシートの全ページから探して、そのページを出します (英語・日本語の見出し)	Searches all pages of the datasheet for this step's heading and shows that page (English and Japanese headings)
+いまが最後の手順です	This is the last step
+次へ ▶	Next ▶
+次の手順に進み、その見出しを探します	Goes to the next step and searches for its heading
+読み方の案内を閉じます	Closes the reading guide
+読み方の案内	Reading guide
+データシートを、どの順に・どこを読めばよいかを、8 つの手順で案内します (絶対最大定格、推奨動作条件、min・typ・max と条件、グラフ …)。手順ごとに、このデータシートのその見出しのページへ飛びます	Guides you in 8 steps through what to read in a datasheet and in what order (absolute maximum ratings, recommended operating conditions, min/typ/max and conditions, graphs …). Each step jumps to the page with that heading in this datasheet.
+# crates/app/src/part_form/draft.rs
+ダーリントン	Darlington
+センサ	Sensor
+上から見た図の文字	Text of the top view
+図の番号と名前	Figure number and name
+図の文字 (OCR で読んだ)	Figure text (read by OCR)
+クアッド	Quad
+デュアル	Dual
+先にデータシートを開いてください	Open a datasheet first
+部品名を読めませんでした	Couldn't read the part name
+種類を読めませんでした	Couldn't read the type
+パッケージを読めませんでした	Couldn't read the package
+ピン表を読めませんでした	Couldn't read the pin table
+本体の寸法を読めませんでした	Couldn't read the body dimensions
+この種類の部品には、特性の値から作るモデルがありません	There is no model built from characteristic values for this type of part
+定格を読めませんでした	Couldn't read the ratings
+# crates/app/src/part_form/drawing_pick.rs
+寸法の分かる線 (寸法線の両端の矢印など) の、片方の端をクリックし、もう片方の端をクリックします。2 点を置いたあと、青い枠の数字 (PDF の寸法の数字) をクリックすると、それがその長さになります。3 回目のクリックでやり直します。小さくて選びにくいときは「大きく開く」	Click one end of a line whose length you know (such as the arrows at the two ends of a dimension line), then the other end. After placing 2 points, click a number in a blue box (a dimension number in the PDF) to make it that length. A third click starts over. If it's too small to pick, use "Open large".
+先に図の上で 2 点目をクリックしてください	Click the second point on the drawing first
+近くの数字 {} を使う	Use the nearby number {}
+2 点の線のまん中にいちばん近い、PDF の寸法の数字です。違うときは、図の上の青い枠の数字をクリックします	The PDF dimension number closest to the middle of the line between the 2 points. If it's wrong, click a number in a blue box on the drawing.
+# crates/app/src/part_form/glyph_pick.rs
+7 セグメント表示器 (箱の中に 8 の字)	7-segment display (a figure 8 in a box)
+ピン名 a〜g・dp と COM。箱とピン名はそのまま、中央に 8 の字を描きます。「デジタル回路を動かしながら見る」で、電流の流れるセグメントが光ります	Pin names a–g, dp and COM. The box and pin names stay as they are, and a figure 8 is drawn in the middle. In "Run and watch a digital circuit", the segments with current flowing light up.
+押しボタン (タクトスイッチ)	Push button (tactile switch)
+ピン名 1 2。モデルに押している位置の電源 Vpress を持つと、「動かしながら見る」でクリックで押せます	Pin names 1 2. If the model has a source Vpress for the pressed position, you can press it with a click in "Run and watch".
+切り替えスイッチ (スライド)	Changeover switch (slide)
+ピン名 A COM B (番号 1 2 3)。モデルに位置の電源 Vpos を持つと、「動かしながら見る」でクリックで切り替えます	Pin names A COM B (numbers 1 2 3). If the model has a position source Vpos, a click switches it in "Run and watch".
+# crates/app/src/part_form/graph_reader.rs
+コイルの「インダクタンスと電流の表」に入れる	Put into the inductor's "Inductance vs current table"
+インダクタンス - 電流	Inductance - current
+# crates/app/src/part_form/heat_fill.rs
+の列]	
+θJA の行 (p.{}) は値がパッケージごとに {} 列あり、{}。表の見出しで部品のパッケージの列を見て、手で入れてください: {}	The θJA row (p.{}) has {} columns of values, one per package; {}. Look at the table header for the column of the part's package and enter it by hand: {}
+部品のパッケージ ({}) の列が見つかりません	Can't find the column for the part's package ({})
+部品のパッケージが分からないので決められません (「④ 部品の形」でフットプリントを選ぶと、その列を取ります)	The part's package isn't known, so it can't be decided (choose a footprint in "④ Part shape" and that column is used)
+接合部 → リード	Junction → lead
+接合部 → 基板	Junction → board
+接合部と上面の温度の差 ÷ 電力。上面の温度を測って接合部の温度を出す目安	Difference between the junction and top-surface temperatures ÷ power. A guide for finding the junction temperature from the measured top temperature
+接合部と基板の温度の差 ÷ 電力	Difference between the junction and board temperatures ÷ power
+{name} {} K/W ({what}) は「そのほかの情報」に入れました (自己発熱には使いません): {}	{name} {} K/W ({what}) was put in "Other information" (not used for self-heating): {}
+# crates/app/src/part_form/linear.rs
+オフセットのドリフト	Offset drift
+オフセットのドリフト {}V/℃: {}	Offset drift {}V/℃: {}
+オフセットのドリフトの行 {} ({}) は単位が読めません。µV/℃ か nV/℃ かを表で見て、自分で入れてください	The unit of the offset drift row {} ({}) can't be read. Check in the table whether it is µV/℃ or nV/℃ and enter it yourself.
+オフセットのドリフト (ΔVOS/ΔT) の typ が表に見つかりません (空なら温度で変わりません)	The typ of the offset drift (ΔVOS/ΔT) isn't found in the table (if empty, it doesn't change with temperature)
+リップル除去の周波数特性は 1 行に「周波数 [Hz] リップル除去 [dB]」で、2 行以上入れてください (例: 1000 59 と 10000 51)	Enter the ripple rejection vs frequency as "frequency [Hz] ripple rejection [dB]" on each line, 2 or more lines (e.g. 1000 59 and 10000 51)
+温度は 1 行に「温度 [℃] 25 ℃ からの変化 [%]」で、低い温度から 2 行以上入れてください (例: 0 0.15 と 125 -0.6)	Enter the temperature as "temperature [℃] change from 25 ℃ [%]" on each line, 2 or more lines starting from the lowest temperature (e.g. 0 0.15 and 125 -0.6)
+部品作成フォームで入れた点 (温度と 25 ℃ からの変化 %)	Points entered in the part creation form (temperature and % change from 25 ℃)
+オフセットのドリフト [V/℃]	Offset drift [V/℃]
+入力オフセットの温度ドリフト (表の typ。dVOS/dT・αVIO)。u は 100 万分の 1 (7u = 7 µV/℃)。向きは部品ごとに違うので大きさだけ入れます。ばらつき・最悪ケースの解析で ± の間で動き、温度を 27 ℃ から変えたときに効きます。空なら入れません	Temperature drift of the input offset (typ in the table; dVOS/dT, αVIO). u means one millionth (7u = 7 µV/℃). The direction differs from part to part, so enter only the magnitude. In the variation and worst-case analyses it moves within ±, and it takes effect when the temperature is changed from 27 ℃. If empty, none is added
+モデルを測ってデータシートと比べる	Measure the model and compare with the datasheet
+作ったモデルを、同梱のオペアンプと同じ回路 (ボルテージフォロワ・開ループ・段の応答・出力の短絡) で測り、入れた値と並べます。ずれが 5 % を超える所は橙色。数秒かかります	Measures the built model with the same circuits as the bundled op amps (voltage follower, open loop, step response, output short) and lists the results next to the values you entered. Differences over 5 % are orange. Takes a few seconds.
+電源 [V]	Supply [V]
+測るときの電源電圧 (正と負の電源の間。空なら 5 V。データシートの表の条件に合わせます)	Supply voltage for the measurement (between the positive and negative supplies; 5 V if empty. Match the conditions of the datasheet table)
+AOL・ISC [V]	AOL, ISC [V]
+開ループ利得と短絡電流を測る電源電圧。データシートはこの 2 つを高い電源で書くことが多いです (LM358: AOL は 15 V、ISC は 10 V)。空なら上と同じ	Supply voltage for measuring the open-loop gain and short-circuit current. Datasheets often give these two at a higher supply (LM358: AOL at 15 V, ISC at 10 V). If empty, same as above
+温度: ℃ 変化 [%]	Temperature: ℃ change [%]
+出力 (LM317 などは基準電圧) の温度による変化。1 行に「温度 [℃] 25 ℃ からの変化 [%]」を、低い温度から 2 行以上。データシートの「出力電圧と温度」の図から読むか、温度係数 (−0.3 mV/℃ なら 5 V の 0 ℃ で +0.15 %、125 ℃ で −0.6 %) から。点の間は直線でつなぎます。空なら温度で変わりません	Change of the output (the reference voltage for LM317 etc.) with temperature. 2 or more lines of "temperature [℃] change from 25 ℃ [%]", starting from the lowest temperature. Read them from the datasheet's "output voltage vs temperature" plot, or work them out from the temperature coefficient (−0.3 mV/℃ gives +0.15 % at 0 ℃ and −0.6 % at 125 ℃ for 5 V). The points are joined by straight lines. If empty, it doesn't change with temperature
+リップル除去の周波数特性: Hz dB	Ripple rejection vs frequency: Hz dB
+高い周波数でリップル除去が下がる様子。1 行に「周波数 [Hz] リップル除去 [dB]」を 2 行以上。データシートの「Ripple Rejection vs Frequency」の図から読みます (下の「グラフから読む」で入ります)。モデルは、表のリップル除去を守りながら、この点に合わせて高い周波数で下げます。空なら、どの周波数でも同じです	How the ripple rejection drops at high frequencies. 2 or more lines of "frequency [Hz] ripple rejection [dB]". Read them from the datasheet's "Ripple Rejection vs Frequency" plot ("Read from graph" below fills them in). The model keeps the ripple rejection of the table and lowers it at high frequencies to match these points. If empty, it is the same at all frequencies
+作ったモデルを、同梱のレギュレータと同じ回路 (表の入力電圧・軽い負荷と 0.5 A・出力の短絡・入力の正弦波) で測り、入れた値と並べます。ずれが 5 % を超える所は橙色	Measures the built model with the same circuits as the bundled regulators (the table's input voltage, light load and 0.5 A, output short, sine wave on the input) and lists the results next to the values you entered. Differences over 5 % are orange
+# crates/app/src/part_form/measure_model.rs
+GBW (単位利得の周波数)	GBW (unity-gain frequency)
+電源電流 (1 回路)	Supply current (per circuit)
+出力の振れ幅 (正の電源から)	Output swing (from the positive supply)
+出力の振れ幅 (負の電源から)	Output swing (from the negative supply)
+入力換算の雑音 (1 kHz)	Input-referred noise (1 kHz)
+ライン・レギュレーション (1 V あたり)	Line regulation (per 1 V)
+ロード・レギュレーション (出力抵抗)	Load regulation (output resistance)
+ドロップアウト (0.5 A)	Dropout (0.5 A)
+電流制限 (短絡)	Current limit (short circuit)
+測った条件	Measurement conditions
+電圧基準	Voltage reference
+SET ピンの LDO	LDO with SET pin
+降圧 DC-DC	Buck DC-DC
+オペアンプ (測った値)	Op amp (measured)
+レギュレータ (測った値)	Regulator (measured)
+成績表: 作ったモデルとデータシートのずれ (全部の欄)	Report card: differences between the built model and the datasheet (all fields)
+{} 行、いちばん大きいずれ {worst:.1} %、5 % を超える行 {over}	{} rows, largest difference {worst:.1} %, rows over 5 %: {over}
+表を写す	Copy table
+成績表を、表計算に貼れる形 (タブ区切り) でクリップボードに写します	Copies the report card to the clipboard in a form you can paste into a spreadsheet (tab-separated)
+欄\t項目\t条件\tデータシート\tモデル\t単位\tずれ %\n	Field\tItem\tCondition\tDatasheet\tModel\tUnit\tDiff %\n
+欄	Field
+# crates/app/src/part_form/padedit.rs
+角丸	Rounded
+角を丸めた四角。面実装のパッドのふつうの形 (角の半径は短い辺の 25% が既定)	Rectangle with rounded corners. The usual shape for surface-mount pads (the corner radius defaults to 25% of the short side)
+角のとがった四角。1 番ピンの印にするときなど	Rectangle with sharp corners. For marking pin 1, for example
+両端が丸い形。リード部品の穴のパッドに	Shape with round ends. For the pads of leaded-part holes
+丸いパッド。幅が直径です	Round pad. The width is the diameter
+パッドを絵で直しています (下の寸法・標準の形・追加のパッドの欄は使われません)。	You are editing the pads in the picture (the dimension, standard shape and extra pad fields below are not used).
+寸法に戻す	Back to dimensions
+絵で直したパッドを捨てて、寸法の欄 (または標準の形) から作るのに戻します	Discards the pads edited in the picture and goes back to making them from the dimension fields (or the standard shape)
+パッドをクリックで選び、ドラッグで動かします (矢印キーでも 1 目盛り)。座標は部品の中心から mm、右が +X・上が +Y。Ctrl+Z で元に戻します	Click a pad to select it and drag to move it (or move it one step with the arrow keys). Coordinates are in mm from the part center; right is +X and up is +Y. Ctrl+Z undoes
+ピン {}: X {:.3}  Y {:.3} mm	Pin {}: X {:.3}  Y {:.3} mm
+パッドを足す	Add pad
+選んだパッドを写して、となりに置きます (並んだパッドなら同じ間隔で次へ)。ピン番号は次の番号になります。何も選んでいなければ最後のパッドを写します	Copies the selected pad and places it next to it (for a row of pads, the next one at the same spacing). The pin number becomes the next number. If nothing is selected, the last pad is copied
+先にパッドを選んでください	Select a pad first
+選んだパッドを消します	Deletes the selected pad
+戻す操作がありません	Nothing to undo
+ひとつ前に戻します (Ctrl+Z)	Undoes the last step (Ctrl+Z)
+目盛り	Grid
+ドラッグと矢印キーで動かすときの目盛りです。データシートの寸法の細かさに合わせます (0.635 と 1.27 は 1.27 mm ピッチの半分と 1 つ)	The step for dragging and the arrow keys. Match it to the precision of the datasheet dimensions (0.635 and 1.27 are half and one of a 1.27 mm pitch)
+パッドを選ぶと、ここで形と大きさを数字で直せます	Select a pad to edit its shape and size as numbers here
+「③ ピン」の表の番号と同じにします。シールドの脚など、同じ番号のパッドを何個も置けます	Same as the number in the "③ Pins" table. You can place several pads with the same number, such as shield legs
+パッドの中心の横の位置。部品の中心から右が +	Horizontal position of the pad center. + is to the right of the part center
+パッドの中心の縦の位置。部品の中心から上が +	Vertical position of the pad center. + is up from the part center
+パッドの横の大きさ (円は直径)	Horizontal size of the pad (the diameter for a circle)
+パッドの縦の大きさ	Vertical size of the pad
+角の丸み	Corner rounding
+角の半径を、短い辺に対する割合で。25 % が KiCad と IPC-7351 の既定、50 % で両端が半円になります	Corner radius as a ratio of the short side. 25 % is the KiCad and IPC-7351 default; 50 % makes both ends semicircles
+穴	Hole
+めっきの穴	Plated hole
+リード部品の足を通す穴を開けます (表と裏の両方にパッドができます)。外すと面実装のパッドです	Makes a hole for the lead of a leaded part (pads on both top and bottom). Uncheck for a surface-mount pad
+穴径 	Drill 
+穴の直径。足の太さより 0.2〜0.4 mm 大きくします	Hole diameter. Make it 0.2–0.4 mm larger than the lead
+# crates/app/src/part_form/padtable.rs
+横	
+脚	
+この種類の行では使いません	Not used in rows of this type
+穴のある行で使えます	Usable in rows with a hole
+いちばん上です	This is the top
+いちばん下です	This is the bottom
+# crates/app/src/part_form/parse.rs
+{}行目: ユニット「unit={u}」は A〜Z の 1 文字にしてください (デュアルのオペアンプの 2 つ目は B)	Line {}: unit "unit={u}" must be one letter A–Z (the second of a dual op amp is B)
+# crates/app/src/part_form/pdf_input.rs
+。インダクタンスの値は「値」の欄に入れてください	. Enter the inductance value in the "Value" field
+p.{} のグラフの {} 点を「インダクタンスと電流の表」に入れ、「曲線のとおりにする」にしました{value}	Put the {@2} points from the graph on p.{@1} into the "Inductance vs current table" and set "Follow the curve"{value}
+# crates/app/src/part_form/pin_import.rs
+取り込むピンがありません。上に表を貼るか、データシートから囲んでください	There are no pins to import. Paste a table above, or select an area in the datasheet
+# crates/app/src/part_form/pintable.rs
+ユニット	Unit
+1 つの IC の中の同じ回路 (デュアルのオペアンプの 1 つ目と 2 つ目) を別々の記号で置くとき、そのピンがどれ (A・B …) にあるか。電源のピンは A に。ふつうの部品は全部 A のまま	Which unit (A, B …) the pin belongs to, when identical circuits in one IC (the first and second of a dual op amp) are placed as separate symbols. Supply pins go in A. For ordinary parts, leave them all as A
+このピンを描くユニット。A のままなら、ふつうの 1 つの記号です	The unit that draws this pin. If left as A, it is an ordinary single symbol
+名前から種類が分かるピン (種類が空のもの) がありません	There are no pins whose type can be told from the name (pins with an empty type)
+ピン表が空です	The pin table is empty
+# crates/app/src/part_form/preview.rs
+エラーが残っています。上の赤い行を直すと押せます	Errors remain. Fix the red lines above to enable it
+# crates/app/src/part_form/refldo.rs
+{label}「{}」が数として読めません (例: 2.5、800u、10k)	{label} "{}" can't be read as a number (e.g. 2.5, 800u, 10k)
+PSRR は 1 行に「周波数 [Hz] 除去 [dB]」で、1 行以上入れてください (例: 120 117 と 10k 90)。2 行以上なら、その点に周波数特性を合わせます	Enter PSRR as "frequency [Hz] rejection [dB]" on each line, 1 or more lines (e.g. 120 117 and 10k 90). With 2 or more lines, the frequency response is matched to the points
+{label}は「0.8u 10 100k」(rms と 帯域の下・上 [Hz]) か、密度 1 つ (20n = 20 nV/√Hz) で入れてください	Enter {label} as "0.8u 10 100k" (rms and the lower and upper bandwidth [Hz]) or as one density (20n = 20 nV/√Hz)
+「2.49875 2.50125」の 2 つの数	Two numbers like "2.49875 2.50125"
+ロード・レギュレーションは ppm/mA で、吐き出しと吸い込みの 2 つ (20 20) か、両方同じなら 1 つで入れてください	Enter load regulation in ppm/mA, as two values for sourcing and sinking (20 20), or as one if both are the same
+「0.02 54」(無負荷の電圧 [V] と 電流による増え [Ω])	"0.02 54" (no-load voltage [V] and increase with current [Ω])
+「25m 20m」(吐き出しと吸い込み [A])	"25m 20m" (sourcing and sinking [A])
+NR・TRIM ピン	NR/TRIM pin
+「1.2 10k 1k 0.5」(バンドギャップの電圧・そこから増幅器までの抵抗・ピンまでの抵抗・大きなコンデンサで残る雑音の割合) か空	"1.2 10k 1k 0.5" (bandgap voltage, resistance from there to the amplifier, resistance to the pin, fraction of noise left with a large capacitor) or empty
+TEMP ピン	TEMP pin
+「0.575 2.64m 60k」(25 ℃ の電圧・1 ℃ あたりの変化・出力抵抗) か空	"0.575 2.64m 60k" (voltage at 25 ℃, change per 1 ℃, output resistance) or empty
+表の測定の入力電圧	Input voltage of the table's measurements
+電源電流の max	Supply current max
+ライン・レギュレーションは「0.5n 0.5u」(SET の電流の変化 [A/V] と オフセットの変化 [V/V]) で入れてください (空でも作れます)	Enter line regulation as "0.5n 0.5u" (change of SET current [A/V] and change of offset [V/V]) (may be empty)
+ロード・レギュレーションは出力抵抗 [Ω] 1 つか、「0.1m 0.499」(オフセットの変化 [V] と 電流の変化 [A]) で入れてください	Enter load regulation as one output resistance [Ω], or as "0.1m 0.499" (change of offset [V] and change of current [A])
+「0.21 0.1」(小さい電流の電圧 [V] と 電流による増え [Ω])	"0.21 0.1" (voltage at small current [V] and increase with current [Ω])
+電源電流は「2.2m 0.02 0.3u」(動作中 [A]・出力電流 1 A あたりの増え・止めたとき [A]) で、1〜3 つ入れてください	Enter supply current as "2.2m 0.02 0.3u" (operating [A], increase per 1 A of output current, shutdown [A]), 1 to 3 values
+電流制限は 1 行に「入出力の差 [V] 電流 [A]」、1 行か 2 行で入れてください (例: 12 0.7 と 20 0.33)	Enter current limit as "input-output difference [V] current [A]" on each line, 1 or 2 lines (e.g. 12 0.7 and 20 0.33)
+ILIM ピン	ILIM pin
+「500 0.3」(出力電流とピンの電流の比・制限が効くピンの電圧 [V]) か空	"500 0.3" (ratio of output current to pin current, pin voltage at which the limit acts [V]) or empty
+PG は「0.3 300 1.9m」(PGFB のしきい値 [V]・PG が Low のときの抵抗 [Ω]・速い起動で SET に足す電流 [A]、無ければ 2 つ) か空で入れてください	Enter PG as "0.3 300 1.9m" (PGFB threshold [V], PG resistance when Low [Ω], current added to SET for fast start-up [A]; 2 values if there is none) or leave it empty
+SET ピンの電流	SET pin current
+SET ピンの電流の min・max	SET pin current min/max
+「99u 101u」の 2 つの数	Two numbers like "99u 101u"
+オフセットの min・max	Offset min/max
+「-1m 1m」の 2 つの数	Two numbers like "-1m 1m"
+最小の入力電圧	Minimum input voltage
+EN のしきい値	EN threshold
+SET の電流の雑音	SET current noise
+NR・TRIM	NR/TRIM
+出力の検出	Output sensing
+入れた値をひな形に入れてモデルを作り、PSRR の点とモデルの値を並べます	Puts the entered values into the template to build the model, and lists the PSRR points next to the model's values
+作ったモデルと注記を、シミュレーションのタブに入れます。ピンは名前で探します (使わないピンの欄が空なら、そのピンは要りません)	Puts the built model and notes into the Simulation tab. Pins are found by name (pins you don't use aren't needed if their fields are empty)
+データシートの電気的特性の表の typ の値を、同梱の REF5025 と同じひな形に入れてモデルを作ります。中は、内部のバンドギャップ (1.2 V など) を増幅して出す形 (REF50xx のブロック図) で、NR・TRIM ピンにコンデンサを付けると雑音が下がり、抵抗で出力を少し動かせます。PSRR は図の点に合わせます	Builds a model by putting the typ values from the datasheet's electrical characteristics table into the same template as the bundled REF5025. Inside, it amplifies an internal bandgap (1.2 V etc.) to the output (as in the REF50xx block diagram); a capacitor on the NR/TRIM pin lowers the noise, and a resistor can shift the output a little. PSRR is matched to the plot points
+電圧基準は、ADC・DAC の物差しになる「正確でゆれない電圧」の IC です。出力の初期精度 (min・max) と温度による変化がいちばん大事な値です。	A voltage reference is an IC that gives an "accurate, steady voltage" to serve as the ruler of an ADC or DAC. The initial output accuracy (min/max) and the change with temperature are the most important values.
+ライン・レギュレーション [ppm/V]: 入力を 1 V 変えたときの出力の変化。ロード・レギュレーション [ppm/mA]: 1 mA 流したときの変化 (吐き出しと吸い込み)。	Line regulation [ppm/V]: the output change when the input changes by 1 V. Load regulation [ppm/mA]: the change when 1 mA flows (sourcing and sinking).

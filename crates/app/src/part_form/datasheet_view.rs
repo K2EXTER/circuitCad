@@ -1095,7 +1095,7 @@ impl Opened {
             ui.label(crate::learn::spaced(step.detail));
             ui.small(i18n::tr("見るところ:"));
             for c in step.checks {
-                ui.small(format!("・{}", i18n::tr_dyn(c)));
+                ui.small(i18n::trf!("・{}", i18n::tr_dyn(c)));
             }
             ui.horizontal(|ui| {
                 if crate::widgets::unless(ui, (k == 0).then_some("いまが最初の手順です"), egui::Button::new(i18n::tr("◀ 前へ"))).on_hover_text(i18n::tr("前の手順")).clicked() {

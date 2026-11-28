@@ -81,10 +81,10 @@ impl ZoomPan {
             if !self.is_fit() && ui.button(i18n::tr("全体")).on_hover_text(i18n::tr("基板の全体が収まる大きさと位置に戻します (Home)")).clicked() {
                 *self = Self::default();
             }
-            if ui.button("＋").on_hover_text(i18n::tr("拡大します (ホイールでも。ポインタの所を中心に)")).clicked() {
+            if ui.button(i18n::tr("＋")).on_hover_text(i18n::tr("拡大します (ホイールでも。ポインタの所を中心に)")).clicked() {
                 self.zoom_about(rect, rect.center(), 1.25);
             }
-            if ui.button("－").on_hover_text(i18n::tr("縮小します (ホイールでも)。絵を動かすのは、中ボタンか Alt + 左ボタンのドラッグ")).clicked() {
+            if ui.button(i18n::tr("－")).on_hover_text(i18n::tr("縮小します (ホイールでも)。絵を動かすのは、中ボタンか Alt + 左ボタンのドラッグ")).clicked() {
                 self.zoom_about(rect, rect.center(), 0.8);
             }
         });

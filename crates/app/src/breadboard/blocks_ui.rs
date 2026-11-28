@@ -134,7 +134,7 @@ fn palette(board: Board, first_var: Option<&str>) -> Vec<Block> {
         Block::Set { name: var.clone(), value: BExpr::Int(0) },
         Block::Change { name: var, by: BExpr::Int(1) },
         Block::SerialBegin(BExpr::Int(9600)),
-        Block::Print { value: BExpr::Text("こんにちは".into()), newline: true },
+        Block::Print { value: BExpr::Text(i18n::tr("こんにちは").to_string()), newline: true },
     ]
 }
 
@@ -295,8 +295,19 @@ fn drag_from(ui: &egui::Ui, r: &egui::Response, text: &str, color: Color32, payl
 
 /// A word between a block's slots.
 fn word(ui: &mut egui::Ui, text: &str) {
+    word_in(ui, "", text);
+}
+
+/// A word between a block's slots, read as the block `place` reads it (`i18n::tr_ctx`: the same particle is "to" in one block
+/// and "from" in another). English puts some of them elsewhere (a verb before its slots): those are left out in English.
+fn word_in(ui: &mut egui::Ui, place: &str, text: &str) {
+    const LEFT_OUT_IN_ENGLISH: [(&str, &str); 4] = [("出力", "にする"), ("代入", "にする"), ("増やす", "だけ増やす"), ("map", "に")];
+    if !i18n::is_ja() && LEFT_OUT_IN_ENGLISH.contains(&(place, text)) {
+        return;
+    }
+    let shown = if place.is_empty() { i18n::tr_dyn(text).to_string() } else { i18n::tr_ctx(&format!("ブロック・{place}"), text).to_string() };
     // not selectable: a drag on it takes the block (a selectable label would take the drag to select its text)
-    ui.add(egui::Label::new(egui::RichText::new(i18n::tr_dyn(text)).color(Color32::WHITE)).selectable(false).wrap_mode(egui::TextWrapMode::Extend));
+    ui.add(egui::Label::new(egui::RichText::new(shown).color(Color32::WHITE)).selectable(false).wrap_mode(egui::TextWrapMode::Extend));
 }
 
 fn vars_ui(ui: &mut egui::Ui, s: &mut BlockSketch, cx: &mut Cx) {
@@ -523,7 +534,7 @@ fn slots_ui(ui: &mut egui::Ui, b: &mut Block, cx: &mut Cx) {
     match b {
         Block::PinMode { pin, mode } => {
             expr_ui(ui, pin, Slot::Pin, cx);
-            word(ui, "は");
+            word_in(ui, "ピンの使い方", "は");
             let label = |m: PinMode| match m {
                 PinMode::Output => "出力",
                 PinMode::Input => "入力",
@@ -537,13 +548,13 @@ fn slots_ui(ui: &mut egui::Ui, b: &mut Block, cx: &mut Cx) {
         }
         Block::DigitalWrite { pin, value } => {
             expr_ui(ui, pin, Slot::Pin, cx);
-            word(ui, "を");
+            word_in(ui, "出力", "を");
             expr_ui(ui, value, Slot::Level, cx);
-            word(ui, "にする");
+            word_in(ui, "出力", "にする");
         }
         Block::AnalogWrite { pin, value } => {
             expr_ui(ui, pin, Slot::Pin, cx);
-            word(ui, "に");
+            word_in(ui, "PWM", "に");
             expr_ui(ui, value, Slot::Num, cx);
             word(ui, "(0〜255)");
         }
@@ -561,15 +572,15 @@ fn slots_ui(ui: &mut egui::Ui, b: &mut Block, cx: &mut Cx) {
         }
         Block::Set { name, value } => {
             var_combo(ui, name, cx);
-            word(ui, "を");
+            word_in(ui, "代入", "を");
             expr_ui(ui, value, Slot::Num, cx);
-            word(ui, "にする");
+            word_in(ui, "代入", "にする");
         }
         Block::Change { name, by } => {
             var_combo(ui, name, cx);
-            word(ui, "を");
+            word_in(ui, "増やす", "を");
             expr_ui(ui, by, Slot::Num, cx);
-            word(ui, "だけ増やす");
+            word_in(ui, "増やす", "だけ増やす");
         }
         Block::If { cond, .. } => {
             expr_ui(ui, cond, Slot::Cond, cx);
@@ -583,7 +594,7 @@ fn slots_ui(ui: &mut egui::Ui, b: &mut Block, cx: &mut Cx) {
         }
         Block::While { cond, .. } => {
             expr_ui(ui, cond, Slot::Cond, cx);
-            word(ui, "の間");
+            word_in(ui, "間", "の間");
         }
     }
 }
@@ -741,7 +752,7 @@ fn expr_ui(ui: &mut egui::Ui, e: &mut BExpr, slot: Slot, cx: &mut Cx) {
             ui.add(egui::TextEdit::singleline(t).desired_width(w)).on_hover_text(i18n::tr("送る文字"));
         }
         BExpr::DigitalRead(p) => chip(ui, cx, READ, &mut |ui, cx| {
-            word(ui, "ピン");
+            word_in(ui, "読み", "ピン");
             expr_ui(ui, p, Slot::Pin, cx);
             word(ui, "の入力");
         }),
@@ -754,22 +765,22 @@ fn expr_ui(ui: &mut egui::Ui, e: &mut BExpr, slot: Slot, cx: &mut Cx) {
         BExpr::Random(a, b) => chip(ui, cx, MATH, &mut |ui, cx| {
             word(ui, "乱数");
             expr_ui(ui, a, Slot::Num, cx);
-            word(ui, "〜");
+            word_in(ui, "乱数", "〜");
             expr_ui(ui, b, Slot::Num, cx);
             word(ui, "の手前");
         }),
         BExpr::Map(a) => chip(ui, cx, MATH, &mut |ui, cx| {
             let [v, a0, a1, b0, b1] = &mut **a;
             expr_ui(ui, v, Slot::Num, cx);
-            word(ui, "を");
+            word_in(ui, "map", "を");
             expr_ui(ui, a0, Slot::Num, cx);
-            word(ui, "〜");
+            word_in(ui, "map", "〜");
             expr_ui(ui, a1, Slot::Num, cx);
-            word(ui, "から");
+            word_in(ui, "map", "から");
             expr_ui(ui, b0, Slot::Num, cx);
-            word(ui, "〜");
+            word_in(ui, "map", "〜");
             expr_ui(ui, b1, Slot::Num, cx);
-            word(ui, "に");
+            word_in(ui, "map", "に");
         }),
         BExpr::Bin(op, a, b) => {
             let logic = op == "&&" || op == "||";
