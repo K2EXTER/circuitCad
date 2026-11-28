@@ -59,6 +59,12 @@ struct Cx {
     /// Where a dragged block goes if let go now (the innermost list under the pointer).
     target: Option<(ListPath, usize)>,
     dragging: bool,
+    /// Where the dragged block would go as of the last frame: a space of its height is left open there (the blocks below make
+    /// way), so the place shows before it is let go.
+    ghost: Option<(ListPath, usize)>,
+    ghost_h: f32,
+    /// The block being moved (drawn faded in its place while it is dragged).
+    moving: Option<(ListPath, usize)>,
 }
 
 impl Cx {
@@ -151,7 +157,20 @@ fn edit_blocks_in(ui: &mut egui::Ui, s: &mut BlockSketch, board: Board, salt: &s
         acts: vec![],
         target: None,
         dragging: egui::DragAndDrop::has_payload_of_type::<Drag>(ui.ctx()),
+        ghost: None,
+        ghost_h: 0.0,
+        moving: None,
     };
+    let ghost_id = cx.base.with("ghost");
+    if cx.dragging {
+        cx.ghost = ui.data(|d| d.get_temp::<Option<(ListPath, usize)>>(ghost_id)).flatten();
+        cx.ghost_h = ui.data(|d| d.get_temp(ghost_id.with("h"))).unwrap_or(GHOST_H);
+        if let Some(p) = egui::DragAndDrop::payload::<Drag>(ui.ctx())
+            && let Drag::Move(l, i) = &*p
+        {
+            cx.moving = Some((l.clone(), *i));
+        }
+    }
     ui.spacing_mut().item_spacing.y = 3.0;
     let palette_rect = palette_ui(ui, s, &mut cx);
     ui.add_space(crate::theme::SPACE_S);
@@ -167,6 +186,13 @@ fn edit_blocks_in(ui: &mut egui::Ui, s: &mut BlockSketch, board: Board, salt: &s
             ui.set_width(ui.available_width());
             list_ui(ui, list, ListPath { section, nest: vec![] }, &mut cx);
         });
+    }
+    // the place it would go now is left open next frame (none over the list at the top: there it is thrown away)
+    let over_palette = ui.ctx().pointer_interact_pos().is_some_and(|q| palette_rect.contains(q));
+    let ghost = if cx.dragging && !over_palette { cx.target.clone() } else { None };
+    ui.data_mut(|d| d.insert_temp(ghost_id, ghost));
+    if !cx.dragging {
+        ui.data_mut(|d| d.insert_temp(ghost_id.with("h"), GHOST_H));
     }
     // let go: where it was dragged to (back onto the list at the top: thrown away)
     if cx.dragging && ui.input(|i| i.pointer.any_released()) {
@@ -232,9 +258,15 @@ fn palette_ui(ui: &mut egui::Ui, s: &BlockSketch, cx: &mut Cx) -> egui::Rect {
     r.response.rect
 }
 
-/// A block's name, dragged to move it: the block goes with the pointer as its name until it is let go.
+/// A block's name, dragged to move it.
 fn handle(ui: &mut egui::Ui, text: &str, color: Color32, payload: Drag) -> egui::Response {
     let r = ui.add(egui::Label::new(egui::RichText::new(i18n::tr_dyn(text)).strong().color(Color32::WHITE)).selectable(false).wrap_mode(egui::TextWrapMode::Extend).sense(egui::Sense::click_and_drag()));
+    drag_from(ui, &r, text, color, payload);
+    r
+}
+
+/// What dragging a block does (from its name or from its ground): it goes with the pointer as its name until it is let go.
+fn drag_from(ui: &egui::Ui, r: &egui::Response, text: &str, color: Color32, payload: Drag) {
     if r.drag_started() {
         egui::DragAndDrop::set_payload(ui.ctx(), payload);
     }
@@ -251,12 +283,12 @@ fn handle(ui: &mut egui::Ui, text: &str, color: Color32, payload: Drag) -> egui:
     } else if r.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
     }
-    r
 }
 
 /// A word between a block's slots.
 fn word(ui: &mut egui::Ui, text: &str) {
-    ui.add(egui::Label::new(egui::RichText::new(i18n::tr_dyn(text)).color(Color32::WHITE)).wrap_mode(egui::TextWrapMode::Extend));
+    // not selectable: a drag on it takes the block (a selectable label would take the drag to select its text)
+    ui.add(egui::Label::new(egui::RichText::new(i18n::tr_dyn(text)).color(Color32::WHITE)).selectable(false).wrap_mode(egui::TextWrapMode::Extend));
 }
 
 fn vars_ui(ui: &mut egui::Ui, s: &mut BlockSketch, cx: &mut Cx) {
@@ -319,21 +351,43 @@ fn vars_ui(ui: &mut egui::Ui, s: &mut BlockSketch, cx: &mut Cx) {
     }
 }
 
+/// How tall the open space is for a new block from the list at the top.
+const GHOST_H: f32 = 26.0;
+
 fn list_ui(ui: &mut egui::Ui, list: &mut [Block], path: ListPath, cx: &mut Cx) {
     let n = list.len();
     for i in 0..n {
+        ghost_ui(ui, cx, &path, i);
         let (rect, header) = block_ui(ui, &mut list[i], &path, i, cx);
+        if cx.moving.as_ref().is_some_and(|(l, k)| *l == path && *k == i) {
+            ui.data_mut(|d| d.insert_temp(cx.base.with("ghost").with("h"), rect.height()));
+        }
         drop_spot(ui, cx, rect, header, &path, i);
     }
+    ghost_ui(ui, cx, &path, n);
     // the end of the list: where a block dropped below the others goes (an empty list is only this)
     let h = ui.spacing().interact_size.y;
     let r = ui.allocate_response(egui::vec2(ui.available_width().max(40.0), if n == 0 { h } else { h * 0.6 }), egui::Sense::hover());
-    if n == 0 {
+    if n == 0 && cx.ghost.as_ref() != Some(&(path.clone(), 0)) {
         ui.painter().text(r.rect.left_center() + egui::vec2(4.0, 0.0), egui::Align2::LEFT_CENTER, i18n::tr("(ここにブロックを置きます)"), egui::TextStyle::Small.resolve(ui.style()), NOTE);
     }
     if cx.dragging && cx.target.is_none() && ui.rect_contains_pointer(r.rect) {
         cx.target = Some((path, n));
-        ui.painter().hline(r.rect.x_range(), r.rect.top() + 2.0, egui::Stroke::new(3.0, crate::theme::HIGHLIGHT));
+    }
+}
+
+/// The open space where the dragged block would go (as of the last frame), before the block `i` of the list. The pointer in it
+/// keeps it there.
+fn ghost_ui(ui: &mut egui::Ui, cx: &mut Cx, path: &ListPath, i: usize) {
+    if cx.ghost.as_ref().is_none_or(|(l, k)| l != path || *k != i) {
+        return;
+    }
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width().max(60.0), cx.ghost_h), egui::Sense::hover());
+    let p = ui.painter();
+    p.rect_filled(rect, 5.0, crate::theme::HIGHLIGHT.gamma_multiply(0.18));
+    p.rect_stroke(rect, 5.0, egui::Stroke::new(1.5, crate::theme::HIGHLIGHT), egui::StrokeKind::Inside);
+    if cx.target.is_none() && ui.rect_contains_pointer(rect) {
+        cx.target = Some((path.clone(), i));
     }
 }
 
@@ -345,8 +399,25 @@ fn drop_spot(ui: &egui::Ui, cx: &mut Cx, rect: egui::Rect, header: egui::Rect, p
     let y = ui.ctx().pointer_interact_pos().map_or(0.0, |p| p.y);
     let before = y < header.center().y;
     cx.target = Some((path.clone(), if before { i } else { i + 1 }));
-    let at = if before { rect.top() - 1.5 } else { rect.bottom() + 1.5 };
-    ui.painter().hline(rect.x_range(), at, egui::Stroke::new(3.0, crate::theme::HIGHLIGHT));
+}
+
+/// A block's right-click menu: 複製 (0), 消す (1), and on an if 「そうでなければ」 on or off (2).
+fn block_menu(ui: &mut egui::Ui, is_if: bool, has_else: bool, menu: &mut Option<u8>) {
+    if ui.button(i18n::tr("複製")).on_hover_text(i18n::tr("このブロックの写しをすぐ下に置きます")).clicked() {
+        *menu = Some(0);
+        ui.close();
+    }
+    if ui.button(i18n::tr("消す")).on_hover_text(i18n::tr("このブロックを中のブロックごと消します (上のブロックの一覧へドラッグしても消せます)")).clicked() {
+        *menu = Some(1);
+        ui.close();
+    }
+    if is_if {
+        let t = if has_else { "「そうでなければ」を外す" } else { "「そうでなければ」を付ける" };
+        if ui.button(i18n::tr(t)).clicked() {
+            *menu = Some(2);
+            ui.close();
+        }
+    }
 }
 
 /// One block and the blocks inside it. Its rect and its title row's.
@@ -355,30 +426,23 @@ fn block_ui(ui: &mut egui::Ui, b: &mut Block, path: &ListPath, i: usize, cx: &mu
     let mut header = egui::Rect::NOTHING;
     let mut menu: Option<u8> = None;
     let has_else = matches!(b, Block::If { els: Some(_), .. });
+    let is_if = matches!(b, Block::If { .. });
+    // the block's ground is grabbed too (where it was last frame; registered before what is on it, so its lists, slots and the
+    // blocks inside it take the pointer first)
+    let ground_id = cx.base.with(("ground", path, i));
+    let ground = ui.data(|d| d.get_temp::<egui::Rect>(ground_id)).map(|r| ui.interact(r, ground_id, egui::Sense::click_and_drag()));
+    let moved = cx.moving.as_ref().is_some_and(|(l, k)| l == path && *k == i);
     // a dark edge: a block inside one of its own colour (a repeat in an if) still shows where it is
     let edge = egui::Stroke::new(1.0, Color32::from_black_alpha(110));
     let r = egui::Frame::NONE.fill(color).stroke(edge).corner_radius(5.0).inner_margin(egui::Margin::symmetric(6, 3)).show(ui, |ui| {
+        if moved {
+            ui.multiply_opacity(0.35);
+        }
         ui.set_min_width(120.0);
         header = ui
             .horizontal_wrapped(|ui| {
                 let h = handle(ui, title, color, Drag::Move(path.clone(), i)).on_hover_text(i18n::tr(tip(b)));
-                h.context_menu(|ui| {
-                    if ui.button(i18n::tr("複製")).on_hover_text(i18n::tr("このブロックの写しをすぐ下に置きます")).clicked() {
-                        menu = Some(0);
-                        ui.close();
-                    }
-                    if ui.button(i18n::tr("消す")).on_hover_text(i18n::tr("このブロックを中のブロックごと消します (上のブロックの一覧へドラッグしても消せます)")).clicked() {
-                        menu = Some(1);
-                        ui.close();
-                    }
-                    if matches!(b, Block::If { .. }) {
-                        let t = if has_else { "「そうでなければ」を外す" } else { "「そうでなければ」を付ける" };
-                        if ui.button(i18n::tr(t)).clicked() {
-                            menu = Some(2);
-                            ui.close();
-                        }
-                    }
-                });
+                h.context_menu(|ui| block_menu(ui, is_if, has_else, &mut menu));
                 slots_ui(ui, b, cx);
             })
             .response
@@ -409,7 +473,16 @@ fn block_ui(ui: &mut egui::Ui, b: &mut Block, path: &ListPath, i: usize, cx: &mu
             Block::While { body, .. } => inner(ui, body, path.child(i, 0), cx),
             _ => {}
         }
+        // the bottom arm of an if or a repeat: the C closed below its blocks (a block let go on it goes after the whole C)
+        if matches!(b, Block::If { .. } | Block::Repeat { .. } | Block::While { .. }) {
+            ui.add_space(7.0);
+        }
     });
+    ui.data_mut(|d| d.insert_temp(ground_id, r.response.rect));
+    if let Some(g) = ground {
+        drag_from(ui, &g, title, color, Drag::Move(path.clone(), i));
+        g.context_menu(|ui| block_menu(ui, is_if, has_else, &mut menu));
+    }
     match menu {
         Some(0) => cx.acts.push(Act::Duplicate(path.clone(), i)),
         Some(1) => cx.acts.push(Act::Remove(path.clone(), i)),
@@ -482,7 +555,7 @@ fn slots_ui(ui: &mut egui::Ui, b: &mut Block, cx: &mut Cx) {
         Block::Repeat { counter, times, .. } => {
             expr_ui(ui, times, Slot::Num, cx);
             word(ui, "回");
-            ui.label(egui::RichText::new(i18n::trf!("(数える変数 {counter})")).small().color(Color32::from_white_alpha(200)))
+            ui.add(egui::Label::new(egui::RichText::new(i18n::trf!("(数える変数 {counter})")).small().color(Color32::from_white_alpha(200))).selectable(false))
                 .on_hover_text(i18n::tr("くり返した回数 (0 から) が入る変数です。中のブロックの値の ▼ から読めます"));
         }
         Block::While { cond, .. } => {
@@ -575,15 +648,33 @@ fn list_with_others(ui: &mut egui::Ui, choices: Vec<(String, BExpr)>, cur: &BExp
     others_ui(ui, others, pick);
 }
 
-/// A reading or calculation in a slot: a rounded frame of its colour with its own slots (wrapped to the next row when it does not
-/// fit).
+/// A reading or calculation in a slot, with its own slots (wrapped to the next row when it does not fit). A condition (a comparison,
+/// and / or, not) is a hexagon, as the slots of an if and a while that want one; a value is rounded.
 fn chip(ui: &mut egui::Ui, cx: &mut Cx, color: Color32, body: &mut dyn FnMut(&mut egui::Ui, &mut Cx)) {
     let id = cx.id();
+    let hex = color == CONTROL;
     wrapped(ui, id, |ui| {
-        egui::Frame::NONE.fill(color).stroke(egui::Stroke::new(1.0, Color32::from_white_alpha(90))).corner_radius(9.0).inner_margin(egui::Margin::symmetric(5, 1)).show(ui, |ui| {
+        // the shape is drawn under its contents once their size is known
+        let under = ui.painter().add(egui::Shape::Noop);
+        let side = if hex { 11 } else { 6 };
+        let r = egui::Frame::NONE.inner_margin(egui::Margin { left: side, right: side, top: 2, bottom: 2 }).show(ui, |ui| {
             // a long one wraps inside itself (a frame of its own does not wrap with the row around it)
             ui.horizontal_wrapped(|ui| body(ui, cx));
         });
+        let rect = r.response.rect;
+        let stroke = egui::Stroke::new(1.0, Color32::from_white_alpha(90));
+        let shape = if hex {
+            let k = (rect.height() / 2.0).min(10.0);
+            let (l, rt, t, b, c) = (rect.left(), rect.right(), rect.top(), rect.bottom(), rect.center().y);
+            let pts = vec![egui::pos2(l, c), egui::pos2(l + k, t), egui::pos2(rt - k, t), egui::pos2(rt, c), egui::pos2(rt - k, b), egui::pos2(l + k, b)];
+            egui::Shape::convex_polygon(pts, color, stroke)
+        } else {
+            egui::Shape::rect_filled(rect, (rect.height() / 2.0).min(10.0), color)
+        };
+        ui.painter().set(under, shape);
+        if !hex {
+            ui.painter().rect_stroke(rect, (rect.height() / 2.0).min(10.0), stroke, egui::StrokeKind::Inside);
+        }
     });
 }
 
@@ -970,6 +1061,29 @@ mod tests {
         frame(&ctx, &mut s, vec![]);
         assert!(s.looped.is_empty(), "{s:?}");
         assert_eq!(s.setup.len(), 1);
+    }
+
+    /// A block is taken by its ground too (a word on it, not only its name); while it is dragged, the place it would go is left
+    /// open (here the empty start's "put a block here" makes way for it).
+    #[test]
+    fn a_block_is_grabbed_by_its_ground_and_its_place_opens() {
+        let ctx = egui::Context::default();
+        let mut s = BlockSketch { vars: vec![], setup: vec![], looped: vec![Block::Delay(BExpr::Int(3)), Block::Delay(BExpr::Int(4))] };
+        let texts = frame(&ctx, &mut s, vec![]);
+        let at = |t: &str| texts.iter().filter(|(x, _)| x == t).map(|(_, p)| *p).fold(None, |m: Option<egui::Pos2>, p| Some(m.map_or(p, |m| if p.y < m.y { p } else { m }))).unwrap();
+        let (from, to) = (at("ミリ秒"), at("(ここにブロックを置きます)"));
+        let button = |pos: egui::Pos2, pressed: bool| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&ctx, &mut s, vec![egui::Event::PointerMoved(from)]);
+        frame(&ctx, &mut s, vec![button(from, true)]);
+        for k in 1..=6 {
+            frame(&ctx, &mut s, vec![egui::Event::PointerMoved(from + (to - from) * (k as f32 / 6.0))]);
+        }
+        let shown = frame(&ctx, &mut s, vec![]);
+        assert!(!shown.iter().any(|(t, _)| t == "(ここにブロックを置きます)"), "the place is open while it is dragged over it");
+        frame(&ctx, &mut s, vec![button(to, false)]);
+        frame(&ctx, &mut s, vec![]);
+        assert_eq!(s.setup, vec![Block::Delay(BExpr::Int(3))], "{s:?}");
+        assert_eq!(s.looped, vec![Block::Delay(BExpr::Int(4))]);
     }
 
     #[test]
